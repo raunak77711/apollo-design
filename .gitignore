@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.log
+npm-debug.log*
+.DS_Store
+
+# Local asset/export storage (keep the folder, ignore contents)
+server/storage/projects/*
+!server/storage/projects/.gitkeep
