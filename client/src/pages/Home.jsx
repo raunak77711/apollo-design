@@ -71,13 +71,13 @@ export default function Home() {
 
       <main className="mx-auto w-full max-w-[1180px] px-5 pb-28 sm:px-8">
         {/* Hero + prompt composer */}
-        <section className="pt-14 sm:pt-20">
-          <h1 className="max-w-[16ch] font-display text-[38px] font-semibold leading-[1.02] tracking-[-0.04em] sm:text-[54px]">
+        <section className="pt-14 text-center sm:pt-20">
+          <h1 className="mx-auto max-w-[16ch] font-display text-[38px] font-semibold leading-[1.02] tracking-[-0.04em] sm:text-[54px]">
             Describe it.
             <br />
             Apollo draws it.
           </h1>
-          <p className="mt-4 max-w-[52ch] text-[15px] leading-relaxed text-ink-2">
+          <p className="mx-auto mt-4 max-w-[52ch] text-[15px] leading-relaxed text-ink-2">
             Every layer stays editable — type, images, shapes, colour. Nothing is baked into a picture.
           </p>
 
@@ -239,7 +239,7 @@ function Composer({ onCreate, creating }) {
   };
 
   return (
-    <div className="mt-8 max-w-[46rem]">
+    <div className="mx-auto mt-8 w-full max-w-[46rem] text-left">
       <div className="rounded-xl border border-line bg-surface transition-colors duration-150 focus-within:border-line-strong">
         <textarea
           ref={inputRef}
@@ -277,7 +277,7 @@ function Composer({ onCreate, creating }) {
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+      <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5">
         <span className="label">Try</span>
         {IDEAS.map((idea) => (
           <button
