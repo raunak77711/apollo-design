@@ -1,5 +1,6 @@
 import { applyOperations } from '../design/operations.js';
 import { createEmptyDocument } from '../design/schema.js';
+import { normalizeTree } from '../design/tree.js';
 
 const MAX_HISTORY = 100;
 
@@ -8,8 +9,14 @@ export const initialState = {
   // Selection is a set: one element shows its own controls, several show
   // arrangement controls instead.
   selectedIds: [],
+  // The group the user has stepped into by double-clicking. Canvas clicks
+  // resolve one level below it instead of selecting the outermost group.
+  enteredId: null,
   tool: 'select',
   zoom: 1,
+  // Workspace preferences. Deliberately outside the document — turning the grid
+  // on is not an edit and must never land in the undo stack.
+  view: { grid: false, gridSize: 24, snapObjects: true, snapGrid: false },
   past: [],
   future: [],
   transientBase: null, // snapshot captured at the start of a drag
@@ -21,20 +28,30 @@ const prune = (ids, document) => {
   return ids.filter((id) => alive.has(id));
 };
 
+const keepEntered = (enteredId, document) =>
+  enteredId && document.elements.some((e) => e.id === enteredId) ? enteredId : null;
+
 export function editorReducer(state, action) {
   switch (action.type) {
     case 'LOAD_DOCUMENT':
       return {
         ...state,
-        document: action.document,
+        // Repair the tree on the way in: older documents describe groups with a
+        // `children` list, and z-indexes may be arbitrary.
+        document: normalizeTree(action.document, { adopt: true }),
         selectedIds: [],
+        enteredId: null,
         past: [],
         future: [],
         transientBase: null,
       };
 
     case 'SELECT':
-      return { ...state, selectedIds: action.ids ? [...action.ids] : [] };
+      return {
+        ...state,
+        selectedIds: action.ids ? [...action.ids] : [],
+        enteredId: action.enteredId !== undefined ? action.enteredId : state.enteredId,
+      };
 
     case 'TOGGLE_SELECT': {
       const has = state.selectedIds.includes(action.id);
@@ -44,11 +61,17 @@ export function editorReducer(state, action) {
       };
     }
 
+    case 'SET_ENTERED':
+      return { ...state, enteredId: action.id || null };
+
     case 'SET_TOOL':
       return { ...state, tool: action.tool };
 
     case 'SET_ZOOM':
       return { ...state, zoom: Math.min(8, Math.max(0.02, action.zoom)) };
+
+    case 'SET_VIEW':
+      return { ...state, view: { ...state.view, ...action.changes } };
 
     // One history entry. Used by discrete edits and by AI operations.
     case 'APPLY': {
@@ -60,6 +83,7 @@ export function editorReducer(state, action) {
         future: [],
         transientBase: null,
         selectedIds: action.selectIds !== undefined ? action.selectIds : prune(state.selectedIds, document),
+        enteredId: action.enteredId !== undefined ? action.enteredId : keepEntered(state.enteredId, document),
       };
     }
 
@@ -89,6 +113,7 @@ export function editorReducer(state, action) {
         past: state.past.slice(0, -1),
         future: [state.document, ...state.future].slice(0, MAX_HISTORY),
         selectedIds: prune(state.selectedIds, previous),
+        enteredId: keepEntered(state.enteredId, previous),
       };
     }
 
@@ -101,6 +126,7 @@ export function editorReducer(state, action) {
         past: [...state.past, state.document].slice(-MAX_HISTORY),
         future: state.future.slice(1),
         selectedIds: prune(state.selectedIds, next),
+        enteredId: keepEntered(state.enteredId, next),
       };
     }
 

@@ -1,14 +1,20 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Maximize2, Minus, Plus } from 'lucide-react';
 import { useEditor } from '../../state/EditorContext.jsx';
+import { useLayerActions } from '../../state/useLayerActions.js';
 import { boundsOf, snapPosition } from '../../design/arrange.js';
+import { layerLabel } from '../../design/layers.js';
+import { selectionTargetId } from '../../design/layerOps.js';
+import { expandWithDescendants, flattenPaint, indexById } from '../../design/tree.js';
+import { contentFilter, frameStyle, layerState } from '../../design/render.js';
 import { fontStack } from '../../design/fonts.js';
 import { inkFor } from '../../design/color.js';
 import { defaultPropertiesFor } from '../../design/schema.js';
 import { cx } from '../../lib/cx.js';
 import { IconButton, Tooltip } from '../../ui/primitives.jsx';
 import ElementRenderer from '../elements/ElementRenderer.jsx';
-import { CREATION_TOOLS } from './ToolRail.jsx';
+import { LayerMenu } from './LayersPanel.jsx';
+import { toolById } from './ToolRail.jsx';
 
 const HANDLES = [
   ['nw', 0, 0],
@@ -41,8 +47,10 @@ const PADDING = 64;
  */
 const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
   const { state, actions } = useEditor();
-  const { document: doc, selectedIds, zoom } = state;
+  const layers = useLayerActions();
+  const { document: doc, selectedIds, zoom, enteredId, view } = state;
   const canvas = doc.canvas;
+  const elements = doc.elements;
 
   const viewportRef = useRef(null);
   const stageRef = useRef(null);
@@ -54,9 +62,19 @@ const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
   const [guides, setGuides] = useState([]);
   const [marquee, setMarquee] = useState(null);
   const [spaceDown, setSpaceDown] = useState(false);
+  const [menu, setMenu] = useState(null);
 
-  const selected = doc.elements.filter((el) => selectedIds.includes(el.id));
-  const ordered = [...doc.elements].filter((el) => !el.hidden).sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+  // Holding space and choosing the hand tool are the same thing to the canvas.
+  const panning = spaceDown || state.tool === 'hand';
+  const armed = state.tool === 'select' || state.tool === 'hand' ? null : toolById(state.tool);
+
+  // Paint order, nesting and inherited state are all derived from the tree, so
+  // the canvas can never disagree with the Layers panel.
+  const painted = useMemo(() => flattenPaint(elements), [elements]);
+  const stateOf = useMemo(() => layerState(elements), [elements]);
+  const byId = useMemo(() => indexById(elements), [elements]);
+
+  const selected = elements.filter((el) => selectedIds.includes(el.id));
 
   /* ------------------------------- zoom -------------------------------- */
 
@@ -155,6 +173,9 @@ const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
     window.removeEventListener('pointermove', listeners.move);
     window.removeEventListener('pointerup', listeners.up);
     if (d?.moved && d.mode !== 'marquee' && d.mode !== 'pan') actions.commitTransient();
+    // A press that never moved, on something already part of a multi-selection,
+    // means "just this one".
+    if (!d?.moved && d?.collapseTo) actions.select(d.collapseTo.id, d.collapseTo.parentId || null);
   }, [actions, listeners]);
 
   const onPointerMove = useCallback(
@@ -179,17 +200,21 @@ const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
           height: Math.abs(point.y - d.origin.y),
         };
         setMarquee(rect);
-        const hits = doc.elements
-          .filter((el) => !el.hidden)
-          .filter(
-            (el) =>
-              el.x < rect.x + rect.width && el.x + el.width > rect.x && el.y < rect.y + rect.height && el.y + el.height > rect.y
-          )
-          .map((el) => el.id);
+        const hits = [];
+        for (const el of elements) {
+          if (el.type === 'group') continue;
+          const layer = stateOf(el);
+          if (layer.hidden || layer.locked) continue;
+          const overlaps =
+            el.x < rect.x + rect.width && el.x + el.width > rect.x && el.y < rect.y + rect.height && el.y + el.height > rect.y;
+          if (!overlaps) continue;
+          const target = selectionTargetId(elements, el, enteredId);
+          if (!hits.includes(target)) hits.push(target);
+        }
         // Only re-dispatch when the hit list actually changes.
         if (hits.join() !== d.lastHits) {
           d.lastHits = hits.join();
-          actions.selectMany(hits);
+          actions.selectMany(hits, enteredId);
         }
         return;
       }
@@ -203,9 +228,15 @@ const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
           else dx = 0;
         }
         const box = { x: d.bounds.x + dx, y: d.bounds.y + dy, width: d.bounds.width, height: d.bounds.height };
-        const snap = e.altKey
+        const snap = e.altKey || !view.snapObjects
           ? { x: Math.round(box.x), y: Math.round(box.y), guides: [] }
           : snapPosition({ box, others: d.others, canvas, zoom });
+        // The grid catches whatever object snapping did not.
+        if (!e.altKey && view.snapGrid && snap.guides.length === 0) {
+          const g = Math.max(2, view.gridSize);
+          snap.x = Math.round(box.x / g) * g;
+          snap.y = Math.round(box.y / g) * g;
+        }
         setGuides(snap.guides);
         const offsetX = snap.x - d.bounds.x;
         const offsetY = snap.y - d.bounds.y;
@@ -220,7 +251,7 @@ const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
       }
 
       if (d.mode === 'resize') {
-        const next = resize(d.element, d.handle, dx, dy, e.shiftKey);
+        const next = resize(d.element, d.handle, dx, dy, e.shiftKey || Boolean(d.element.lockAspect));
         actions.applyTransient([{ type: 'UPDATE_ELEMENT', targetId: d.element.id, changes: next }]);
         return;
       }
@@ -232,7 +263,7 @@ const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [actions, zoom, doc.elements, canvas]
+    [actions, zoom, elements, canvas, enteredId, view, stateOf]
   );
 
   moveRef.current = onPointerMove;
@@ -253,12 +284,13 @@ const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
 
   /** Places an armed tool where the canvas was clicked, then returns to Select. */
   const placeTool = (toolId, point) => {
-    const tool = CREATION_TOOLS.find((t) => t.id === toolId);
+    const tool = toolById(toolId);
     if (!tool) return;
-    const id = `${toolId}-${Date.now().toString(36)}`;
+    // Several tools (Heading, Triangle…) are presets over one element type.
+    const type = tool.type || tool.id;
+    const id = `${type}-${Date.now().toString(36)}`;
     const ink = inkFor(canvas.background);
-    const inked =
-      toolId === 'text' ? { color: ink } : toolId === 'icon' ? { color: ink } : toolId === 'line' ? { stroke: ink } : {};
+    const inked = type === 'text' || type === 'icon' ? { color: ink } : type === 'line' ? { stroke: ink } : {};
 
     actions.apply(
       [
@@ -266,27 +298,27 @@ const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
           type: 'CREATE_ELEMENT',
           element: {
             id,
-            type: toolId,
+            type,
             x: Math.round(point.x - tool.size.width / 2),
             y: Math.round(point.y - tool.size.height / 2),
             ...tool.size,
-            properties: { ...defaultPropertiesFor(toolId), ...inked, ...(tool.props || {}) },
+            properties: { ...defaultPropertiesFor(type), ...inked, ...(tool.props || {}) },
           },
         },
       ],
       { selectIds: [id] }
     );
     actions.setTool('select');
-    if (toolId === 'text' || toolId === 'button') setEditingId(id);
+    if (type === 'text' || type === 'button') setEditingId(id);
   };
 
   const onViewportPointerDown = (e) => {
-    if (state.tool !== 'select' && e.button === 0 && !spaceDown) {
+    if (armed && e.button === 0 && !panning) {
       e.preventDefault();
       placeTool(state.tool, toDoc(e.clientX, e.clientY));
       return;
     }
-    if (e.button === 1 || spaceDown) {
+    if (e.button === 1 || panning) {
       e.preventDefault();
       beginDrag({
         mode: 'pan',
@@ -299,40 +331,61 @@ const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
     }
     if (e.button !== 0) return;
     setEditingId(null);
+    // Clicking away steps back out of whatever group was being edited.
     if (!e.shiftKey) actions.clearSelection();
     beginDrag({ mode: 'marquee', origin: toDoc(e.clientX, e.clientY) });
   };
 
   const onElementPointerDown = (e, el) => {
-    if (editingId === el.id || spaceDown || e.button !== 0) return;
+    if (editingId === el.id || panning || e.button !== 0) return;
     e.stopPropagation();
 
-    const already = selectedIds.includes(el.id);
+    const targetId = selectionTargetId(elements, el, enteredId);
+    const target = byId.get(targetId) || el;
+    const already = selectedIds.includes(targetId);
     let ids = selectedIds;
+
     if (e.shiftKey) {
-      actions.toggleSelect(el.id);
-      ids = already ? selectedIds.filter((id) => id !== el.id) : [...selectedIds, el.id];
+      actions.toggleSelect(targetId);
+      ids = already ? selectedIds.filter((id) => id !== targetId) : [...selectedIds, targetId];
     } else if (!already) {
-      actions.select(el.id);
-      ids = [el.id];
+      actions.select(targetId, target.parentId || null);
+      ids = [targetId];
     }
 
-    const moving = doc.elements.filter((item) => ids.includes(item.id));
+    const moving = elements.filter((item) => ids.includes(item.id));
     if (moving.length === 0) return;
 
+    // A group drags everything inside it, and nothing inside it can also snap.
+    const inMotion = new Set(expandWithDescendants(elements, ids));
     beginDrag({
       mode: 'move',
       startX: e.clientX,
       startY: e.clientY,
+      collapseTo: already && !e.shiftKey && selectedIds.length > 1 ? target : null,
       origin: moving.map((item) => ({ id: item.id, x: item.x, y: item.y })),
       bounds: boundsOf(moving),
-      others: doc.elements.filter((item) => !ids.includes(item.id) && !item.hidden),
+      others: elements.filter((item) => !inMotion.has(item.id) && item.type !== 'group' && !stateOf(item).hidden),
     });
   };
 
+  /** Double-click steps one level into a group, or edits the layer itself. */
   const onDoubleClick = (el) => {
+    const outer = selectionTargetId(elements, el, enteredId);
+    if (outer !== el.id) {
+      actions.select(selectionTargetId(elements, el, outer), outer);
+      return;
+    }
     if (el.type === 'text' || el.type === 'button') setEditingId(el.id);
     else if (el.type === 'image') (el.properties.src ? onEditImage : onPickImage)?.(el.id);
+  };
+
+  const onElementContextMenu = (e, el) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const targetId = selectionTargetId(elements, el, enteredId);
+    if (!selectedIds.includes(targetId)) actions.select(targetId, byId.get(targetId)?.parentId || null);
+    setMenu({ x: e.clientX, y: e.clientY, id: targetId });
   };
 
   /* -------------------------------- render ------------------------------ */
@@ -341,15 +394,17 @@ const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
   const single = selected.length === 1 ? selected[0] : null;
   const groupBox = multi ? boundsOf(selected) : null;
   const px = 1 / zoom;
+  const menuTarget = menu ? byId.get(menu.id) : null;
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-workspace">
       <div
         ref={viewportRef}
         onPointerDown={onViewportPointerDown}
+        onContextMenu={(e) => e.preventDefault()}
         className={cx(
           'thin-scroll grid min-h-0 flex-1 place-items-center overflow-auto',
-          spaceDown ? 'cursor-grab' : state.tool !== 'select' && 'cursor-crosshair'
+          panning ? 'cursor-grab' : armed && 'cursor-crosshair'
         )}
         style={{ padding: PADDING }}
       >
@@ -365,46 +420,63 @@ const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
             className="absolute left-0 top-0 origin-top-left"
             style={{ width: canvas.width, height: canvas.height, transform: `scale(${zoom})` }}
           >
-            {ordered.map((el) => {
+            {view.grid && (
+              <div
+                className="pointer-events-none absolute inset-0"
+                style={{
+                  zIndex: 0,
+                  backgroundImage:
+                    'linear-gradient(to right, rgba(128,128,128,0.22) 1px, transparent 1px), linear-gradient(to bottom, rgba(128,128,128,0.22) 1px, transparent 1px)',
+                  backgroundSize: `${view.gridSize}px ${view.gridSize}px`,
+                }}
+              />
+            )}
+
+            {painted.map(({ element: el }, index) => {
+              const layer = stateOf(el);
+              if (layer.hidden) return null;
               const isSelected = selectedIds.includes(el.id);
               const isEditing = editingId === el.id && (el.type === 'text' || el.type === 'button');
+              const inert = layer.locked || el.type === 'group';
+
               return (
                 <div
                   key={el.id}
                   className="absolute"
                   style={{
-                    left: el.x,
-                    top: el.y,
-                    width: el.width,
-                    height: el.height,
-                    transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
-                    opacity: el.opacity,
-                    zIndex: el.zIndex,
-                    cursor: spaceDown ? 'inherit' : state.tool !== 'select' ? 'crosshair' : 'move',
+                    ...frameStyle(el, { opacity: layer.opacity, zIndex: index + 1 }),
+                    pointerEvents: inert ? 'none' : undefined,
+                    cursor: panning ? 'inherit' : armed ? 'crosshair' : 'move',
                   }}
                   onPointerDown={(e) => onElementPointerDown(e, el)}
+                  onContextMenu={(e) => onElementContextMenu(e, el)}
                   onPointerEnter={() => setHoverId(el.id)}
                   onPointerLeave={() => setHoverId((current) => (current === el.id ? null : current))}
                   onDoubleClick={() => onDoubleClick(el)}
                 >
-                  {isEditing ? (
-                    <InlineEditor
-                      element={el}
-                      onCommit={(text) => {
-                        if (text !== el.properties.text) {
-                          actions.apply([{ type: 'SET_CONTENT', targetId: el.id, changes: { text } }]);
-                        }
-                        setEditingId(null);
-                      }}
-                    />
-                  ) : (
-                    <ElementRenderer element={el} />
-                  )}
+                  <div className="h-full w-full" style={{ filter: contentFilter(el) }}>
+                    {isEditing ? (
+                      <InlineEditor
+                        element={el}
+                        onCommit={(text) => {
+                          if (text !== el.properties.text) {
+                            actions.apply([{ type: 'SET_CONTENT', targetId: el.id, changes: { text } }]);
+                          }
+                          setEditingId(null);
+                        }}
+                      />
+                    ) : (
+                      <ElementRenderer element={el} />
+                    )}
+                  </div>
 
                   {(isSelected || hoverId === el.id) && !isEditing && (
                     <span
                       className={cx('pointer-events-none absolute inset-0', isSelected ? 'border-accent' : 'border-accent/45')}
-                      style={{ borderWidth: px }}
+                      style={{
+                        borderWidth: px,
+                        borderStyle: el.type === 'group' ? 'dashed' : 'solid',
+                      }}
                     />
                   )}
                 </div>
@@ -412,7 +484,7 @@ const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
             })}
 
             {/* Single-selection transform handles */}
-            {single && editingId !== single.id && (
+            {single && editingId !== single.id && !stateOf(single).hidden && !stateOf(single).locked && (
               <div
                 className="pointer-events-none absolute"
                 style={{
@@ -483,7 +555,7 @@ const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
             )}
           </div>
 
-          {doc.elements.length === 0 && (
+          {elements.length === 0 && (
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
               <span className="font-mono text-[11px] uppercase tracking-[0.22em]" style={{ color: 'rgba(140,140,140,0.9)' }}>
                 Empty canvas
@@ -497,10 +569,19 @@ const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
       </div>
 
       {/* Armed-tool hint */}
-      {state.tool !== 'select' && (
+      {armed && (
         <div className="pointer-events-none absolute left-1/2 top-4 flex -translate-x-1/2 animate-rise items-center gap-2 rounded-lg border border-line bg-surface px-3 py-1.5 text-[13px] text-ink shadow-pop">
-          Click the canvas to place the {CREATION_TOOLS.find((t) => t.id === state.tool)?.label.toLowerCase()}
+          Click the canvas to place the {armed.label.toLowerCase()}
           <span className="font-mono text-2xs text-ink-3">ESC</span>
+        </div>
+      )}
+
+      {/* Group context breadcrumb — what "inside" currently means */}
+      {enteredId && byId.get(enteredId) && !armed && (
+        <div className="pointer-events-none absolute left-1/2 top-4 flex -translate-x-1/2 animate-fade-in items-center gap-1.5 rounded-lg border border-line bg-surface/95 px-2.5 py-1 text-2xs text-ink-3 shadow-pop">
+          Inside
+          <span className="text-ink-2">{layerLabel(byId.get(enteredId))}</span>
+          <span className="font-mono">ESC</span>
         </div>
       )}
 
@@ -528,6 +609,18 @@ const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
           </Tooltip>
         </div>
       </div>
+
+      {menu && menuTarget && (
+        <LayerMenu
+          x={menu.x}
+          y={menu.y}
+          element={menuTarget}
+          selectionCount={selectedIds.length}
+          layers={layers}
+          onRename={() => setMenu(null)}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </div>
   );
 });
@@ -602,6 +695,9 @@ function InlineEditor({ element, onCommit }) {
         fontFamily: fontStack(p.fontFamily),
         fontSize: p.fontSize,
         fontWeight: p.fontWeight,
+        fontStyle: p.italic ? 'italic' : undefined,
+        textDecoration: p.underline ? 'underline' : undefined,
+        textTransform: p.textCase && p.textCase !== 'none' ? p.textCase : undefined,
         color: p.color,
         textAlign: p.align,
         lineHeight: p.lineHeight,
@@ -612,7 +708,7 @@ function InlineEditor({ element, onCommit }) {
   );
 }
 
-/** Axis-aligned resize. Shift keeps the original proportions. */
+/** Axis-aligned resize. Shift — or a locked aspect ratio — keeps proportions. */
 function resize(orig, handle, dx, dy, keepRatio) {
   let { x, y, width, height } = orig;
   const ratio = orig.width / orig.height;

@@ -3,21 +3,22 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import {
   AlignCenterVertical,
   ArrowLeft,
-  Circle,
   Copy,
   Download,
+  FolderPlus,
+  Grid3x3,
+  Hand,
   ImageIcon,
   Keyboard,
   Layers,
+  LayoutTemplate,
   Maximize2,
-  Minus,
   Moon,
-  RectangleHorizontal,
-  Square,
-  Star,
+  Pipette,
+  SlidersHorizontal,
   Sun,
   Trash2,
-  Type,
+  Ungroup,
 } from 'lucide-react';
 import { api } from '../api/client.js';
 import { cx } from '../lib/cx.js';
@@ -25,14 +26,15 @@ import { useToast } from '../lib/toast.jsx';
 import { useTheme } from '../lib/theme.jsx';
 import { useMediaQuery } from '../lib/useMediaQuery.js';
 import { EditorProvider, useEditor } from '../state/EditorContext.jsx';
+import { useLayerActions } from '../state/useLayerActions.js';
 import { alignOperations } from '../design/arrange.js';
 import { Spinner } from '../ui/primitives.jsx';
 import { Spark } from '../ui/brand.jsx';
 import TopBar from '../components/editor/TopBar.jsx';
 import ToolRail, { CREATION_TOOLS } from '../components/editor/ToolRail.jsx';
+import TemplatesPanel from '../components/editor/TemplatesPanel.jsx';
 import Stage from '../components/editor/Stage.jsx';
-import Inspector from '../components/editor/Inspector.jsx';
-import LayersPanel from '../components/editor/LayersPanel.jsx';
+import RightPanel from '../components/editor/RightPanel.jsx';
 import LibraryPanel from '../components/editor/LibraryPanel.jsx';
 import AIPanel from '../components/editor/AIPanel.jsx';
 import PhotoEditor from '../components/editor/PhotoEditor.jsx';
@@ -47,7 +49,16 @@ export default function EditorPage() {
   );
 }
 
-const TOOL_KEYS = { v: 'select', t: 'text', r: 'rectangle', o: 'circle', l: 'line', b: 'button', i: 'icon' };
+const TOOL_KEYS = {
+  v: 'select', h: 'hand', t: 'text', r: 'rectangle', o: 'circle',
+  p: 'polygon', s: 'star', l: 'line', b: 'button', i: 'icon',
+};
+
+/** Which property a sampled colour belongs to, per element type. */
+const COLOUR_KEY = {
+  text: 'color', icon: 'color', button: 'background', line: 'stroke',
+  rectangle: 'fill', circle: 'fill', polygon: 'fill', star: 'fill',
+};
 
 function EditorShell() {
   const { id } = useParams();
@@ -55,6 +66,7 @@ function EditorShell() {
   const toast = useToast();
   const { theme, toggle: toggleTheme } = useTheme();
   const { state, actions } = useEditor();
+  const layers = useLayerActions();
   const wide = useMediaQuery('(min-width: 1100px)');
 
   const [name, setName] = useState('Untitled design');
@@ -64,8 +76,10 @@ function EditorShell() {
   const [generating, setGenerating] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  const [leftPanel, setLeftPanel] = useState(null); // 'library' | 'layers'
+  const [leftPanel, setLeftPanel] = useState(null); // 'library' | 'templates'
   const [rightPanel, setRightPanel] = useState('inspector'); // 'inspector' | 'ai'
+  const [rightTab, setRightTab] = useState('properties'); // 'properties' | 'layers'
+  const [renamingId, setRenamingId] = useState(null);
   const [inspectorOpen, setInspectorOpen] = useState(false); // only used when narrow
   const [photoEditId, setPhotoEditId] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -176,9 +190,15 @@ function EditorShell() {
     if (!wide) setInspectorOpen(true);
   }, [wide, inspectorOpen]);
 
-  const openPanel = useCallback((panel) => {
-    setLeftPanel(panel);
-  }, []);
+  /** Brings the right column back to a given tab, opening it if it is closed. */
+  const openTab = useCallback(
+    (tab) => {
+      setRightTab(tab);
+      setRightPanel('inspector');
+      if (!wide) setInspectorOpen(true);
+    },
+    [wide]
+  );
 
   const pickImageFor = useCallback(
     (elementId) => {
@@ -186,6 +206,40 @@ function EditorShell() {
       setLeftPanel('library');
     },
     [actions]
+  );
+
+  /**
+   * Samples a colour from anywhere on screen and drops it where it belongs for
+   * whatever is selected — text colour, button fill, stroke — or the canvas
+   * background when nothing is. Chromium-only, so the tool is offered only
+   * where the browser can actually deliver it.
+   */
+  const sampleColour = useCallback(async () => {
+    if (!('EyeDropper' in window)) return;
+    let picked;
+    try {
+      ({ sRGBHex: picked } = await new window.EyeDropper().open());
+    } catch {
+      return; // dismissed
+    }
+    const targets = state.document.elements
+      .filter((el) => state.selectedIds.includes(el.id) && COLOUR_KEY[el.type]);
+    if (targets.length === 0) {
+      actions.apply([{ type: 'SET_CANVAS', changes: { background: picked } }]);
+      toast.success('Canvas background updated', picked.toUpperCase());
+      return;
+    }
+    actions.apply(
+      targets.map((el) => ({ type: 'UPDATE_ELEMENT', targetId: el.id, changes: { [COLOUR_KEY[el.type]]: picked } }))
+    );
+  }, [actions, state.document.elements, state.selectedIds, toast]);
+
+  const startRename = useCallback(
+    (layerId) => {
+      openTab('layers');
+      setRenamingId(layerId);
+    },
+    [openTab]
   );
 
   /* ------------------------------- shortcuts ----------------------------- */
@@ -227,7 +281,9 @@ function EditorShell() {
 
       if (mod && e.key.toLowerCase() === 'a') {
         e.preventDefault();
-        actions.selectMany(state.document.elements.filter((el) => !el.hidden).map((el) => el.id));
+        actions.selectMany(
+          state.document.elements.filter((el) => !el.hidden && !el.parentId).map((el) => el.id)
+        );
         return;
       }
       if (mod && e.key === '0') {
@@ -245,19 +301,47 @@ function EditorShell() {
         setShortcutsOpen(true);
         return;
       }
+
+      /* --- layer commands --------------------------------------------- */
+
+      if (mod && e.key.toLowerCase() === 'g' && ids.length) {
+        e.preventDefault();
+        if (e.shiftKey) layers.ungroup();
+        else layers.group();
+        return;
+      }
+      if (mod && e.shiftKey && e.key.toLowerCase() === 'h' && ids.length) {
+        e.preventDefault();
+        layers.toggleHidden();
+        return;
+      }
+      if (mod && e.shiftKey && e.key.toLowerCase() === 'l' && ids.length) {
+        e.preventDefault();
+        layers.toggleLocked();
+        return;
+      }
+      if ((e.key === ']' || e.key === '[') && ids.length) {
+        e.preventDefault();
+        const forward = e.key === ']';
+        layers.arrange(mod ? (forward ? 'front' : 'back') : forward ? 'forward' : 'backward');
+        return;
+      }
+      if (e.key === 'F2' && ids.length === 1) {
+        e.preventDefault();
+        startRename(ids[0]);
+        return;
+      }
       if (mod && e.key.toLowerCase() === 'd' && ids.length) {
         e.preventDefault();
-        actions.apply(ids.map((elementId) => ({ type: 'DUPLICATE_ELEMENT', targetId: elementId })));
+        layers.duplicate();
         return;
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && ids.length) {
         e.preventDefault();
-        actions.apply(
-          ids.map((elementId) => ({ type: 'DELETE_ELEMENT', targetId: elementId })),
-          { selectIds: [] }
-        );
+        layers.remove();
         return;
       }
+
       if (e.key.startsWith('Arrow') && ids.length) {
         e.preventDefault();
         const step = e.shiftKey ? 10 : 1;
@@ -286,10 +370,15 @@ function EditorShell() {
       }
       if (e.key.toLowerCase() === 'm') {
         e.preventDefault();
-        setLeftPanel((p) => (p === 'library' ? null : 'library'));
+        setLeftPanel((panel) => (panel === 'library' ? null : 'library'));
+        return;
+      }
+      if (e.key.toLowerCase() === 'c' && 'EyeDropper' in window) {
+        e.preventDefault();
+        sampleColour();
       }
     },
-    [actions, state.selectedIds, state.document.elements, state.tool, leftPanel, save, openAI]
+    [actions, layers, state.selectedIds, state.document.elements, state.tool, leftPanel, save, openAI, startRename, sampleColour]
   );
 
   useEffect(() => {
@@ -301,20 +390,39 @@ function EditorShell() {
 
   const commands = useMemo(() => {
     const selected = state.selectedIds;
-    const place = (toolId) => ({
-      id: `tool-${toolId}`,
-      group: 'Insert',
-      label: `Place ${CREATION_TOOLS.find((t) => t.id === toolId)?.label.toLowerCase()}`,
-      hint: CREATION_TOOLS.find((t) => t.id === toolId)?.hint,
-      icon: { text: Type, rectangle: Square, circle: Circle, line: Minus, button: RectangleHorizontal, icon: Star }[toolId],
-      run: () => actions.setTool(toolId),
-    });
 
     return [
-      ...CREATION_TOOLS.map((t) => place(t.id)),
+      ...CREATION_TOOLS.map((tool) => ({
+        id: `tool-${tool.id}`,
+        group: 'Insert',
+        label: `Place ${tool.label.toLowerCase()}`,
+        hint: tool.hint,
+        icon: tool.icon,
+        run: () => actions.setTool(tool.id),
+      })),
       { id: 'library', group: 'Insert', label: 'Open image library', hint: 'M', icon: ImageIcon, run: () => setLeftPanel('library') },
-      { id: 'layers', group: 'Panels', label: 'Show layers', icon: Layers, run: () => setLeftPanel('layers') },
+      { id: 'templates', group: 'Insert', label: 'Browse templates', icon: LayoutTemplate, run: () => setLeftPanel('templates') },
+      { id: 'layers', group: 'Panels', label: 'Show layers', icon: Layers, run: () => openTab('layers') },
+      { id: 'properties', group: 'Panels', label: 'Show properties', icon: SlidersHorizontal, run: () => openTab('properties') },
       { id: 'ai', group: 'Panels', label: 'Ask Apollo', hint: '⌘J', icon: Spark, run: openAI },
+      {
+        id: 'group',
+        group: 'Arrange',
+        label: 'Group selection',
+        hint: '⌘G',
+        icon: FolderPlus,
+        disabled: !layers.canGroup(),
+        run: () => layers.group(),
+      },
+      {
+        id: 'ungroup',
+        group: 'Arrange',
+        label: 'Ungroup selection',
+        hint: '⇧⌘G',
+        icon: Ungroup,
+        disabled: !layers.canUngroup(),
+        run: () => layers.ungroup(),
+      },
       {
         id: 'align-center',
         group: 'Arrange',
@@ -324,8 +432,8 @@ function EditorShell() {
         run: () => {
           const els = state.document.elements.filter((el) => selected.includes(el.id));
           actions.apply([
-            ...alignOperations(els, state.document.canvas, 'center'),
-            ...alignOperations(els, state.document.canvas, 'middle'),
+            ...alignOperations(els, state.document.canvas, 'center', 'canvas'),
+            ...alignOperations(els, state.document.canvas, 'middle', 'canvas'),
           ]);
         },
       },
@@ -336,7 +444,7 @@ function EditorShell() {
         hint: '⌘D',
         icon: Copy,
         disabled: selected.length === 0,
-        run: () => actions.apply(selected.map((elementId) => ({ type: 'DUPLICATE_ELEMENT', targetId: elementId }))),
+        run: () => layers.duplicate(),
       },
       {
         id: 'delete',
@@ -345,10 +453,21 @@ function EditorShell() {
         hint: '⌫',
         icon: Trash2,
         disabled: selected.length === 0,
-        run: () => actions.apply(selected.map((elementId) => ({ type: 'DELETE_ELEMENT', targetId: elementId })), { selectIds: [] }),
+        run: () => layers.remove(),
       },
+      ...('EyeDropper' in window
+        ? [{ id: 'eyedropper', group: 'Arrange', label: 'Pick a colour from the screen', hint: 'C', icon: Pipette, run: sampleColour }]
+        : []),
+      { id: 'hand', group: 'View', label: 'Hand tool', hint: 'H', icon: Hand, run: () => actions.setTool('hand') },
       { id: 'fit', group: 'View', label: 'Fit to screen', hint: '⇧1', icon: Maximize2, run: () => stageRef.current?.fit() },
       { id: 'zoom-100', group: 'View', label: 'Zoom to 100%', hint: '⌘0', icon: Maximize2, run: () => actions.setZoom(1) },
+      {
+        id: 'grid',
+        group: 'View',
+        label: state.view.grid ? 'Hide grid' : 'Show grid',
+        icon: Grid3x3,
+        run: () => actions.setView({ grid: !state.view.grid }),
+      },
       {
         id: 'theme',
         group: 'View',
@@ -361,7 +480,7 @@ function EditorShell() {
       { id: 'export-webp', group: 'Export', label: 'Export WebP', icon: Download, run: () => exportDesign('webp') },
       { id: 'shortcuts', group: 'Help', label: 'Keyboard shortcuts', hint: '?', icon: Keyboard, run: () => setShortcutsOpen(true) },
     ];
-  }, [actions, state.selectedIds, state.document, theme, toggleTheme, exportDesign, openAI]);
+  }, [actions, layers, state.selectedIds, state.document, state.view, theme, toggleTheme, exportDesign, openAI, openTab, sampleColour]);
 
   /* -------------------------------- render ------------------------------- */
 
@@ -404,7 +523,15 @@ function EditorShell() {
       />
 
       <div className="relative flex min-h-0 flex-1">
-        <ToolRail panel={leftPanel} onPanel={openPanel} />
+        <ToolRail
+          libraryOpen={leftPanel === 'library'}
+          onLibrary={() => setLeftPanel((panel) => (panel === 'library' ? null : 'library'))}
+          templatesOpen={leftPanel === 'templates'}
+          onTemplates={() => setLeftPanel((panel) => (panel === 'templates' ? null : 'templates'))}
+          layersOpen={rightTab === 'layers' && rightPanel === 'inspector' && showRight}
+          onLayers={() => openTab(rightTab === 'layers' ? 'properties' : 'layers')}
+          onSampleColour={'EyeDropper' in window ? sampleColour : undefined}
+        />
 
         {leftPanel && (
           <div
@@ -413,8 +540,8 @@ function EditorShell() {
               !wide && 'absolute inset-y-0 left-[52px] z-30 shadow-pop'
             )}
           >
-            {leftPanel === 'layers' ? (
-              <LayersPanel onClose={() => setLeftPanel(null)} />
+            {leftPanel === 'templates' ? (
+              <TemplatesPanel onClose={() => setLeftPanel(null)} />
             ) : (
               <LibraryPanel projectId={id} onClose={() => setLeftPanel(null)} />
             )}
@@ -428,7 +555,15 @@ function EditorShell() {
             {rightPanel === 'ai' ? (
               <AIPanel onClose={() => (wide ? setRightPanel('inspector') : setInspectorOpen(false))} />
             ) : (
-              <Inspector onEditImage={setPhotoEditId} onPickImage={pickImageFor} />
+              <RightPanel
+                tab={rightTab}
+                onTab={setRightTab}
+                renamingId={renamingId}
+                onRenaming={setRenamingId}
+                onEditImage={setPhotoEditId}
+                onPickImage={pickImageFor}
+                onClose={wide ? undefined : () => setInspectorOpen(false)}
+              />
             )}
           </div>
         )}

@@ -36,20 +36,30 @@ export default function ImageElement({ element, preview }) {
     );
   }
 
+  // Cropping is a focal point plus a zoom: the frame decides how much is seen,
+  // the focal point decides what stays in it. Both survive resizing the layer.
+  const cropped = (p.fit || 'cover') === 'cover';
+  const focal = `${p.focalX ?? 50}% ${p.focalY ?? 50}%`;
+  const zoom = cropped ? p.zoom ?? 1 : 1;
+
   return (
-    <img
-      src={p.src}
-      alt={p.alt || ''}
-      draggable={false}
-      style={{
-        width: '100%',
-        height: '100%',
-        objectFit: p.fit || 'cover',
-        borderRadius: p.borderRadius,
-        filter: cssImageFilter(p),
-        display: 'block',
-        userSelect: 'none',
-      }}
-    />
+    <div style={{ width: '100%', height: '100%', overflow: 'hidden', borderRadius: p.borderRadius }}>
+      <img
+        src={p.src}
+        alt={p.alt || ''}
+        draggable={false}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: p.fit || 'cover',
+          objectPosition: cropped ? focal : undefined,
+          transform: zoom > 1 ? `scale(${zoom})` : undefined,
+          transformOrigin: focal,
+          filter: cssImageFilter(p),
+          display: 'block',
+          userSelect: 'none',
+        }}
+      />
+    </div>
   );
 }

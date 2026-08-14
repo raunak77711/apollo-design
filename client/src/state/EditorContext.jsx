@@ -12,13 +12,17 @@ export function EditorProvider({ children }) {
     () => ({
       loadDocument: (document) => dispatch({ type: 'LOAD_DOCUMENT', document }),
 
-      select: (id) => dispatch({ type: 'SELECT', ids: id ? [id] : [] }),
-      selectMany: (ids) => dispatch({ type: 'SELECT', ids }),
+      // `enteredId` travels with selection so the canvas and the Layers panel
+      // always agree on which group the user is working inside.
+      select: (id, enteredId = null) => dispatch({ type: 'SELECT', ids: id ? [id] : [], enteredId }),
+      selectMany: (ids, enteredId = null) => dispatch({ type: 'SELECT', ids, enteredId }),
       toggleSelect: (id) => dispatch({ type: 'TOGGLE_SELECT', id }),
-      clearSelection: () => dispatch({ type: 'SELECT', ids: [] }),
+      clearSelection: () => dispatch({ type: 'SELECT', ids: [], enteredId: null }),
+      setEntered: (id) => dispatch({ type: 'SET_ENTERED', id }),
 
       setTool: (tool) => dispatch({ type: 'SET_TOOL', tool }),
       setZoom: (zoom) => dispatch({ type: 'SET_ZOOM', zoom }),
+      setView: (changes) => dispatch({ type: 'SET_VIEW', changes }),
 
       // Discrete, undoable edits (inspector, layers, AI apply).
       apply: (operations, opts = {}) => dispatch({ type: 'APPLY', operations, ...opts }),

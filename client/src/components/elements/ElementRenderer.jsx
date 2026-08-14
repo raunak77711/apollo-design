@@ -3,6 +3,7 @@ import ImageElement from './ImageElement.jsx';
 import IconElement from './IconElement.jsx';
 import RectangleElement from './RectangleElement.jsx';
 import CircleElement from './CircleElement.jsx';
+import PolyElement from './PolyElement.jsx';
 import LineElement from './LineElement.jsx';
 import ButtonElement from './ButtonElement.jsx';
 import GroupElement from './GroupElement.jsx';
@@ -13,6 +14,8 @@ const RENDERERS = {
   icon: IconElement,
   rectangle: RectangleElement,
   circle: CircleElement,
+  polygon: PolyElement,
+  star: PolyElement,
   line: LineElement,
   button: ButtonElement,
   group: GroupElement,

@@ -29,7 +29,8 @@ export function TextField({ className, ...props }) {
   return <input className={cx('field', className)} {...props} />;
 }
 
-export function NumberField({ label, value, onChange, onCommit, step = 1, min, max, suffix, className }) {
+/** `name` is the spoken label — "X" and "W" are legible but say nothing aloud. */
+export function NumberField({ label, name, value, onChange, onCommit, step = 1, min, max, suffix, className }) {
   const [draft, setDraft] = useState(String(value ?? 0));
   const scrub = useRef(null);
 
@@ -81,6 +82,7 @@ export function NumberField({ label, value, onChange, onCommit, step = 1, min, m
         }}
         value={draft}
         inputMode="decimal"
+        aria-label={name || label}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={(e) => commit(e.target.value)}
         onKeyDown={(e) => {
@@ -101,11 +103,13 @@ export function NumberField({ label, value, onChange, onCommit, step = 1, min, m
   );
 }
 
+/** Label sits in the same left column as PropRow, so colours line up with everything else. */
 export function ColorField({ label, value, onChange, onCommit, className }) {
   const hex = toHex(value);
   return (
-    <Field label={label} className={className}>
-      <div className="flex h-8 items-center gap-2 rounded border border-line bg-raised px-1.5 transition-colors focus-within:border-accent/70 hover:border-line-strong">
+    <div className={cx('flex h-8 items-center gap-2', className)}>
+      {label && <span className="label w-[4.25rem] shrink-0 truncate">{label}</span>}
+      <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded border border-line bg-raised px-1.5 transition-colors focus-within:border-accent/70 hover:border-line-strong">
         <span className="relative h-[18px] w-[18px] shrink-0 overflow-hidden rounded-sm border border-line-strong">
           <input
             type="color"
@@ -121,21 +125,23 @@ export function ColorField({ label, value, onChange, onCommit, className }) {
           onChange={(e) => onChange(e.target.value)}
           onBlur={() => onCommit?.()}
           spellCheck={false}
+          aria-label={`${label || 'Colour'} hex value`}
           className="w-full min-w-0 bg-transparent font-mono text-xs uppercase text-ink outline-none"
         />
       </div>
-    </Field>
+    </div>
   );
 }
 
-export function SelectField({ label, value, options, onChange, className }) {
+export function SelectField({ label, name, value, options, onChange, className }) {
   return (
     <Field label={label} className={className}>
       <div className="relative">
         <select
           value={value}
+          aria-label={name || label}
           onChange={(e) => onChange(e.target.value)}
-          className="field appearance-none pr-7 capitalize"
+          className="field appearance-none pr-7"
         >
           {options.map((o) =>
             typeof o === 'string' ? (
@@ -174,6 +180,112 @@ export function SliderField({ label, value, onChange, onCommit, min = 0, max = 1
         onKeyUp={() => onCommit?.()}
       />
     </div>
+  );
+}
+
+/**
+ * Inspector row: a fixed micro-label column with the control beside it. Every
+ * property reads down one edge, which is what makes a dense panel scannable.
+ */
+export function PropRow({ label, children, className, align = 'center' }) {
+  const top = align === 'start';
+  return (
+    <div className={cx('flex min-h-[2rem] gap-2', top ? 'items-start' : 'items-center', className)}>
+      <span className={cx('label w-[4.25rem] shrink-0 truncate', top && 'pt-2')}>{label}</span>
+      <div className={cx('flex min-w-0 flex-1 gap-1.5', top ? 'items-start' : 'items-center')}>{children}</div>
+    </div>
+  );
+}
+
+/** Label, track and readout on one line — the Appearance panel's workhorse. */
+export function SliderRow({ label, value, display, onChange, onCommit, min = 0, max = 100, step = 1, disabled }) {
+  return (
+    <div className={cx('flex h-8 items-center gap-2', disabled && 'pointer-events-none opacity-40')}>
+      <span className="label w-[4.25rem] shrink-0 truncate">{label}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        aria-label={label}
+        className="min-w-0 flex-1"
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        onPointerUp={() => onCommit?.()}
+        onKeyUp={() => onCommit?.()}
+      />
+      <span className="num w-10 shrink-0 text-right text-2xs text-ink-2">{display ?? round(value)}</span>
+    </div>
+  );
+}
+
+export function Toggle({ checked, onChange, label, disabled }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={Boolean(checked)}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={cx(
+        'relative h-[16px] w-[28px] shrink-0 rounded-full border transition-colors duration-150',
+        'disabled:pointer-events-none disabled:opacity-40',
+        checked ? 'border-accent bg-accent' : 'border-line-strong bg-raised hover:border-ink-3'
+      )}
+    >
+      <span
+        className={cx(
+          'absolute top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full transition-all duration-150 ease-out',
+          checked ? 'left-[13px] bg-accent-ink' : 'left-[2px] bg-ink-3'
+        )}
+      />
+    </button>
+  );
+}
+
+/** Square icon toggle used for italic/underline/flip and other on-off styling. */
+export function IconToggle({ icon: Icon, label, active, onClick, disabled, className }) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-pressed={Boolean(active)}
+      disabled={disabled}
+      onClick={onClick}
+      className={cx(
+        'flex h-8 w-8 shrink-0 items-center justify-center rounded border transition-colors duration-150',
+        'disabled:pointer-events-none disabled:opacity-40',
+        active
+          ? 'border-line-strong bg-raised text-ink'
+          : 'border-line bg-raised text-ink-3 hover:border-line-strong hover:text-ink',
+        className
+      )}
+    >
+      <Icon size={14} />
+    </button>
+  );
+}
+
+/** Full-width action with an icon — group, distribute, replace image, and so on. */
+export function ActionButton({ icon: Icon, label, onClick, disabled, danger, title, className }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title || label}
+      className={cx(
+        'flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded border border-line bg-raised px-2 text-xs',
+        'transition-colors duration-150 hover:border-line-strong disabled:pointer-events-none disabled:opacity-40',
+        danger ? 'text-danger hover:bg-danger/10' : 'text-ink-2 hover:text-ink',
+        className
+      )}
+    >
+      {Icon && <Icon size={13} className="shrink-0" />}
+      <span className="truncate">{label}</span>
+    </button>
   );
 }
 

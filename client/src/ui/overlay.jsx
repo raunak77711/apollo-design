@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { cx } from '../lib/cx.js';
 
 /** Escape-to-close, shared by every overlay. */
@@ -55,6 +56,7 @@ export function MenuItem({ icon: Icon, children, hint, danger, className, ...pro
     <button
       className={cx(
         'flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-[13px] transition-colors duration-100',
+        'disabled:pointer-events-none disabled:opacity-40',
         danger ? 'text-danger hover:bg-danger/10' : 'text-ink-2 hover:bg-raised hover:text-ink',
         className
       )}
@@ -64,6 +66,62 @@ export function MenuItem({ icon: Icon, children, hint, danger, className, ...pro
       <span className="flex-1 truncate">{children}</span>
       {hint && <span className="font-mono text-2xs text-ink-3">{hint}</span>}
     </button>
+  );
+}
+
+export function MenuDivider() {
+  return <span className="my-1 block h-px bg-line" />;
+}
+
+/**
+ * Right-click menu, portalled to the body so it is never clipped by a scrolling
+ * panel and always flips away from the viewport edges.
+ */
+export function ContextMenu({ x, y, onClose, children, className }) {
+  const ref = useRef(null);
+  const [place, setPlace] = useState({ left: x, top: y, ready: false });
+
+  useEscape(onClose, true);
+
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const { width, height } = node.getBoundingClientRect();
+    setPlace({
+      left: Math.max(8, Math.min(x, window.innerWidth - width - 8)),
+      top: Math.max(8, Math.min(y, window.innerHeight - height - 8)),
+      ready: true,
+    });
+  }, [x, y]);
+
+  useEffect(() => {
+    const dismiss = (e) => {
+      if (!ref.current?.contains(e.target)) onClose();
+    };
+    window.addEventListener('pointerdown', dismiss);
+    window.addEventListener('resize', onClose);
+    window.addEventListener('blur', onClose);
+    return () => {
+      window.removeEventListener('pointerdown', dismiss);
+      window.removeEventListener('resize', onClose);
+      window.removeEventListener('blur', onClose);
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      ref={ref}
+      role="menu"
+      onContextMenu={(e) => e.preventDefault()}
+      style={{ left: place.left, top: place.top, visibility: place.ready ? 'visible' : 'hidden' }}
+      className={cx(
+        'fixed z-[90] w-52 animate-pop rounded-lg border border-line bg-surface p-1 shadow-pop',
+        className
+      )}
+    >
+      {children}
+    </div>,
+    document.body
   );
 }
 

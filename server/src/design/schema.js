@@ -1,10 +1,8 @@
 /**
  * Apollo canonical design-document schema helpers.
  *
- * This module is intentionally dependency-free and pure so it can be shared
- * verbatim by the frontend (client/src/design/schema.js is a mirror copy).
- * AI output is untrusted — every element and operation passes through the
- * sanitizers here before it is allowed into a document.
+ * MIRROR of client/src/design/schema.js — keep the two in sync. Pure &
+ * dependency-free so the same validation/sanitization runs on both sides.
  */
 
 export const SCHEMA_VERSION = 1;
@@ -15,12 +13,13 @@ export const ELEMENT_TYPES = [
   'icon',
   'rectangle',
   'circle',
+  'polygon',
+  'star',
   'line',
   'button',
   'group',
 ];
 
-// Whitelist of Lucide icon names the AI is allowed to reference.
 export const ALLOWED_ICONS = [
   'Home', 'Search', 'Heart', 'User', 'Settings', 'ShoppingCart', 'MapPin',
   'Calendar', 'Mail', 'Phone', 'ArrowRight', 'Check', 'X', 'Menu', 'Instagram',
@@ -28,79 +27,74 @@ export const ALLOWED_ICONS = [
   'Upload', 'Download', 'Play', 'Flame', 'Zap', 'Trophy', 'Clock', 'Award',
 ];
 
-const BASE_ELEMENT = {
-  x: 0,
-  y: 0,
-  width: 100,
-  height: 100,
-  rotation: 0,
-  opacity: 1,
-  zIndex: 1,
-};
+export const BLEND_MODES = [
+  'normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten',
+  'color-dodge', 'color-burn', 'hard-light', 'soft-light',
+  'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity',
+];
 
-// Default `properties` per element type.
+export const TEXT_CASES = ['none', 'uppercase', 'lowercase', 'capitalize'];
+export const STROKE_STYLES = ['solid', 'dashed', 'dotted'];
+export const IMAGE_FITS = ['cover', 'contain', 'fill'];
+
+export const DEFAULT_SHADOW = { x: 0, y: 10, blur: 24, color: '#00000059' };
+
+const BASE_ELEMENT = { x: 0, y: 0, width: 100, height: 100, rotation: 0, opacity: 1, zIndex: 1 };
+
 const DEFAULT_PROPERTIES = {
   text: {
-    text: 'Text',
-    fontFamily: 'Inter',
-    fontSize: 32,
-    fontWeight: 600,
-    color: '#FFFFFF',
-    align: 'left',
-    lineHeight: 1.2,
-    letterSpacing: 0,
+    text: 'Text', fontFamily: 'Inter', fontSize: 32, fontWeight: 600,
+    color: '#FFFFFF', align: 'left', lineHeight: 1.2, letterSpacing: 0,
+    italic: false, underline: false, textCase: 'none',
   },
   image: {
-    src: '',
-    alt: '',
-    fit: 'cover', // cover | contain | fill
-    borderRadius: 0,
-    brightness: 100,
-    contrast: 100,
-    saturation: 100,
-    blur: 0,
-    hue: 0, // hue-rotate degrees
-    grayscale: 0, // 0-100
+    src: '', alt: '', fit: 'cover', borderRadius: 0,
+    brightness: 100, contrast: 100, saturation: 100, blur: 0,
+    hue: 0, grayscale: 0,
+    // Crop is expressed as a focal point plus a zoom, so it survives resizing.
+    focalX: 50, focalY: 50, zoom: 1,
   },
   icon: { name: 'Star', size: 48, color: '#FFFFFF', strokeWidth: 2 },
-  rectangle: { fill: '#D9A441', borderRadius: 0, borderColor: '', borderWidth: 0 },
-  circle: { fill: '#D9A441', borderColor: '', borderWidth: 0 },
-  line: { stroke: '#FFFFFF', strokeWidth: 2 },
+  rectangle: { fill: '#D9A441', fillOpacity: 1, borderRadius: 0, borderColor: '', borderWidth: 0, strokeStyle: 'solid' },
+  circle: { fill: '#D9A441', fillOpacity: 1, borderColor: '', borderWidth: 0, strokeStyle: 'solid' },
+  // `sides` covers triangles through dodecagons; `points`/`depth` shape a star.
+  polygon: { fill: '#D9A441', fillOpacity: 1, sides: 3, borderColor: '', borderWidth: 0, strokeStyle: 'solid' },
+  star: { fill: '#D9A441', fillOpacity: 1, points: 5, depth: 0.45, borderColor: '', borderWidth: 0, strokeStyle: 'solid' },
+  line: { stroke: '#FFFFFF', strokeWidth: 2, strokeStyle: 'solid' },
   button: {
-    text: 'Button',
-    fontFamily: 'Inter',
-    fontSize: 18,
-    fontWeight: 700,
-    color: '#141005',
-    background: '#D9A441',
-    borderRadius: 6,
-    align: 'center',
+    text: 'Button', fontFamily: 'Inter', fontSize: 18, fontWeight: 700,
+    color: '#141005', background: '#D9A441', borderRadius: 6, align: 'center',
+    letterSpacing: 0, italic: false, underline: false, textCase: 'none',
+    borderColor: '', borderWidth: 0, strokeStyle: 'solid',
   },
   group: {},
 };
 
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 const num = (v, fallback = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
+const oneOf = (v, list, fallback) => (list.includes(v) ? v : fallback);
 
 export function createEmptyDocument({ width = 1200, height = 628, background = '#0A0A0A' } = {}) {
+  return { version: SCHEMA_VERSION, type: 'design', canvas: { width, height, background }, elements: [] };
+}
+
+export function defaultPropertiesFor(type) {
+  return { ...(DEFAULT_PROPERTIES[type] || {}) };
+}
+
+export function sanitizeShadow(shadow) {
+  if (!shadow) return null;
   return {
-    version: SCHEMA_VERSION,
-    type: 'design',
-    canvas: { width, height, background },
-    elements: [],
+    x: clamp(num(shadow.x, 0), -200, 200),
+    y: clamp(num(shadow.y, DEFAULT_SHADOW.y), -200, 200),
+    blur: clamp(num(shadow.blur, DEFAULT_SHADOW.blur), 0, 200),
+    color: typeof shadow.color === 'string' && shadow.color ? shadow.color : DEFAULT_SHADOW.color,
   };
 }
 
-/**
- * Produce a fully-formed, sanitized element from a partial spec (from AI or UI).
- * Unknown property keys are dropped; numeric fields are coerced and clamped.
- */
 export function makeElement(type, spec = {}, idFactory) {
-  if (!ELEMENT_TYPES.includes(type)) {
-    throw new Error(`Unknown element type: ${type}`);
-  }
+  if (!ELEMENT_TYPES.includes(type)) throw new Error(`Unknown element type: ${type}`);
   const id = spec.id || (idFactory ? idFactory() : `${type}-${Math.random().toString(36).slice(2, 9)}`);
-
   const el = {
     id,
     type,
@@ -113,11 +107,24 @@ export function makeElement(type, spec = {}, idFactory) {
     zIndex: num(spec.zIndex, BASE_ELEMENT.zIndex),
     properties: sanitizeProperties(type, { ...spec.properties, ...pickInlineProps(type, spec) }),
   };
+
+  // Layer-level state. Only written when set, so documents stay lean and
+  // diff-friendly.
+  if (typeof spec.name === 'string' && spec.name.trim()) el.name = spec.name.trim().slice(0, 80);
+  if (spec.parentId) el.parentId = String(spec.parentId);
+  if (spec.hidden) el.hidden = true;
+  if (spec.locked) el.locked = true;
+  if (spec.flipH) el.flipH = true;
+  if (spec.flipV) el.flipV = true;
+  if (spec.lockAspect) el.lockAspect = true;
+  if (spec.blendMode && spec.blendMode !== 'normal') el.blendMode = oneOf(spec.blendMode, BLEND_MODES, 'normal');
+  if (num(spec.layerBlur, 0) > 0) el.layerBlur = clamp(num(spec.layerBlur, 0), 0, 100);
+  if (spec.shadow) el.shadow = sanitizeShadow(spec.shadow);
+
   if (type === 'group') el.children = Array.isArray(spec.children) ? spec.children : [];
   return el;
 }
 
-// Some callers pass properties inline (e.g. AI: { type:'icon', name, color }).
 function pickInlineProps(type, spec) {
   const keys = Object.keys(DEFAULT_PROPERTIES[type] || {});
   const out = {};
@@ -132,8 +139,20 @@ export function sanitizeProperties(type, props = {}) {
     if (props[key] === undefined) continue;
     out[key] = props[key];
   }
-  if (type === 'icon' && !ALLOWED_ICONS.includes(out.name)) {
-    out.name = 'Star'; // reject arbitrary icon names
+  if (type === 'icon' && !ALLOWED_ICONS.includes(out.name)) out.name = 'Star';
+  if (out.textCase !== undefined) out.textCase = oneOf(out.textCase, TEXT_CASES, 'none');
+  if (out.strokeStyle !== undefined) out.strokeStyle = oneOf(out.strokeStyle, STROKE_STYLES, 'solid');
+  if (type === 'image') {
+    out.fit = oneOf(out.fit, IMAGE_FITS, 'cover');
+    out.focalX = clamp(num(out.focalX, 50), 0, 100);
+    out.focalY = clamp(num(out.focalY, 50), 0, 100);
+    out.zoom = clamp(num(out.zoom, 1), 1, 4);
+  }
+  if (out.fillOpacity !== undefined) out.fillOpacity = clamp(num(out.fillOpacity, 1), 0, 1);
+  if (type === 'polygon') out.sides = Math.round(clamp(num(out.sides, 3), 3, 24));
+  if (type === 'star') {
+    out.points = Math.round(clamp(num(out.points, 5), 3, 24));
+    out.depth = clamp(num(out.depth, 0.45), 0.05, 0.95);
   }
   return out;
 }

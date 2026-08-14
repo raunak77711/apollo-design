@@ -4,25 +4,23 @@
  * same undo entry) as every other edit.
  */
 
-export function boundsOf(elements) {
-  if (elements.length === 0) return null;
-  const x = Math.min(...elements.map((e) => e.x));
-  const y = Math.min(...elements.map((e) => e.y));
-  const right = Math.max(...elements.map((e) => e.x + e.width));
-  const bottom = Math.max(...elements.map((e) => e.y + e.height));
-  return { x, y, width: right - x, height: bottom - y, right, bottom };
-}
+import { boundsOf } from './tree.js';
+
+// Bounding-box maths lives with the layer tree (groups need it too); arrange
+// re-exports it so callers have one obvious import for "where is this?".
+export { boundsOf };
 
 /**
  * A single element aligns to the canvas; several align to their shared bounding
- * box — which is what a designer means by "align left" in each case.
+ * box — which is what a designer means by "align left" in each case. Pass
+ * `to: 'canvas'` to align a multi-selection to the artboard instead.
  */
-export function alignOperations(elements, canvas, mode) {
+export function alignOperations(elements, canvas, mode, to = 'auto') {
   if (elements.length === 0) return [];
-  const frame =
-    elements.length > 1
-      ? boundsOf(elements)
-      : { x: 0, y: 0, width: canvas.width, height: canvas.height, right: canvas.width, bottom: canvas.height };
+  const useCanvas = to === 'canvas' || elements.length === 1;
+  const frame = useCanvas
+    ? { x: 0, y: 0, width: canvas.width, height: canvas.height, right: canvas.width, bottom: canvas.height }
+    : boundsOf(elements);
 
   return elements.map((el) => {
     const changes = {};

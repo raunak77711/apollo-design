@@ -1,5 +1,7 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cx } from '../lib/cx.js';
+import { flattenPaint } from '../design/tree.js';
+import { contentFilter, frameStyle, layerState } from '../design/render.js';
 import ElementRenderer from './elements/ElementRenderer.jsx';
 
 /**
@@ -22,9 +24,11 @@ export default function DesignPreview({ document: doc, className, style }) {
     return () => observer.disconnect();
   }, [canvas.width]);
 
-  const elements = [...(doc?.elements || [])]
-    .filter((el) => !el.hidden)
-    .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+  // Previews paint through exactly the same tree walk as the canvas, so a card
+  // and the editor can never disagree about order, nesting or visibility.
+  const elements = doc?.elements || [];
+  const painted = useMemo(() => flattenPaint(elements), [elements]);
+  const stateOf = useMemo(() => layerState(elements), [elements]);
 
   return (
     <div
@@ -37,22 +41,17 @@ export default function DesignPreview({ document: doc, className, style }) {
           className="pointer-events-none absolute left-0 top-0 origin-top-left"
           style={{ width: canvas.width, height: canvas.height, transform: `scale(${scale})` }}
         >
-          {elements.map((el) => (
-            <div
-              key={el.id}
-              className="absolute"
-              style={{
-                left: el.x,
-                top: el.y,
-                width: el.width,
-                height: el.height,
-                transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
-                opacity: el.opacity,
-              }}
-            >
-              <ElementRenderer element={el} preview />
-            </div>
-          ))}
+          {painted.map(({ element: el }, index) => {
+            const layer = stateOf(el);
+            if (layer.hidden) return null;
+            return (
+              <div key={el.id} className="absolute" style={frameStyle(el, { opacity: layer.opacity, zIndex: index + 1 })}>
+                <div className="h-full w-full" style={{ filter: contentFilter(el) }}>
+                  <ElementRenderer element={el} preview />
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

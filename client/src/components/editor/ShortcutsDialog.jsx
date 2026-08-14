@@ -7,13 +7,17 @@ const GROUPS = [
     title: 'Tools',
     items: [
       ['Select', 'V'],
+      ['Hand', 'H'],
       ['Text', 'T'],
       ['Rectangle', 'R'],
       ['Ellipse', 'O'],
+      ['Polygon', 'P'],
+      ['Star', 'S'],
       ['Line', 'L'],
       ['Button', 'B'],
       ['Icon', 'I'],
-      ['Image library', 'M'],
+      ['Images', 'M'],
+      ['More in a slot', 'Hold or right-click'],
     ],
   },
   {
@@ -30,6 +34,21 @@ const GROUPS = [
     ],
   },
   {
+    title: 'Layers',
+    items: [
+      ['Group', '⌘ G'],
+      ['Ungroup', '⇧ ⌘ G'],
+      ['Bring forward', ']'],
+      ['Send backward', '['],
+      ['Bring to front', '⌘ ]'],
+      ['Send to back', '⌘ ['],
+      ['Rename layer', 'F2'],
+      ['Hide / show', '⇧ ⌘ H'],
+      ['Lock / unlock', '⇧ ⌘ L'],
+      ['Enter group', 'Double-click'],
+    ],
+  },
+  {
     title: 'Canvas',
     items: [
       ['Zoom', '⌘ + scroll'],
@@ -38,6 +57,8 @@ const GROUPS = [
       ['Actual size', '⌘ 0'],
       ['Multi-select', '⇧ + click'],
       ['Ignore snapping', 'Alt + drag'],
+      ['Layer menu', 'Right-click'],
+      ['Pick a colour', 'C'],
     ],
   },
   {

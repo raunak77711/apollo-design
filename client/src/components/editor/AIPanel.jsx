@@ -3,6 +3,7 @@ import { ArrowUp, Undo2, X } from 'lucide-react';
 import { api } from '../../api/client.js';
 import { cx } from '../../lib/cx.js';
 import { useEditor, useSelection } from '../../state/EditorContext.jsx';
+import { layerLabel } from '../../design/layers.js';
 import { IconButton, Spinner } from '../../ui/primitives.jsx';
 import { Spark } from '../../ui/brand.jsx';
 
@@ -70,7 +71,7 @@ export default function AIPanel({ onClose }) {
       <div className="flex items-center gap-2 border-b border-line px-3 py-2">
         <span className="label shrink-0">Context</span>
         <span className="min-w-0 flex-1 truncate text-right text-xs text-ink-2">
-          {target ? `${target.type} · ${labelFor(target)}` : selection.length > 1 ? `${selection.length} layers` : 'Whole design'}
+          {target ? `${target.type} · ${layerLabel(target).slice(0, 28)}` : selection.length > 1 ? `${selection.length} layers` : 'Whole design'}
         </span>
       </div>
 
