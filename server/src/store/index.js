@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid';
 import { isMongoConnected } from '../config/db.js';
 import { Project } from '../models/Project.js';
 import { Asset } from '../models/Asset.js';
+import { ImageSearchCache } from '../models/ImageSearchCache.js';
 
 /**
  * Repository layer. Uses Mongoose when MongoDB is connected, otherwise an
@@ -12,7 +13,10 @@ import { Asset } from '../models/Asset.js';
 const mem = {
   projects: new Map(),
   assets: new Map(),
+  imageCache: new Map(),
 };
+
+const IMAGE_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 14; // 14 days, matches the Mongo TTL index
 
 function toPlain(doc) {
   if (!doc) return null;
@@ -119,5 +123,35 @@ export const assets = {
     const asset = { id: nanoid(), createdAt: now, updatedAt: now, ...data };
     mem.assets.set(asset.id, asset);
     return asset;
+  },
+};
+
+/* -------------------------- Image search cache ------------------------ */
+
+export const imageCache = {
+  async get(key) {
+    if (isMongoConnected()) {
+      const doc = await ImageSearchCache.findOne({ key }).lean();
+      return doc?.results || null;
+    }
+    const entry = mem.imageCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.at > IMAGE_CACHE_TTL_MS) {
+      mem.imageCache.delete(key);
+      return null;
+    }
+    return entry.results;
+  },
+
+  async set(key, { provider, query, results }) {
+    if (isMongoConnected()) {
+      await ImageSearchCache.findOneAndUpdate(
+        { key },
+        { key, provider, query, results, createdAt: new Date() },
+        { upsert: true }
+      );
+      return;
+    }
+    mem.imageCache.set(key, { results, at: Date.now() });
   },
 };

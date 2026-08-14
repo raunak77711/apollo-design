@@ -1,0 +1,11 @@
+# Dev image: installs devDependencies (nodemon) and runs with hot reload.
+# Source is bind-mounted by docker-compose.dev.yml, so this image only needs
+# to provide the runtime + node_modules.
+FROM node:20-bookworm-slim
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN mkdir -p storage/projects
+EXPOSE 5010
+CMD ["npm", "run", "dev"]

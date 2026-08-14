@@ -1,0 +1,10 @@
+# Dev image: runs the Vite dev server directly (no nginx, no build step) so
+# edits on the host hot-reload in the browser. Source is bind-mounted by
+# docker-compose.dev.yml.
+FROM node:20-bookworm-slim
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+EXPOSE 5180
+CMD ["npm", "run", "dev", "--", "--host"]

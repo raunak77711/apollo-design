@@ -14,4 +14,7 @@ const assetSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// The Library panel's Uploads tab lists images newest-first.
+assetSchema.index({ type: 1, createdAt: -1 });
+
 export const Asset = mongoose.model('Asset', assetSchema);

@@ -20,12 +20,36 @@ export const ELEMENT_TYPES = [
   'group',
 ];
 
-export const ALLOWED_ICONS = [
-  'Home', 'Search', 'Heart', 'User', 'Settings', 'ShoppingCart', 'MapPin',
-  'Calendar', 'Mail', 'Phone', 'ArrowRight', 'Check', 'X', 'Menu', 'Instagram',
-  'Facebook', 'Star', 'Dumbbell', 'Briefcase', 'Building', 'Camera', 'Image',
-  'Upload', 'Download', 'Play', 'Flame', 'Zap', 'Trophy', 'Clock', 'Award',
-];
+// Icon elements are never arbitrary SVG — only a name from one of these closed,
+// per-library sets. `lucide` is the default and the only library the AI is
+// asked to use (see DeepSeekProvider); the others are for manual browsing.
+export const ICON_LIBRARIES = ['lucide', 'game'];
+
+export const ALLOWED_ICONS = {
+  lucide: [
+    'Home', 'Search', 'Heart', 'User', 'Settings', 'ShoppingCart', 'MapPin',
+    'Calendar', 'Mail', 'Phone', 'ArrowRight', 'Check', 'X', 'Menu', 'Instagram',
+    'Facebook', 'Star', 'Dumbbell', 'Briefcase', 'Building', 'Camera', 'Image',
+    'Upload', 'Download', 'Play', 'Flame', 'Zap', 'Trophy', 'Clock', 'Award',
+    'Music', 'Car', 'Coffee', 'Leaf', 'Users', 'Gift', 'Sparkles', 'Globe',
+    'Wallet', 'GraduationCap', 'Stethoscope', 'Palette', 'Rocket', 'ThumbsUp',
+    'TrendingUp',
+  ],
+  // "Fun" set — Game Icons via react-icons/gi. Whimsical shapes Lucide doesn't
+  // have: food, animals, party, nature. Browsed manually, never AI-authored.
+  game: [
+    'GiPartyPopper', 'GiBalloonDog', 'GiAirBalloon', 'GiCupcake', 'GiDonut',
+    'GiWineGlass', 'GiCat', 'GiSittingDog', 'GiOwl', 'GiFox', 'GiPanda',
+    'GiRabbit', 'GiElephant', 'GiLion', 'GiDolphin', 'GiTurtle', 'GiBee',
+    'GiUnicorn', 'GiGhost', 'GiCrown', 'GiPresent', 'GiGuitar', 'GiMusicalNotes',
+    'GiSunglasses', 'GiRainbowStar', 'GiSparkles', 'GiSnowflake1', 'GiCastle',
+    'GiIsland', 'GiRocket', 'GiHearts', 'GiFlowers', 'GiPawPrint', 'GiTrophy',
+    'GiCoffeeCup', 'GiPizzaSlice', 'GiHamburger', 'GiSoccerBall',
+    'GiBasketballBall', 'GiIceCreamCone', 'GiDiamondRing', 'GiCampfire',
+    'GiTreehouse', 'GiPineTree', 'GiMoon', 'GiSun', 'GiRose', 'GiMapleLeaf',
+    'GiButterfly',
+  ],
+};
 
 export const BLEND_MODES = [
   'normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten',
@@ -39,7 +63,17 @@ export const IMAGE_FITS = ['cover', 'contain', 'fill'];
 
 export const DEFAULT_SHADOW = { x: 0, y: 10, blur: 24, color: '#00000059' };
 
+// Adjustment fields that are "neutral at 0, signed either way" (±100).
+export const SIGNED_ADJUST_KEYS = [
+  'vibrance', 'temperature', 'tint', 'exposure', 'black', 'white',
+  'highlights', 'shadowsTone', 'clarity', 'dehaze',
+];
+// Adjustment fields that only push in one direction (0-100).
+export const UNSIGNED_ADJUST_KEYS = ['sharpen', 'smooth', 'grain', 'vignette', 'bloom', 'glamour'];
+
 const BASE_ELEMENT = { x: 0, y: 0, width: 100, height: 100, rotation: 0, opacity: 1, zIndex: 1 };
+
+const ZEROED = Object.fromEntries([...SIGNED_ADJUST_KEYS, ...UNSIGNED_ADJUST_KEYS].map((k) => [k, 0]));
 
 const DEFAULT_PROPERTIES = {
   text: {
@@ -49,12 +83,15 @@ const DEFAULT_PROPERTIES = {
   },
   image: {
     src: '', alt: '', fit: 'cover', borderRadius: 0,
+    // Baseline tone controls — direct CSS filter equivalents.
     brightness: 100, contrast: 100, saturation: 100, blur: 0,
     hue: 0, grayscale: 0,
+    // Extended Adjust panel — Color / Light / Details / Scene. All neutral at 0.
+    ...ZEROED,
     // Crop is expressed as a focal point plus a zoom, so it survives resizing.
     focalX: 50, focalY: 50, zoom: 1,
   },
-  icon: { name: 'Star', size: 48, color: '#FFFFFF', strokeWidth: 2 },
+  icon: { name: 'Star', library: 'lucide', size: 48, color: '#FFFFFF', strokeWidth: 2 },
   rectangle: { fill: '#D9A441', fillOpacity: 1, borderRadius: 0, borderColor: '', borderWidth: 0, strokeStyle: 'solid' },
   circle: { fill: '#D9A441', fillOpacity: 1, borderColor: '', borderWidth: 0, strokeStyle: 'solid' },
   // `sides` covers triangles through dodecagons; `points`/`depth` shape a star.
@@ -139,7 +176,11 @@ export function sanitizeProperties(type, props = {}) {
     if (props[key] === undefined) continue;
     out[key] = props[key];
   }
-  if (type === 'icon' && !ALLOWED_ICONS.includes(out.name)) out.name = 'Star';
+  if (type === 'icon') {
+    out.library = oneOf(out.library, ICON_LIBRARIES, 'lucide');
+    const set = ALLOWED_ICONS[out.library] || ALLOWED_ICONS.lucide;
+    if (!set.includes(out.name)) out.name = set[0];
+  }
   if (out.textCase !== undefined) out.textCase = oneOf(out.textCase, TEXT_CASES, 'none');
   if (out.strokeStyle !== undefined) out.strokeStyle = oneOf(out.strokeStyle, STROKE_STYLES, 'solid');
   if (type === 'image') {
@@ -147,6 +188,8 @@ export function sanitizeProperties(type, props = {}) {
     out.focalX = clamp(num(out.focalX, 50), 0, 100);
     out.focalY = clamp(num(out.focalY, 50), 0, 100);
     out.zoom = clamp(num(out.zoom, 1), 1, 4);
+    for (const key of SIGNED_ADJUST_KEYS) out[key] = clamp(num(out[key], 0), -100, 100);
+    for (const key of UNSIGNED_ADJUST_KEYS) out[key] = clamp(num(out[key], 0), 0, 100);
   }
   if (out.fillOpacity !== undefined) out.fillOpacity = clamp(num(out.fillOpacity, 1), 0, 1);
   if (type === 'polygon') out.sides = Math.round(clamp(num(out.sides, 3), 3, 24));

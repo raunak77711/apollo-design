@@ -1,7 +1,8 @@
 import { Layers, SlidersHorizontal, X } from 'lucide-react';
 import { cx } from '../../lib/cx.js';
 import { useEditor } from '../../state/EditorContext.jsx';
-import { IconButton } from '../../ui/primitives.jsx';
+import { IconButton, Tooltip } from '../../ui/primitives.jsx';
+import { Spark } from '../../ui/brand.jsx';
 import Inspector from './Inspector.jsx';
 import LayersPanel from './LayersPanel.jsx';
 
@@ -15,7 +16,7 @@ const TABS = [
  * and Layers share it through a switcher rather than a second sidebar, so the
  * canvas keeps the width it deserves.
  */
-export default function RightPanel({ tab, onTab, renamingId, onRenaming, onEditImage, onPickImage, onClose }) {
+export default function RightPanel({ tab, onTab, renamingId, onRenaming, onEditImage, onPickImage, onAskApollo, onClose }) {
   const { state } = useEditor();
   const count = state.selectedIds.length;
 
@@ -43,6 +44,13 @@ export default function RightPanel({ tab, onTab, renamingId, onRenaming, onEditI
         </div>
 
         {count > 1 && tab === 'layers' && <span className="num shrink-0 px-1 text-2xs text-ink-3">{count} selected</span>}
+        {onAskApollo && (
+          <Tooltip label="Ask Apollo" hint="⌘J" side="bottom">
+            <IconButton onClick={onAskApollo} aria-label="Ask Apollo">
+              <Spark size={13} className="text-accent" />
+            </IconButton>
+          </Tooltip>
+        )}
         {onClose && (
           <IconButton onClick={onClose} aria-label="Close panel">
             <X size={14} />

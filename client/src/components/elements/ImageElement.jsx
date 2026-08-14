@@ -1,4 +1,5 @@
 import { cssImageFilter } from '../../design/imageFilters.js';
+import ImageEffectOverlays from './ImageEffectOverlays.jsx';
 
 /**
  * An image layer. With no source yet it renders as a marked slot — crop marks
@@ -43,7 +44,7 @@ export default function ImageElement({ element, preview }) {
   const zoom = cropped ? p.zoom ?? 1 : 1;
 
   return (
-    <div style={{ width: '100%', height: '100%', overflow: 'hidden', borderRadius: p.borderRadius }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', borderRadius: p.borderRadius }}>
       <img
         src={p.src}
         alt={p.alt || ''}
@@ -60,6 +61,7 @@ export default function ImageElement({ element, preview }) {
           userSelect: 'none',
         }}
       />
+      <ImageEffectOverlays properties={p} src={p.src} />
     </div>
   );
 }

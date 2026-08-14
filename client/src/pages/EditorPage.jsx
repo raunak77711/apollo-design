@@ -28,6 +28,7 @@ import { useMediaQuery } from '../lib/useMediaQuery.js';
 import { EditorProvider, useEditor } from '../state/EditorContext.jsx';
 import { useLayerActions } from '../state/useLayerActions.js';
 import { alignOperations } from '../design/arrange.js';
+import { expandWithDescendants, indexById, topLevelOf } from '../design/tree.js';
 import { Spinner } from '../ui/primitives.jsx';
 import { Spark } from '../ui/brand.jsx';
 import TopBar from '../components/editor/TopBar.jsx';
@@ -40,6 +41,7 @@ import AIPanel from '../components/editor/AIPanel.jsx';
 import PhotoEditor from '../components/editor/PhotoEditor.jsx';
 import CommandPalette from '../components/editor/CommandPalette.jsx';
 import ShortcutsDialog from '../components/editor/ShortcutsDialog.jsx';
+import OnboardingOverlay from '../ui/onboarding.jsx';
 
 export default function EditorPage() {
   return (
@@ -89,6 +91,7 @@ function EditorShell() {
   const latest = useRef({ name, document: state.document });
   const didGenerate = useRef(false);
   const skipSave = useRef(true);
+  const clipboard = useRef(null); // { rootIds, elements } — in-memory, per tab
 
   latest.current = { name, document: state.document };
   const showRight = wide || inspectorOpen;
@@ -242,6 +245,53 @@ function EditorShell() {
     [openTab]
   );
 
+  /**
+   * Copy/paste works on the whole subtree under the selection (a group brings
+   * its children) so pasting never orphans a layer. Paste offsets everything by
+   * the same amount, which keeps nested layers exactly where they were relative
+   * to their group.
+   */
+  const copySelection = useCallback(() => {
+    const ids = state.selectedIds;
+    if (ids.length === 0) return false;
+    const elements = state.document.elements;
+    const fullIds = expandWithDescendants(elements, ids);
+    const byId = indexById(elements);
+    clipboard.current = {
+      rootIds: topLevelOf(elements, ids),
+      elements: fullIds.map((id) => JSON.parse(JSON.stringify(byId.get(id)))),
+    };
+    return true;
+  }, [state.document.elements, state.selectedIds]);
+
+  const pasteClipboard = useCallback(() => {
+    const clip = clipboard.current;
+    if (!clip || clip.elements.length === 0) return;
+    const OFFSET = 24;
+    const idMap = new Map(clip.elements.map((el) => [el.id, `${el.type}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`]));
+    const topZ = Math.max(0, 0, ...state.document.elements.filter((e) => !e.parentId).map((e) => e.zIndex || 0));
+    let rootCount = 0;
+    const newRootIds = [];
+
+    const operations = clip.elements.map((el) => {
+      const newId = idMap.get(el.id);
+      const isRoot = clip.rootIds.includes(el.id);
+      const parentId = el.parentId && idMap.has(el.parentId) ? idMap.get(el.parentId) : null;
+      if (isRoot) newRootIds.push(newId);
+
+      const element = { ...el, id: newId, x: el.x + OFFSET, y: el.y + OFFSET };
+      if (parentId) element.parentId = parentId;
+      else delete element.parentId;
+      if (isRoot && !parentId) element.zIndex = topZ + 1 + rootCount++;
+      if (element.type === 'group' && Array.isArray(element.children)) {
+        element.children = element.children.map((cid) => idMap.get(cid)).filter(Boolean);
+      }
+      return { type: 'CREATE_ELEMENT', element };
+    });
+
+    actions.apply(operations, { selectIds: newRootIds });
+  }, [actions, state.document.elements]);
+
   /* ------------------------------- shortcuts ----------------------------- */
 
   const onKey = useCallback(
@@ -341,6 +391,21 @@ function EditorShell() {
         layers.remove();
         return;
       }
+      if (mod && e.key.toLowerCase() === 'c' && ids.length) {
+        e.preventDefault();
+        copySelection();
+        return;
+      }
+      if (mod && e.key.toLowerCase() === 'x' && ids.length) {
+        e.preventDefault();
+        if (copySelection()) layers.remove();
+        return;
+      }
+      if (mod && e.key.toLowerCase() === 'v') {
+        e.preventDefault();
+        pasteClipboard();
+        return;
+      }
 
       if (e.key.startsWith('Arrow') && ids.length) {
         e.preventDefault();
@@ -378,7 +443,7 @@ function EditorShell() {
         sampleColour();
       }
     },
-    [actions, layers, state.selectedIds, state.document.elements, state.tool, leftPanel, save, openAI, startRename, sampleColour]
+    [actions, layers, state.selectedIds, state.document.elements, state.tool, leftPanel, save, openAI, startRename, sampleColour, copySelection, pasteClipboard]
   );
 
   useEffect(() => {
@@ -553,7 +618,10 @@ function EditorShell() {
         {showRight && (
           <div className={cx('animate-slide-in-right', !wide && 'absolute inset-y-0 right-0 z-30 shadow-pop')}>
             {rightPanel === 'ai' ? (
-              <AIPanel onClose={() => (wide ? setRightPanel('inspector') : setInspectorOpen(false))} />
+              <AIPanel
+                onClose={() => (wide ? setRightPanel('inspector') : setInspectorOpen(false))}
+                onShowLayers={() => openTab('layers')}
+              />
             ) : (
               <RightPanel
                 tab={rightTab}
@@ -562,6 +630,7 @@ function EditorShell() {
                 onRenaming={setRenamingId}
                 onEditImage={setPhotoEditId}
                 onPickImage={pickImageFor}
+                onAskApollo={openAI}
                 onClose={wide ? undefined : () => setInspectorOpen(false)}
               />
             )}
@@ -574,18 +643,7 @@ function EditorShell() {
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />
       <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
-      {generating && (
-        <div className="fixed inset-0 z-[75] flex items-center justify-center">
-          <div className="scrim absolute inset-0 animate-fade-in" />
-          <div className="relative flex animate-rise items-center gap-3 rounded-xl border border-line bg-surface px-5 py-4 shadow-pop">
-            <Spark size={16} className="animate-pulse text-accent" />
-            <div>
-              <p className="text-[13px] font-medium text-ink">Apollo is drawing your design</p>
-              <p className="mt-0.5 text-xs text-ink-3">Every layer will be editable.</p>
-            </div>
-          </div>
-        </div>
-      )}
+      {generating && <OnboardingOverlay />}
     </div>
   );
 }

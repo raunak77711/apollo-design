@@ -11,4 +11,7 @@ const projectSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// The dashboard always lists projects newest-first.
+projectSchema.index({ updatedAt: -1 });
+
 export const Project = mongoose.model('Project', projectSchema);

@@ -43,7 +43,7 @@ import { childrenOf } from '../../design/tree.js';
 import { TYPE_META, layerLabel, typeLabel } from '../../design/layers.js';
 import { joinAlpha, splitAlpha } from '../../design/color.js';
 import { FONTS } from '../../design/fonts.js';
-import { ICON_NAMES, getIcon } from '../../design/icons.js';
+import { ICON_LIBRARIES, getIcon, iconNames } from '../../design/icons.js';
 import { PRESETS, presetLabel, ratioLabel } from '../../design/presets.js';
 import { BLEND_MODES, DEFAULT_SHADOW, STROKE_STYLES } from '../../design/schema.js';
 import {
@@ -307,10 +307,19 @@ function ElementPanel({ element, onEditImage, onPickImage }) {
 
         {element.type === 'icon' && (
           <Section id="icon" label="Icon">
-            <IconPicker value={p.name} onChange={(name) => set({ name })} />
+            <Segmented
+              className="w-full"
+              size="sm"
+              value={p.library || 'lucide'}
+              onChange={(library) => set({ library, name: iconNames(library)[0] })}
+              options={ICON_LIBRARIES.map((l) => ({ value: l.id, label: l.label }))}
+            />
+            <IconPicker value={p.name} library={p.library || 'lucide'} onChange={(name) => set({ name })} />
             <Row>
               <NumberField label="Size" name="Icon size" value={p.size} min={8} max={800} onChange={(size) => live({ size, width: size, height: size })} onCommit={commit} />
-              <NumberField label="Line" name="Icon line weight" value={p.strokeWidth} step={0.25} min={0.5} max={4} onChange={(strokeWidth) => live({ strokeWidth })} onCommit={commit} />
+              {(p.library || 'lucide') === 'lucide' && (
+                <NumberField label="Line" name="Icon line weight" value={p.strokeWidth} step={0.25} min={0.5} max={4} onChange={(strokeWidth) => live({ strokeWidth })} onCommit={commit} />
+              )}
             </Row>
             <ColorField label="Colour" value={p.color} onChange={(color) => live({ color })} onCommit={commit} />
           </Section>
@@ -963,10 +972,10 @@ function AlignGrid({ onAlign }) {
   );
 }
 
-function IconPicker({ value, onChange }) {
+function IconPicker({ value, library, onChange }) {
   const [query, setQuery] = useState('');
-  const Current = getIcon(value);
-  const names = ICON_NAMES.filter((n) => n.toLowerCase().includes(query.toLowerCase()));
+  const Current = getIcon(value, library);
+  const names = iconNames(library).filter((n) => n.toLowerCase().includes(query.toLowerCase()));
 
   return (
     <Popover
@@ -992,7 +1001,7 @@ function IconPicker({ value, onChange }) {
           />
           <div className="thin-scroll grid max-h-52 grid-cols-6 gap-1 overflow-y-auto">
             {names.map((name) => {
-              const Icon = getIcon(name);
+              const Icon = getIcon(name, library);
               return (
                 <button
                   key={name}

@@ -6,25 +6,36 @@ import {
   ArrowUpToLine,
   ChevronDown,
   ChevronRight,
+  Combine,
   Copy,
   Eye,
   EyeOff,
   FolderPlus,
+  Image as ImageIcon,
   Layers as LayersIcon,
   Lock,
   LockOpen,
+  MoreHorizontal,
   Pencil,
+  Plus,
+  Shapes,
+  SquareStack,
   Trash2,
+  Type,
   Ungroup,
+  X,
 } from 'lucide-react';
 import { cx } from '../../lib/cx.js';
 import { useEditor } from '../../state/EditorContext.jsx';
 import { useLayerActions } from '../../state/useLayerActions.js';
+import { useMergeLayers } from '../../state/useMergeLayers.js';
+import { newElementId } from '../../design/operations.js';
+import { defaultPropertiesFor } from '../../design/schema.js';
 import { TYPE_META, layerLabel, typeLabel } from '../../design/layers.js';
 import { childrenOf, descendantIds, flattenPanel, indexById } from '../../design/tree.js';
 import { getIcon } from '../../design/icons.js';
-import { EmptyState, IconButton, Tooltip } from '../../ui/primitives.jsx';
-import { ContextMenu, MenuDivider, MenuItem } from '../../ui/overlay.jsx';
+import { EmptyState, IconButton, Spinner, Tooltip } from '../../ui/primitives.jsx';
+import { ContextMenu, MenuDivider, MenuItem, Popover } from '../../ui/overlay.jsx';
 
 const INDENT = 12; // px per nesting level — enough to read, not enough to waste
 
@@ -36,6 +47,7 @@ const INDENT = 12; // px per nesting level — enough to read, not enough to was
 export default function LayersPanel({ renamingId, onRename }) {
   const { state, actions } = useEditor();
   const layers = useLayerActions();
+  const merge = useMergeLayers();
   const { document: doc, selectedIds } = state;
   const elements = doc.elements;
 
@@ -43,6 +55,7 @@ export default function LayersPanel({ renamingId, onRename }) {
   const [drag, setDrag] = useState(null); // { ids, active }
   const [drop, setDrop] = useState(null); // { rowId, kind, parentId, index }
   const [menu, setMenu] = useState(null); // { x, y, id }
+  const [addingLayer, setAddingLayer] = useState(false);
 
   const listRef = useRef(null);
   const rows = useMemo(
@@ -232,7 +245,49 @@ export default function LayersPanel({ renamingId, onRename }) {
             <FolderPlus size={13} />
           </IconButton>
         </Tooltip>
+        <Tooltip label="Add layer" side="bottom">
+          <IconButton size="sm" aria-label="Add layer" onClick={() => setAddingLayer(true)}>
+            <Plus size={14} />
+          </IconButton>
+        </Tooltip>
+        <Popover
+          align="end"
+          panelClassName="w-48"
+          button={({ toggle }) => (
+            <IconButton size="sm" aria-label="More layer actions" onClick={toggle}>
+              <MoreHorizontal size={13} />
+            </IconButton>
+          )}
+        >
+          {({ close }) => (
+            <>
+              <MenuItem
+                icon={Combine}
+                disabled={!merge.canMergeVisible() || merge.busy}
+                onClick={() => {
+                  close();
+                  merge.mergeVisible();
+                }}
+              >
+                Merge visible
+              </MenuItem>
+              <MenuItem
+                icon={SquareStack}
+                disabled={!merge.canMergeVisible() || merge.busy}
+                onClick={() => {
+                  close();
+                  merge.flatten();
+                }}
+              >
+                Flatten image
+              </MenuItem>
+            </>
+          )}
+        </Popover>
+        {merge.busy && <Spinner size={13} />}
       </header>
+
+      {addingLayer && <AddLayerModal onClose={() => setAddingLayer(false)} />}
 
       {rows.length === 0 ? (
         <EmptyState
@@ -459,7 +514,7 @@ function LayerGlyph({ element: el, selected }) {
     return <span className="h-[2px] w-4 rounded-full" style={{ background: p.stroke }} />;
   }
   if (el.type === 'icon') {
-    const Icon = getIcon(p.name);
+    const Icon = getIcon(p.name, p.library);
     return <Icon size={13} className={tint} />;
   }
   const Icon = TYPE_META[el.type]?.icon || TYPE_META.rectangle.icon;
@@ -469,6 +524,8 @@ function LayerGlyph({ element: el, selected }) {
 /* ------------------------------ context menu ----------------------------- */
 
 export function LayerMenu({ x, y, element, selectionCount, layers, onRename, onClose }) {
+  const { state } = useEditor();
+  const merge = useMergeLayers();
   const many = selectionCount > 1;
   const run = (fn) => () => {
     fn();
@@ -512,9 +569,82 @@ export function LayerMenu({ x, y, element, selectionCount, layers, onRename, onC
         Ungroup
       </MenuItem>
       <MenuDivider />
+      {many ? (
+        <MenuItem icon={Combine} disabled={merge.busy} onClick={run(() => merge.merge(state.selectedIds))}>
+          Merge selected
+        </MenuItem>
+      ) : (
+        <MenuItem icon={Combine} disabled={merge.busy} onClick={run(() => merge.mergeDown([element.id]))}>
+          Merge down
+        </MenuItem>
+      )}
+      <MenuDivider />
       <MenuItem icon={Trash2} hint="⌫" danger onClick={run(() => layers.remove())}>
         Delete
       </MenuItem>
     </ContextMenu>
+  );
+}
+
+/** Popup for the Layers panel's "+" — pick a starting element, or cancel. */
+function AddLayerModal({ onClose }) {
+  const { state, actions } = useEditor();
+  const canvas = state.document.canvas;
+
+  const add = (build) => {
+    const id = newElementId('layer');
+    const el = build(id);
+    actions.apply([{ type: 'CREATE_ELEMENT', element: el }], { selectIds: [id] });
+    onClose();
+  };
+
+  const centered = (w, h) => ({ x: Math.round(canvas.width / 2 - w / 2), y: Math.round(canvas.height / 2 - h / 2), width: w, height: h });
+
+  const options = [
+    {
+      id: 'image', label: 'Empty image', icon: ImageIcon,
+      create: () => add((id) => ({ id, type: 'image', ...centered(480, 320), properties: defaultPropertiesFor('image') })),
+    },
+    {
+      id: 'frame', label: 'Frame', icon: SquareStack,
+      create: () => add((id) => ({ id, type: 'rectangle', ...centered(480, 320), properties: { ...defaultPropertiesFor('rectangle'), fillOpacity: 0, borderColor: '#8C8C8C', borderWidth: 2 } })),
+    },
+    {
+      id: 'text', label: 'Text', icon: Type,
+      create: () => add((id) => ({ id, type: 'text', ...centered(360, 60), properties: { ...defaultPropertiesFor('text'), text: 'New text' } })),
+    },
+    {
+      id: 'shape', label: 'Shape', icon: Shapes,
+      create: () => add((id) => ({ id, type: 'rectangle', ...centered(240, 160), properties: defaultPropertiesFor('rectangle') })),
+    },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div className="w-72 rounded-xl border border-line bg-surface p-4 shadow-pop" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-[13px] font-medium text-ink">Add layer</p>
+          <IconButton size="sm" onClick={onClose} aria-label="Close"><X size={14} /></IconButton>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {options.map(({ id, label, icon: Icon, create }) => (
+            <button
+              key={id}
+              onClick={create}
+              className="flex flex-col items-center gap-2 rounded-lg border border-line bg-raised py-4 text-ink-2 transition-colors hover:border-accent hover:text-ink"
+            >
+              <Icon size={20} />
+              <span className="text-xs">{label}</span>
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={onClose}
+          className="mt-3 h-8 w-full rounded border border-line text-xs text-ink-2 transition-colors hover:bg-raised hover:text-ink"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }

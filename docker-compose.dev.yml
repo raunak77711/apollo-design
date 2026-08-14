@@ -1,0 +1,62 @@
+# Apollo Design — DEV stack with hot reload.
+#   Frontend (Vite dev server) → http://localhost:5180
+#   Backend  (nodemon)         → http://localhost:5010
+#   MongoDB                    → localhost:27020
+#
+#   docker compose -f docker-compose.dev.yml up --build
+#
+# Source is bind-mounted, so edits on the host reload instantly in both
+# containers. node_modules stays inside each container (anonymous volume)
+# so the host and container dependency trees never collide.
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27020:27017"
+    volumes:
+      - apollo-mongo-data-dev:/data/db
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      PORT: 5010
+      CLIENT_ORIGIN: http://localhost:5180
+      MONGODB_URI: mongodb://mongo:27017/apollo_design
+      AI_PROVIDER: ${AI_PROVIDER:-deepseek}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}
+      IMAGE_PROVIDER: ${IMAGE_PROVIDER:-pexels}
+      PEXELS_API_KEY: ${PEXELS_API_KEY:-}
+      UNSPLASH_ACCESS_KEY: ${UNSPLASH_ACCESS_KEY:-}
+    ports:
+      - "5010:5010"
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+      - ./server/storage:/app/storage
+
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      VITE_BACKEND_URL: http://backend:5010
+    ports:
+      - "5180:5180"
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+
+volumes:
+  apollo-mongo-data-dev:

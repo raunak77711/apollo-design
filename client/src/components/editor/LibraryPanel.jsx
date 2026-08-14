@@ -6,7 +6,7 @@ import { useToast } from '../../lib/toast.jsx';
 import { useEditor } from '../../state/EditorContext.jsx';
 import { defaultPropertiesFor } from '../../design/schema.js';
 import { inkFor } from '../../design/color.js';
-import { ICON_NAMES, getIcon } from '../../design/icons.js';
+import { ICON_LIBRARIES, getIcon, iconNames } from '../../design/icons.js';
 import { EmptyState, IconButton, Spinner } from '../../ui/primitives.jsx';
 import { Segmented } from '../../ui/fields.jsx';
 
@@ -23,6 +23,9 @@ export default function LibraryPanel({ projectId, onClose }) {
   const [query, setQuery] = useState('');
   const [photos, setPhotos] = useState([]);
   const [photoState, setPhotoState] = useState('idle');
+
+  const [iconLibrary, setIconLibrary] = useState('lucide');
+  const [iconQuery, setIconQuery] = useState('');
 
   const [uploads, setUploads] = useState([]);
   const [uploadState, setUploadState] = useState('loading');
@@ -84,7 +87,7 @@ export default function LibraryPanel({ projectId, onClose }) {
     );
   };
 
-  const placeIcon = (name) => {
+  const placeIcon = (name, library) => {
     const id = `icon-${Date.now().toString(36)}`;
     const size = Math.round(Math.min(canvas.width, canvas.height) * 0.12);
     actions.apply(
@@ -98,7 +101,7 @@ export default function LibraryPanel({ projectId, onClose }) {
             y: Math.round(canvas.height / 2 - size / 2),
             width: size,
             height: size,
-            properties: { ...defaultPropertiesFor('icon'), name, size, color: inkFor(canvas.background) },
+            properties: { ...defaultPropertiesFor('icon'), name, library, size, color: inkFor(canvas.background) },
           },
         },
       ],
@@ -250,24 +253,46 @@ export default function LibraryPanel({ projectId, onClose }) {
       )}
 
       {tab === 'icons' && (
-        <div className="thin-scroll min-h-0 flex-1 overflow-y-auto p-2.5">
-          <div className="grid grid-cols-5 gap-1">
-            {ICON_NAMES.map((name) => {
-              const Icon = getIcon(name);
-              return (
-                <button
-                  key={name}
-                  title={name}
-                  onClick={() => placeIcon(name)}
-                  className={cx(
-                    'flex h-10 items-center justify-center rounded text-ink-2 transition-colors duration-150',
-                    'hover:bg-raised hover:text-ink'
-                  )}
-                >
-                  <Icon size={17} strokeWidth={1.75} />
-                </button>
-              );
-            })}
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="space-y-2 p-2.5 pb-0">
+            <Segmented
+              size="sm"
+              className="w-full"
+              value={iconLibrary}
+              onChange={(lib) => setIconLibrary(lib)}
+              options={ICON_LIBRARIES.map((l) => ({ value: l.id, label: l.label }))}
+            />
+            <div className="relative">
+              <Search size={13} className="pointer-events-none absolute left-[10px] top-1/2 -translate-y-1/2 text-ink-3" />
+              <input
+                value={iconQuery}
+                onChange={(e) => setIconQuery(e.target.value)}
+                placeholder="Search icons"
+                className="field pl-7"
+              />
+            </div>
+          </div>
+          <div className="thin-scroll min-h-0 flex-1 overflow-y-auto p-2.5">
+            <div className="grid grid-cols-5 gap-1">
+              {iconNames(iconLibrary)
+                .filter((name) => name.toLowerCase().includes(iconQuery.toLowerCase()))
+                .map((name) => {
+                  const Icon = getIcon(name, iconLibrary);
+                  return (
+                    <button
+                      key={name}
+                      title={name}
+                      onClick={() => placeIcon(name, iconLibrary)}
+                      className={cx(
+                        'flex h-10 items-center justify-center rounded text-ink-2 transition-colors duration-150',
+                        'hover:bg-raised hover:text-ink'
+                      )}
+                    >
+                      <Icon size={17} strokeWidth={iconLibrary === 'lucide' ? 1.75 : undefined} />
+                    </button>
+                  );
+                })}
+            </div>
           </div>
         </div>
       )}

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Undo2, X } from 'lucide-react';
+import { ArrowUp, Layers, Undo2, X } from 'lucide-react';
 import { api } from '../../api/client.js';
 import { cx } from '../../lib/cx.js';
 import { useEditor, useSelection } from '../../state/EditorContext.jsx';
 import { layerLabel } from '../../design/layers.js';
-import { IconButton, Spinner } from '../../ui/primitives.jsx';
+import { IconButton, Spinner, Tooltip } from '../../ui/primitives.jsx';
 import { Spark } from '../../ui/brand.jsx';
 
 /**
@@ -12,7 +12,7 @@ import { Spark } from '../../ui/brand.jsx';
  * it returns operations, which are validated and applied as a single undoable
  * step, so anything it makes stays editable by hand.
  */
-export default function AIPanel({ onClose }) {
+export default function AIPanel({ onClose, onShowLayers }) {
   const { state, actions } = useEditor();
   const selection = useSelection();
   const [input, setInput] = useState('');
@@ -63,6 +63,16 @@ export default function AIPanel({ onClose }) {
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-3">
         <Spark size={13} className="text-accent" />
         <h2 className="flex-1 text-[13px] font-medium text-ink">Apollo</h2>
+        {onShowLayers && (
+          <Tooltip label="Show layers" side="bottom">
+            <button
+              onClick={onShowLayers}
+              className="flex h-7 items-center gap-1.5 rounded px-2 text-xs font-medium text-ink-2 transition-colors hover:bg-raised hover:text-ink"
+            >
+              <Layers size={13} /> Layers
+            </button>
+          </Tooltip>
+        )}
         <IconButton onClick={onClose} aria-label="Close Apollo">
           <X size={14} />
         </IconButton>

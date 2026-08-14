@@ -1,5 +1,6 @@
 import { AIProvider } from './AIProvider.js';
 import { ALLOWED_ICONS } from '../../design/schema.js';
+import { detectIndustry } from '../../design/industries.js';
 
 /**
  * Deterministic, rule-based provider used when no DEEPSEEK_API_KEY is set.
@@ -24,15 +25,16 @@ export class MockProvider extends AIProvider {
   /* --------------------------- Generation --------------------------- */
 
   generateDesign(message, document) {
+    const industry = detectIndustry(message);
     const brand = extractBrand(message) || 'Your Brand';
-    const headline = extractQuoted(message) || defaultHeadline(message);
-    const accent = extractColor(message) || '#D9A441';
-    const dark = /\bdark|premium|modern|luxury\b/.test(message.toLowerCase());
+    const headline = extractQuoted(message) || industry?.headline || defaultHeadline(message);
+    const accent = extractColor(message) || industry?.accent || '#D9A441';
+    const dark = industry ? industry.dark : /\bdark|premium|modern|luxury\b/.test(message.toLowerCase());
     const bg = dark ? '#0A0A0A' : '#111827';
     const { width, height } = document?.canvas || { width: 1200, height: 628 };
 
-    const imageQuery = buildImageQuery(message);
-    const icon = pickIcon(message);
+    const imageQuery = buildImageQuery(message, industry);
+    const icon = pickIcon(message, industry);
 
     const operations = [
       { type: 'SET_CANVAS', changes: { background: bg } },
@@ -82,13 +84,13 @@ export class MockProvider extends AIProvider {
       {
         type: 'CREATE_ELEMENT',
         element: { type: 'text', x: 80, y: 372, width: width * 0.44, height: 60, zIndex: 6,
-          properties: { text: defaultSubtitle(message), fontSize: 22, fontWeight: 400, color: '#D1D5DB', align: 'left', lineHeight: 1.35 } },
+          properties: { text: defaultSubtitle(message, industry), fontSize: 22, fontWeight: 400, color: '#D1D5DB', align: 'left', lineHeight: 1.35 } },
       },
       // CTA button.
       {
         type: 'CREATE_ELEMENT',
         element: { type: 'button', x: 80, y: 456, width: 220, height: 60, zIndex: 7,
-          properties: { text: extractCTA(message), background: accent, color: readableOn(accent), fontSize: 20, fontWeight: 800, borderRadius: 8 } },
+          properties: { text: extractCTA(message, industry), background: accent, color: readableOn(accent), fontSize: 20, fontWeight: 800, borderRadius: 8 } },
       },
     ];
 
@@ -203,50 +205,42 @@ function extractColor(text) {
   return found ? map[found] : null;
 }
 
-function pickIcon(message) {
+/** Explicit signals in the prompt beat the detected industry, which beats a generic default. */
+function pickIcon(message, industry) {
   const t = message.toLowerCase();
-  if (/gym|fitness|workout|muscle|athlete/.test(t)) return 'Dumbbell';
   if (/job|career|work|hiring/.test(t)) return 'Briefcase';
-  if (/food|restaurant|menu|cafe/.test(t)) return 'Flame';
-  if (/shop|store|clothing|sale/.test(t)) return 'ShoppingCart';
   if (/photo|camera/.test(t)) return 'Camera';
-  const capitalized = message.split(/\s+/).find((w) => ALLOWED_ICONS.includes(w));
-  return capitalized || 'Star';
+  const capitalized = message.split(/\s+/).find((w) => ALLOWED_ICONS.lucide.includes(w));
+  return capitalized || industry?.icon || 'Star';
 }
 
-function buildImageQuery(message) {
-  const t = message.toLowerCase();
-  if (/muscular|athlete|gym|fitness|bodybuilder/.test(t)) return 'professional muscular athlete gym dark';
-  if (/food|restaurant|menu/.test(t)) return 'gourmet food plating dark';
-  if (/clothing|fashion|store/.test(t)) return 'fashion model studio';
-  if (/job|career|office/.test(t)) return 'modern office professional';
+function buildImageQuery(message, industry) {
   const m = message.match(/\bwith (?:a |an )?([a-z ]{3,40})/i);
-  return m ? m[1].trim() : 'abstract dark background';
+  if (m) return m[1].trim();
+  if (industry) return industry.imageQuery;
+  const t = message.toLowerCase();
+  if (/job|career|office/.test(t)) return 'modern office professional';
+  return 'abstract dark background';
 }
 
 function defaultHeadline(message) {
   const t = message.toLowerCase();
-  if (/gym|fitness/.test(t)) return 'TRANSFORM YOUR BODY';
-  if (/food|restaurant/.test(t)) return 'TASTE THE DIFFERENCE';
   if (/job|career/.test(t)) return 'FIND YOUR NEXT ROLE';
-  if (/sale|clothing|store/.test(t)) return 'NEW COLLECTION';
   return 'MAKE IT HAPPEN';
 }
 
-function defaultSubtitle(message) {
+function defaultSubtitle(message, industry) {
+  if (industry) return industry.subtitle;
   const t = message.toLowerCase();
-  if (/gym|fitness/.test(t)) return 'Elite training. Real results. Join the movement today.';
-  if (/food|restaurant/.test(t)) return 'Crafted with the finest ingredients, served with passion.';
   if (/job|career/.test(t)) return 'Thousands of opportunities. One perfect match.';
   return 'Premium quality, designed for people who expect more.';
 }
 
-function extractCTA(message) {
-  const t = message.toLowerCase();
+function extractCTA(message, industry) {
   const m = message.match(/["“']([^"”']+)["”']\s*button/i);
   if (m) return m[1].toUpperCase();
-  if (/gym|fitness|join/.test(t)) return 'JOIN NOW';
-  if (/shop|store|buy|sale/.test(t)) return 'SHOP NOW';
+  if (industry) return industry.cta;
+  const t = message.toLowerCase();
   if (/job|career|apply/.test(t)) return 'APPLY NOW';
   return 'GET STARTED';
 }

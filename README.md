@@ -20,12 +20,13 @@ component registry are the core of the product.
 
 | Layer     | Tech |
 |-----------|------|
-| Frontend  | React, Vite, Tailwind, React Context + `useReducer`, Lucide React |
-| Backend   | Node, Express, Mongoose (MongoDB) |
+| Frontend  | React, Vite, Tailwind, React Context + `useReducer`, Lucide React + react-icons |
+| Backend   | Node, Express, Mongoose (MongoDB), `compression` (gzip) |
 | AI        | DeepSeek (behind an `AIProvider` abstraction) |
-| Images    | Pexels / Unsplash (behind an `ImageProvider` abstraction) |
-| Media     | Sharp (uploads + export) |
+| Images    | Pexels / Unsplash (behind an `ImageProvider` abstraction), Mongo-cached searches |
+| Media     | Sharp (uploads, export, image adjustments, layer merge/flatten) |
 | Storage   | Local filesystem (`server/storage/`) |
+| Dev       | Docker Compose — a production build (nginx) and a hot-reload dev stack |
 
 ## Runs with zero API keys
 
@@ -37,14 +38,26 @@ To make the MVP demonstrable out of the box, three graceful fallbacks exist:
   to real DeepSeek — nothing else changes.
 - **No image API key?** A keyless `PlaceholderProvider` returns stock-style photos.
 
-Add real keys in `server/.env` to activate the real providers.
+Add real keys to a root `.env` (Docker) or `server/.env` (local dev) — copy
+`.env.example` — to activate the real providers. With DeepSeek connected it can
+edit **everything** in the schema (shape, colour, blend modes, shadows, crop,
+image adjustments, grouping — not just text/colour), and it's given a short
+list of common industries (gym, restaurant, real estate, SaaS, healthcare,
+finance, etc. — see `server/src/design/industries.js`) so a vague prompt like
+"banner for my gym" gets a sensible starting palette and imagery. Every
+provider result — real or mock — goes through the same operation validator, so
+a bad or malformed AI response can't corrupt the document.
+
+Stock photo searches (manual or AI-triggered) are cached in Mongo for two
+weeks (in-memory if Mongo isn't running), so repeat searches are instant and
+don't burn API quota — see `server/src/models/ImageSearchCache.js`.
 
 ---
 
 This is a **local, single-user** app (a school project) — there is no login or
 accounts. Run it one of two ways:
 
-### Option A — Docker (recommended, one command)
+### Option A — Docker, production-style build
 
 ```bash
 # optional: add API keys for real DeepSeek / stock photos
@@ -53,13 +66,27 @@ cp .env.example .env    # then edit — totally optional
 docker compose up --build     # or: npm run docker:up
 ```
 
-- Frontend: http://localhost:5180
+- Frontend: http://localhost:5180 (nginx, serving the built app)
 - Backend:  http://localhost:5010  (health: `/api/health`)
 - MongoDB:  localhost:27020
 
 Stop with `docker compose down` (add `-v` to also wipe the database).
 
-### Option B — Local dev (Vite + nodemon)
+### Option A½ — Docker with hot reload (for actively working on the code)
+
+```bash
+cp .env.example .env    # optional
+docker compose -f docker-compose.dev.yml up --build   # or: npm run docker:dev
+```
+
+Same ports, but the frontend runs the real Vite dev server and the backend
+runs under `nodemon` — both containers bind-mount your source, so edits on the
+host reload automatically (no rebuild). File-watching uses polling
+(`--legacy-watch` / `usePolling`), which is what makes this reliable inside
+Docker on Windows/macOS, where native filesystem events don't cross a bind
+mount. Stop with `npm run docker:dev:down`.
+
+### Option B — Local dev (Vite + nodemon, no Docker)
 
 ```bash
 npm install && npm run install:all
@@ -87,9 +114,27 @@ Vite proxies `/api` and `/storage` to the backend, so no CORS setup is needed in
    (typography for text, fill for shapes, adjustments for images). With nothing
    selected it shows canvas settings; with several selected, alignment and grouping.
 4. Drag with alignment snapping, marquee-select, nudge with the arrow keys,
-   **⌘K** for every action, **Undo/Redo** (⌘Z), then **Export** to PNG/JPG/WebP.
+   **Copy/Cut/Paste** (⌘C/⌘X/⌘V), **⌘K** for every action, **Undo/Redo** (⌘Z),
+   then **Export** to PNG/JPG/WebP.
 5. Keep asking: *"make the headline bigger"*, *"change the button colour to blue"* —
    each reply is a minimal, undoable operation applied to the same document.
+   The **Apollo** panel and the **Layers** panel share the right column — a
+   button in either one's header jumps straight to the other.
+6. Double-click an image (or **Adjust** in its properties) for the full photo
+   editor: **Adjust** (Color/Light/Details/Scene — vibrance, temperature, tint,
+   exposure, black/white points, highlights/shadows, sharpen, clarity, smooth,
+   grain, vignette, glamour, bloom, dehaze, plus the original brightness/
+   contrast/saturation/hue/blur/rotate) and **Effects** (ten moods — B&W,
+   Faded, Vintage, Tone, Portrait, Food, Urban, Nature, Vivid, Artsy — six
+   one-click presets each). Hold **Eye** to compare against the original.
+7. In the **Layers** panel: rename, lock, hide, reorder, group, and — new —
+   **Merge down**, **Merge visible**, and **Flatten image** (right-click a
+   layer, or the **···** menu), which rasterize the target layers into one new
+   image layer via the same Sharp pipeline export uses. The **+** button adds
+   an empty image, a frame, text, or a shape.
+8. The icon picker (in Properties and in the Library panel) has two sets —
+   **Line** (Lucide, what the AI uses) and **Fun** (Game Icons — animals,
+   food, party, nature) — each searchable.
 
 **Templates** opens ten finished layouts as live layers, and **Assets** holds your
 uploads plus the stock photo library.
@@ -102,22 +147,28 @@ uploads plus the stock photo library.
 apollo-design/
 ├── client/                 # Vite + React editor
 │   └── src/
-│       ├── design/         # schema.js + operations.js (MIRROR of server), icons,
+│       ├── design/         # schema.js + operations.js (MIRROR of server), icons
+│       │                   # (multi-library), imageFilters.js, effects.js,
 │       │                   # templates, presets, fonts, arrange (align/snap)
-│       ├── state/          # EditorContext + reducer (document, selection, history)
-│       ├── ui/             # design system: primitives, fields, overlays, brand
-│       ├── components/     # editor/ (stage, rail, inspector, panels) + elements/
+│       ├── state/          # EditorContext + reducer, useLayerActions,
+│       │                   # useMergeLayers (merge/flatten)
+│       ├── ui/             # design system: primitives, fields, overlays, brand,
+│       │                   # onboarding (the AI-generating overlay + hints)
+│       ├── components/     # editor/ (stage, rail, inspector, panels, PhotoEditor)
+│       │                   # + elements/ (one renderer per type)
 │       └── pages/          # Home, Templates, Assets, EditorPage
+├── docker-compose.yml      # production build (nginx)
+├── docker-compose.dev.yml  # hot-reload dev stack (vite + nodemon, bind mounts)
 └── server/                 # Express API
     └── src/
-        ├── design/         # canonical schema.js + operations.js
+        ├── design/         # canonical schema.js + operations.js + industries.js
         ├── services/
         │   ├── ai/         # AIProvider → DeepSeekProvider | MockProvider
         │   ├── images/     # ImageProvider → Pexels | Unsplash | Placeholder
         │   ├── aiService.js, exportService.js, storageService.js
-        ├── models/         # Project, Asset (Mongoose) — no user/auth
+        ├── models/         # Project, Asset, ImageSearchCache (Mongoose) — no user/auth
         ├── store/          # repository w/ in-memory fallback
-        └── routes/         # projects, ai, images, assets, export
+        └── routes/         # projects, ai, images, assets, export (+ /export/flatten)
 ```
 
 ## API
@@ -131,6 +182,7 @@ POST   /api/ai/chat             # { message, document, selectedElementId } → {
 GET    /api/images/search?q=
 GET    /api/assets              POST /api/assets/upload    # multipart (file, projectId)
 POST   /api/export              # { projectId, document, format }
+POST   /api/export/flatten      # { document } → { dataUrl }  — layer merge/flatten
 ```
 
 ## Security notes
@@ -146,17 +198,41 @@ POST   /api/export              # { projectId, document, format }
 
 - **No auth by design** — this is a local single-user app; all projects are shared
   on the one machine it runs on.
-- **Server-side export** rasterizes shapes, text, and images via SVG→Sharp, and
-  applies image adjustments (brightness/contrast/saturation/hue/grayscale/blur) so
-  exports match the on-canvas preview. Lucide **icons render as an outline
-  placeholder in exports** (they render fully in the browser). Custom web fonts
-  fall back to system fonts in the export renderer.
-- **Photo editor (Adjust)** is implemented for image layers — presets, colour/light
-  sliders, blur, radius, opacity, hold-to-compare, and 90° rotate — all editing the
-  design document (one undoable operation). **Pixel crop/flip are not yet
-  included** (rotate is).
+- **Server-side export** rasterizes shapes, text, and images via SVG→Sharp.
+  brightness/contrast/saturation/hue/grayscale/blur/sharpen and vignette are
+  applied for real (Sharp `modulate`/`linear`/`sharpen`/a composited gradient).
+  vibrance/temperature/tint/exposure/black/white/highlights/shadows/clarity/
+  dehaze have **no CSS or Sharp primitive** and are folded into
+  brightness/contrast/saturation with the same formula on both the client
+  preview and the server export (`design/imageFilters.js` /
+  `exportService.js`) — a close approximation, not a true tone curve or white
+  balance. **Grain, glamour, and bloom are preview-only** — they render live on
+  the canvas and in the photo editor (as overlay layers) but are not
+  reproduced in the exported file. Lucide/Game **icons render as an outline
+  placeholder in exports** (they render fully in the browser). Custom web
+  fonts fall back to system fonts in the export renderer.
+- **Photo editor** has two tabs: **Adjust** (see above) and **Effects** (60
+  one-click mood presets). **Pixel crop/flip are not yet included** in the
+  editor UI (rotate and a focal-point crop are, via the Properties panel).
 - **Groups** exist in the schema/operations but the canvas doesn't yet move a
   group's children together — grouping is structural only for now.
+- **Merge down / Merge visible / Flatten image** rasterize the target layers
+  (via the server's SVG→Sharp pipeline) into one new image layer — a real
+  operation, not a placeholder, but it's a one-way conversion: the merged
+  layers' individual properties are gone once merged (undo still restores them,
+  since it's one operation like any other).
+- **Liquify, Retouch (dodge/burn/heal), and a freehand Draw suite** (brush/pen/
+  eraser/fill-bucket/drag-to-create shapes) were requested but are **not
+  built**. Apollo edits a structured document, not a pixel buffer — those tools
+  need a genuine raster-editing engine (pixel warping, brush stamping, a paint
+  history) that's a substantial subsystem on its own. Rather than ship a
+  half-working version, this is the clear next milestone.
+- The editor bundle (~155KB gzipped) is larger than ideal because
+  `ElementRenderer` statically imports every element type — including the icon
+  libraries — so `DesignPreview` (used on Home for recent-project thumbnails)
+  pulls them into the eagerly-loaded bundle despite the editor route itself
+  being lazy-loaded. Splitting the icon libraries out behind their own lazy
+  boundary is a reasonable follow-up.
 - **Project cards render the real document** rather than a stored thumbnail, so the
   list endpoint ships each project's canvas plus its first 80 elements.
 - **Templates** are built-in documents in `client/src/design/templates.js`; they are

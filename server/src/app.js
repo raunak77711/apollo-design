@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import { config } from './config/env.js';
 import { projectsRouter } from './routes/projects.js';
 import { aiRouter } from './routes/ai.js';
@@ -13,10 +14,12 @@ export function createApp() {
   const app = express();
 
   app.use(cors({ origin: config.clientOrigin }));
+  app.use(compression()); // gzip every JSON/SVG response — the AI ops payload and image search results both benefit
   app.use(express.json({ limit: '5mb' }));
 
-  // Serve locally-stored assets & exports.
-  app.use('/storage', express.static(`${config.storageRoot}`));
+  // Serve locally-stored assets & exports. Filenames are content-addressed
+  // (nanoid, never reused), so a long cache lifetime is safe.
+  app.use('/storage', express.static(`${config.storageRoot}`, { maxAge: '7d', immutable: true }));
 
   app.get('/api/health', (req, res) => {
     res.json({ ok: true, mongo: isMongoConnected(), aiProvider: config.ai.provider, imageProvider: config.images.provider });

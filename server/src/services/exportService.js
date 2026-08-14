@@ -38,6 +38,18 @@ export async function exportDesign({ projectId, document, format = 'png', qualit
   return saveBuffer(projectId, 'exports', filename, buffer);
 }
 
+/**
+ * Rasterize a (typically small, transparent-background) document straight to a
+ * PNG data URI without touching disk. Used to flatten/merge a handful of
+ * layers into one new image element — an internal editing step, not a
+ * user-facing export.
+ */
+export async function renderToDataUri(document) {
+  const svg = await documentToSvg({ ...document, canvas: { ...document.canvas, background: document.canvas.background ?? 'transparent' } });
+  const buffer = await sharp(Buffer.from(svg), { density: 144 }).png().toBuffer();
+  return `data:image/png;base64,${buffer.toString('base64')}`;
+}
+
 async function documentToSvg(input) {
   const doc = normalizeTree(input, { adopt: true });
   const { width, height, background } = doc.canvas;
@@ -210,9 +222,16 @@ function imageBox(el, p, image) {
 }
 
 /**
- * Fetch an image, apply the same adjustments the browser shows (brightness,
- * contrast, saturation, hue, grayscale, blur) using Sharp, and return a PNG
- * data URI plus its pixel size for framing.
+ * Fetch an image and apply adjustments with Sharp, returning a PNG data URI
+ * plus its pixel size for framing.
+ *
+ * brightness/contrast/saturation/hue/grayscale/blur/sharpen and vignette are
+ * applied for real. vibrance/temperature/tint/exposure/black/white/
+ * highlights/shadowsTone/clarity/dehaze/smooth are folded into
+ * brightness/contrast/saturation with the SAME formula the client preview
+ * uses (design/imageFilters.js#cssImageFilter), so the export closely matches
+ * what was previewed even though Sharp has no direct primitive for them.
+ * grain/bloom/glamour are preview-only — see README.
  */
 async function processedImage(src, p = {}) {
   const buf = await fetchImageBuffer(src);
@@ -220,27 +239,57 @@ async function processedImage(src, p = {}) {
 
   let img = sharp(buf);
   if (needsProcessing(p)) {
-    const brightness = (p.brightness ?? 100) / 100;
-    const saturation = (p.saturation ?? 100) / 100;
-    const hue = Math.round(p.hue ?? 0);
-    img = img.modulate({ brightness, saturation, hue });
+    const brightnessPct = (p.brightness ?? 100)
+      + (p.exposure ?? 0) * 0.8 + (p.white ?? 0) * 0.15 - (p.black ?? 0) * 0.15 + (p.highlights ?? 0) * 0.1;
+    const contrastPct = (p.contrast ?? 100)
+      + (p.white ?? 0) * 0.25 + (p.black ?? 0) * 0.25 + (p.clarity ?? 0) * 0.3 + (p.sharpen ?? 0) * 0.15
+      - (p.shadowsTone ?? 0) * 0.1;
+    const saturationPct = (p.saturation ?? 100)
+      + (p.vibrance ?? 0) * 0.6 + (p.dehaze ?? 0) * 0.2 + Math.abs(p.temperature ?? 0) * 0.1;
+    const huePlusTemp = Math.round((p.hue ?? 0) + (p.temperature ?? 0) * -0.4 + (p.tint ?? 0) * 0.3);
+
+    img = img.modulate({
+      brightness: Math.max(0.1, brightnessPct / 100),
+      saturation: Math.max(0, saturationPct / 100),
+      hue: huePlusTemp,
+    });
 
     // Contrast around the midpoint: out = (in - 128) * c + 128
-    const c = (p.contrast ?? 100) / 100;
+    const c = Math.max(0, contrastPct) / 100;
     if (c !== 1) img = img.linear(c, 128 * (1 - c));
 
     if ((p.grayscale ?? 0) >= 50) img = img.grayscale();
-    if ((p.blur ?? 0) > 0) img = img.blur(Math.max(0.3, p.blur));
+    if ((p.sharpen ?? 0) > 0) img = img.sharpen({ sigma: 0.5 + (p.sharpen / 100) * 2.5 });
+
+    const blur = (p.blur ?? 0) + (p.smooth ?? 0) * 0.06;
+    if (blur > 0) img = img.blur(Math.max(0.3, blur));
   }
 
-  const { data, info } = await img.png().toBuffer({ resolveWithObject: true });
+  let { data, info } = await img.png().toBuffer({ resolveWithObject: true });
+  if ((p.vignette ?? 0) > 0) data = await applyVignette(data, info.width, info.height, p.vignette);
+
   return { href: `data:image/png;base64,${data.toString('base64')}`, width: info.width, height: info.height };
 }
 
+/** A real darkened-corners composite, matching the CSS radial-gradient overlay used in the editor. */
+async function applyVignette(pngBuffer, width, height, strength) {
+  const opacity = Math.min(1, strength / 100) * 0.92;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+    <defs><radialGradient id="v" cx="50%" cy="50%" r="75%">
+      <stop offset="35%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="${opacity}"/>
+    </radialGradient></defs>
+    <rect width="100%" height="100%" fill="url(#v)"/>
+  </svg>`;
+  const overlay = await sharp(Buffer.from(svg)).png().toBuffer();
+  return sharp(pngBuffer).composite([{ input: overlay, blend: 'multiply' }]).png().toBuffer();
+}
+
 function needsProcessing(p = {}) {
-  return (p.brightness ?? 100) !== 100 || (p.contrast ?? 100) !== 100 ||
-    (p.saturation ?? 100) !== 100 || (p.hue ?? 0) !== 0 ||
-    (p.grayscale ?? 0) !== 0 || (p.blur ?? 0) !== 0;
+  const zeroed = ['hue', 'grayscale', 'blur', 'vibrance', 'temperature', 'tint', 'exposure', 'black', 'white',
+    'highlights', 'shadowsTone', 'clarity', 'dehaze', 'sharpen', 'smooth'];
+  const hundred = ['brightness', 'contrast', 'saturation'];
+  return hundred.some((k) => (p[k] ?? 100) !== 100) || zeroed.some((k) => (p[k] ?? 0) !== 0);
 }
 
 async function fetchImageBuffer(src) {

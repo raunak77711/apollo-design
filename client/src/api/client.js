@@ -45,4 +45,5 @@ export const api = {
 
   // Export
   exportDesign: (payload) => request('/export', { method: 'POST', body: payload }),
+  flattenLayers: (document) => request('/export/flatten', { method: 'POST', body: { document } }),
 };
