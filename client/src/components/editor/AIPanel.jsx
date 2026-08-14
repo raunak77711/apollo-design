@@ -59,26 +59,23 @@ export default function AIPanel({ onClose, onShowLayers }) {
   const lastAppliedIndex = messages.reduce((last, m, i) => (m.applied > 0 ? i : last), -1);
 
   return (
-    <aside className="flex h-full w-[300px] shrink-0 flex-col border-l border-line bg-surface">
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-3">
-        <Spark size={13} className="text-accent" />
-        <h2 className="flex-1 text-[13px] font-medium text-ink">Apollo</h2>
+    <aside className="flex h-full w-[292px] shrink-0 flex-col border-l border-line bg-surface">
+      <header className="flex h-8 shrink-0 items-center gap-2 border-b border-line pl-3 pr-1">
+        <Spark size={12} className="shrink-0 text-accent" />
+        <h2 className="flex-1 text-xs font-semibold uppercase tracking-[0.08em] text-ink-2">Apollo</h2>
         {onShowLayers && (
-          <Tooltip label="Show layers" side="bottom">
-            <button
-              onClick={onShowLayers}
-              className="flex h-7 items-center gap-1.5 rounded px-2 text-xs font-medium text-ink-2 transition-colors hover:bg-raised hover:text-ink"
-            >
-              <Layers size={13} /> Layers
-            </button>
+          <Tooltip label="Show layers" hint="F7" side="bottom">
+            <IconButton size="sm" onClick={onShowLayers} aria-label="Show layers">
+              <Layers size={13} />
+            </IconButton>
           </Tooltip>
         )}
-        <IconButton onClick={onClose} aria-label="Close Apollo">
-          <X size={14} />
+        <IconButton size="sm" onClick={onClose} aria-label="Close Apollo">
+          <X size={13} />
         </IconButton>
       </header>
 
-      <div className="flex items-center gap-2 border-b border-line px-3 py-2">
+      <div className="flex items-center gap-2 border-b border-line px-3 py-1.5">
         <span className="label shrink-0">Context</span>
         <span className="min-w-0 flex-1 truncate text-right text-xs text-ink-2">
           {target ? `${target.type} · ${layerLabel(target).slice(0, 28)}` : selection.length > 1 ? `${selection.length} layers` : 'Whole design'}

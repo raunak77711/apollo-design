@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { LayoutTemplate, X } from 'lucide-react';
+import { LayoutTemplate } from 'lucide-react';
 import { cx } from '../../lib/cx.js';
 import { useEditor } from '../../state/EditorContext.jsx';
 import { TEMPLATES, TEMPLATE_CATEGORIES, documentFromTemplate } from '../../design/templates.js';
 import { presetLabel } from '../../design/presets.js';
-import { Chip, IconButton } from '../../ui/primitives.jsx';
+import { Chip, PanelHeader } from '../../ui/primitives.jsx';
 import DesignPreview from '../DesignPreview.jsx';
 
 const FILTERS = ['All', ...TEMPLATE_CATEGORIES];
@@ -37,16 +37,10 @@ export default function TemplatesPanel({ onClose }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-3">
-        <LayoutTemplate size={14} className="text-ink-3" />
-        <h2 className="flex-1 text-[13px] font-medium text-ink">Templates</h2>
-        <IconButton onClick={onClose} aria-label="Close templates">
-          <X size={14} />
-        </IconButton>
-      </header>
+      <PanelHeader icon={LayoutTemplate} title="Templates" onClose={onClose} />
 
       {/* Chips wrap; a segmented control would clip its last category at this width. */}
-      <div className="flex flex-wrap gap-1.5 border-b border-line px-3 py-2.5">
+      <div className="flex flex-wrap gap-1.5 border-b border-line p-2">
         {FILTERS.map((f) => (
           <Chip key={f} active={filter === f} onClick={() => setFilter(f)}>
             {f}
@@ -54,7 +48,7 @@ export default function TemplatesPanel({ onClose }) {
         ))}
       </div>
 
-      <div className="thin-scroll min-h-0 flex-1 space-y-2.5 overflow-y-auto p-3">
+      <div className="thin-scroll min-h-0 flex-1 space-y-2.5 overflow-y-auto p-2">
         {shown.map((template) => {
           const asking = confirming === template.id;
           return (
@@ -96,7 +90,7 @@ export default function TemplatesPanel({ onClose }) {
         })}
       </div>
 
-      <p className="border-t border-line px-3 py-2.5 text-2xs leading-relaxed text-ink-3">
+      <p className="border-t border-line px-3 py-2 text-2xs leading-relaxed text-ink-3">
         Templates land as editable layers. Undo puts your design back.
       </p>
     </div>

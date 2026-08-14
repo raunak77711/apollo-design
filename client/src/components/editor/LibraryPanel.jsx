@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Circle, Hexagon, ImageIcon, Minus, RectangleHorizontal, Search, Square, Star, Triangle, Upload, X } from 'lucide-react';
+import { Circle, Hexagon, ImageIcon, Minus, RectangleHorizontal, Search, Shapes, Sticker, Square, Star, Triangle, Upload } from 'lucide-react';
 import { api } from '../../api/client.js';
 import { cx } from '../../lib/cx.js';
 import { useToast } from '../../lib/toast.jsx';
@@ -8,8 +8,16 @@ import { defaultPropertiesFor } from '../../design/schema.js';
 import { inkFor } from '../../design/color.js';
 import { newElementId } from '../../design/operations.js';
 import { ICON_LIBRARIES, getIcon, iconNames } from '../../design/icons.js';
-import { EmptyState, IconButton, Spinner } from '../../ui/primitives.jsx';
+import { EmptyState, PanelHeader, Spinner } from '../../ui/primitives.jsx';
 import { Segmented } from '../../ui/fields.jsx';
+
+/** The rail opens this panel straight onto a tab, so it names itself for it. */
+const TAB_META = {
+  shapes: { title: 'Shapes', icon: Shapes },
+  icons: { title: 'Icons', icon: Sticker },
+  photos: { title: 'Images', icon: ImageIcon },
+  uploads: { title: 'Uploads', icon: Upload },
+};
 
 const SHAPES = [
   { id: 'rectangle', label: 'Rectangle', icon: Square, size: { width: 320, height: 200 } },
@@ -27,10 +35,10 @@ const SHAPES = [
  * picking a photo replaces it in place — otherwise a new layer lands in the
  * middle of the canvas.
  */
-export default function LibraryPanel({ projectId, onClose }) {
+export default function LibraryPanel({ projectId, tab, onTab, onClose }) {
   const toast = useToast();
   const { state, actions } = useEditor();
-  const [tab, setTab] = useState('shapes');
+  const setTab = onTab;
 
   const [query, setQuery] = useState('');
   const [photos, setPhotos] = useState([]);
@@ -166,14 +174,9 @@ export default function LibraryPanel({ projectId, onClose }) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-3">
-        <h2 className="flex-1 text-[13px] font-medium text-ink">Elements</h2>
-        <IconButton onClick={onClose} aria-label="Close elements">
-          <X size={14} />
-        </IconButton>
-      </header>
+      <PanelHeader icon={TAB_META[tab].icon} title={TAB_META[tab].title} onClose={onClose} />
 
-      <div className="border-b border-line p-2.5">
+      <div className="border-b border-line p-2">
         <Segmented
           size="sm"
           className="w-full"

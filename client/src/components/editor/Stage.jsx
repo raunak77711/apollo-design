@@ -561,7 +561,7 @@ const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
                 Empty canvas
               </span>
               <span className="text-[13px]" style={{ color: 'rgba(140,140,140,0.75)' }}>
-                Press T for text, or ask Apollo to draw something
+                Pick a tool from the rail, or ask Apollo to draw something
               </span>
             </div>
           )}
@@ -570,7 +570,7 @@ const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
 
       {/* Armed-tool hint */}
       {armed && (
-        <div className="pointer-events-none absolute left-1/2 top-4 flex -translate-x-1/2 animate-rise items-center gap-2 rounded-lg border border-line bg-surface px-3 py-1.5 text-[13px] text-ink shadow-pop">
+        <div className="pointer-events-none absolute left-1/2 top-3 flex -translate-x-1/2 animate-rise items-center gap-2 rounded-md border border-line bg-elevated px-2.5 py-1.5 text-xs text-ink shadow-pop">
           Click the canvas to place the {armed.label.toLowerCase()}
           <span className="font-mono text-2xs text-ink-3">ESC</span>
         </div>
@@ -578,36 +578,45 @@ const Stage = forwardRef(function Stage({ onEditImage, onPickImage }, ref) {
 
       {/* Group context breadcrumb — what "inside" currently means */}
       {enteredId && byId.get(enteredId) && !armed && (
-        <div className="pointer-events-none absolute left-1/2 top-4 flex -translate-x-1/2 animate-fade-in items-center gap-1.5 rounded-lg border border-line bg-surface/95 px-2.5 py-1 text-2xs text-ink-3 shadow-pop">
+        <div className="pointer-events-none absolute left-1/2 top-3 flex -translate-x-1/2 animate-fade-in items-center gap-1.5 rounded-md border border-line bg-elevated px-2.5 py-1 text-2xs text-ink-3 shadow-pop">
           Inside
           <span className="text-ink-2">{layerLabel(byId.get(enteredId))}</span>
           <span className="font-mono">ESC</span>
         </div>
       )}
 
-      {/* Zoom pill */}
-      <div className="pointer-events-none absolute bottom-4 left-4 flex items-center gap-0.5 rounded-lg border border-line bg-surface/95 p-0.5 shadow-pop">
-        <div className="pointer-events-auto flex items-center gap-0.5">
-          <IconButton aria-label="Zoom out" onClick={() => actions.setZoom(zoom / 1.2)}>
-            <Minus size={14} />
+      {/* Status bar: what is selected, and how close you are looking. */}
+      <div className="flex h-7 shrink-0 items-center gap-2 border-t border-line bg-surface px-2 text-2xs text-ink-3">
+        <span className="min-w-0 flex-1 truncate">
+          {selected.length === 0
+            ? `${canvas.width} × ${canvas.height} px`
+            : selected.length === 1
+              ? `${layerLabel(selected[0])} · ${Math.round(selected[0].width)} × ${Math.round(selected[0].height)}`
+              : `${selected.length} layers selected`}
+        </span>
+
+        {view.grid && <span className="num hidden shrink-0 sm:inline">grid {view.gridSize}</span>}
+
+        <span className="mx-0.5 h-3.5 w-px shrink-0 bg-line" />
+
+        <IconButton size="sm" aria-label="Zoom out" onClick={() => actions.setZoom(zoom / 1.2)}>
+          <Minus size={13} />
+        </IconButton>
+        <button
+          onClick={() => actions.setZoom(1)}
+          title="Reset to 100%"
+          className="num w-11 shrink-0 rounded text-center text-2xs text-ink-2 transition-colors hover:text-ink"
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <IconButton size="sm" aria-label="Zoom in" onClick={() => actions.setZoom(zoom * 1.2)}>
+          <Plus size={13} />
+        </IconButton>
+        <Tooltip label="Fit to screen" hint="⇧1" side="top">
+          <IconButton size="sm" aria-label="Fit to screen" onClick={fit}>
+            <Maximize2 size={12} />
           </IconButton>
-          <button
-            onClick={() => actions.setZoom(1)}
-            title="Reset to 100%"
-            className="num w-12 rounded px-1 py-1 text-center text-xs text-ink-2 transition-colors hover:text-ink"
-          >
-            {Math.round(zoom * 100)}%
-          </button>
-          <IconButton aria-label="Zoom in" onClick={() => actions.setZoom(zoom * 1.2)}>
-            <Plus size={14} />
-          </IconButton>
-          <span className="mx-0.5 h-4 w-px bg-line" />
-          <Tooltip label="Fit to screen" hint="⇧1" side="top">
-            <IconButton aria-label="Fit to screen" onClick={fit}>
-              <Maximize2 size={13} />
-            </IconButton>
-          </Tooltip>
-        </div>
+        </Tooltip>
       </div>
 
       {menu && menuTarget && (

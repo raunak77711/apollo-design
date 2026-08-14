@@ -30,18 +30,15 @@
       />
     </noscript>
 
-    <!-- Resolve the theme before first paint so there is never a flash. -->
+    <!-- Resolve the theme before first paint so there is never a flash.
+         Apollo is dark by default — the editor is built around a dark room so
+         the artboard is the brightest thing on screen. A light preference is
+         honoured, but only once it has been chosen explicitly. -->
     <script>
       (function () {
         try {
           var stored = localStorage.getItem('apollo.theme');
-          var theme =
-            stored === 'light' || stored === 'dark'
-              ? stored
-              : window.matchMedia('(prefers-color-scheme: light)').matches
-                ? 'light'
-                : 'dark';
-          document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.setAttribute('data-theme', stored === 'light' ? 'light' : 'dark');
         } catch (e) {
           document.documentElement.setAttribute('data-theme', 'dark');
         }

@@ -1,8 +1,8 @@
 import { useRef } from 'react';
-import { Crop, X } from 'lucide-react';
+import { Crop } from 'lucide-react';
 import { useEditor, useSelection } from '../../state/EditorContext.jsx';
 import { SliderField, Segmented } from '../../ui/fields.jsx';
-import { EmptyState, IconButton } from '../../ui/primitives.jsx';
+import { EmptyState, PanelHeader } from '../../ui/primitives.jsx';
 
 /**
  * Crop, on its own — the same focal-point-plus-zoom model as the Properties
@@ -16,14 +16,10 @@ export default function CropPanel({ onClose }) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-3">
-        <Crop size={14} className="text-ink-3" />
-        <h2 className="flex-1 text-[13px] font-medium text-ink">Crop</h2>
-        <IconButton onClick={onClose} aria-label="Close crop"><X size={14} /></IconButton>
-      </header>
+      <PanelHeader icon={Crop} title="Crop" onClose={onClose} />
 
       {!element ? (
-        <EmptyState icon={Crop} title="Select an image" body="Pick an image layer on the canvas to crop it." />
+        <EmptyState className="flex-1" icon={Crop} title="Select an image" body="Pick an image layer on the canvas to crop it." />
       ) : (
         <CropControls element={element} actions={actions} />
       )}

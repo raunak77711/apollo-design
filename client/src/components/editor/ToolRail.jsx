@@ -1,13 +1,15 @@
 import {
+  Brush,
   Circle,
+  Contrast,
   Crop,
   Hand,
   Hexagon,
+  ImageIcon,
   Layers,
   LayoutTemplate,
   Minus,
   MousePointer2,
-  PenTool,
   Pipette,
   RectangleHorizontal,
   Shapes,
@@ -15,13 +17,15 @@ import {
   Square,
   Star,
   Sticker,
-  SunDim,
   Triangle,
   Type,
+  Upload,
+  Wand2,
 } from 'lucide-react';
 import { cx } from '../../lib/cx.js';
 import { useEditor } from '../../state/EditorContext.jsx';
 import { Tooltip } from '../../ui/primitives.jsx';
+import { Spark } from '../../ui/brand.jsx';
 
 /**
  * Everything the rail can place. `size` is the footprint a click drops on the
@@ -50,92 +54,113 @@ export const toolById = (id) => CREATION_TOOLS.find((t) => t.id === id) || null;
 export const typeOfTool = (id) => toolById(id)?.type || id;
 
 /**
- * Tool rail: Select, Hand, then the panel tools in the order a photo editor
- * expects them — Crop, Filters, Retouch, Drawing, Texts, Elements. Each of
- * those opens its own panel rather than arming a place-on-click tool, so
- * there's nothing to "drop" — click it and it's already there or already
- * applied. Shape/text/icon keyboard shortcuts (R, O, T, I…) still work from
- * anywhere; this is just what's visible.
+ * The rail is the editor's spine: every major tool hangs off it, in the order
+ * work actually happens — point at something, make something, adjust it — and
+ * the panels that describe the result (Layers, Properties, Apollo) are pinned
+ * to the bottom where they are always one click away, never buried in a tab.
+ *
+ * Two kinds of button live here and they behave differently on purpose:
+ * arming tools (Select, Hand) change what a canvas click does, while panel
+ * tools open a flyout and leave the canvas alone.
  */
 export default function ToolRail({
-  cropOpen, onCrop,
-  filtersOpen, onFilters,
+  panel,
+  onPanel,
+  dock,
+  onDock,
+  aiOpen,
+  onAI,
   onRetouch,
   onDraw,
-  textsOpen, onTexts,
-  elementsOpen, onElements,
-  templatesOpen, onTemplates,
-  layersOpen, onLayers,
   onSampleColour,
 }) {
   const { state, actions } = useEditor();
 
   return (
-    <nav className="z-20 flex w-[52px] shrink-0 flex-col items-center gap-1 border-r border-line bg-surface py-2.5">
-      <RailButton
-        label="Select"
-        hint="V"
-        icon={MousePointer2}
-        active={state.tool === 'select'}
-        onClick={() => actions.setTool('select')}
-      />
-      <RailButton
-        label="Hand"
-        hint="H"
-        icon={Hand}
-        active={state.tool === 'hand'}
-        onClick={() => actions.setTool(state.tool === 'hand' ? 'select' : 'hand')}
-      />
+    <nav
+      aria-label="Tools"
+      className="z-20 flex w-12 shrink-0 flex-col items-center border-r border-line bg-surface"
+    >
+      <div className="no-scrollbar flex min-h-0 flex-1 flex-col items-center gap-px overflow-y-auto py-2">
+        <RailButton
+          label="Select"
+          hint="V"
+          icon={MousePointer2}
+          active={state.tool === 'select'}
+          onClick={() => actions.setTool('select')}
+        />
+        <RailButton
+          label="Pan"
+          hint="H"
+          icon={Hand}
+          active={state.tool === 'hand'}
+          onClick={() => actions.setTool(state.tool === 'hand' ? 'select' : 'hand')}
+        />
 
-      <Divider />
+        <Divider />
 
-      <RailButton label="Crop" icon={Crop} active={cropOpen} onClick={onCrop} />
-      <RailButton label="Filters" icon={SlidersHorizontal} active={filtersOpen} onClick={onFilters} />
-      <RailButton label="Retouch" icon={SunDim} onClick={onRetouch} />
-      <RailButton label="Drawing" icon={PenTool} onClick={onDraw} />
+        <RailButton
+          label="Text"
+          hint="T"
+          icon={Type}
+          active={panel === 'texts' || state.tool === 'text'}
+          onClick={() => onPanel('texts')}
+        />
+        <RailButton label="Shapes" hint="M" icon={Shapes} active={panel === 'shapes'} onClick={() => onPanel('shapes')} />
+        <RailButton label="Images" icon={ImageIcon} active={panel === 'images'} onClick={() => onPanel('images')} />
+        <RailButton label="Upload" icon={Upload} active={panel === 'uploads'} onClick={() => onPanel('uploads')} />
+        <RailButton label="Draw" icon={Brush} onClick={onDraw} />
+        <RailButton
+          label="Templates"
+          icon={LayoutTemplate}
+          active={panel === 'templates'}
+          onClick={() => onPanel('templates')}
+        />
 
-      <Divider />
+        <Divider />
 
-      <RailButton label="Texts" hint="T" icon={Type} active={textsOpen} onClick={onTexts} />
-      <RailButton label="Elements" hint="M" icon={Shapes} active={elementsOpen} onClick={onElements} />
-      <RailButton label="Templates" icon={LayoutTemplate} active={templatesOpen} onClick={onTemplates} />
+        <RailButton label="Crop" icon={Crop} active={panel === 'crop'} onClick={() => onPanel('crop')} />
+        <RailButton label="Effects" icon={Contrast} active={panel === 'filters'} onClick={() => onPanel('filters')} />
+        <RailButton label="Retouch" icon={Wand2} onClick={onRetouch} />
+        {onSampleColour && <RailButton label="Pick a colour" hint="C" icon={Pipette} onClick={onSampleColour} />}
+      </div>
 
-      <div className="flex-1" />
-
-      {onSampleColour && (
-        <RailButton label="Pick a colour" hint="C" icon={Pipette} onClick={onSampleColour} />
-      )}
-      <RailButton label="Layers" icon={Layers} active={layersOpen} onClick={onLayers} />
+      {/* Pinned dock: what the design is made of, and who else can change it. */}
+      <div className="flex shrink-0 flex-col items-center gap-px border-t border-line py-2">
+        <RailButton
+          label="Ask Apollo"
+          hint="⌘J"
+          icon={Spark}
+          active={aiOpen}
+          onClick={onAI}
+          iconClassName={cx(!aiOpen && 'text-accent')}
+        />
+        <RailButton label="Layers" hint="F7" icon={Layers} active={dock.layers} onClick={() => onDock('layers')} />
+        <RailButton
+          label="Properties"
+          hint="F8"
+          icon={SlidersHorizontal}
+          active={dock.properties}
+          onClick={() => onDock('properties')}
+        />
+      </div>
     </nav>
   );
 }
 
-const Divider = () => <span className="my-1 h-px w-6 bg-line" />;
+const Divider = () => <span className="my-1.5 h-px w-5 shrink-0 bg-line" />;
 
-function RailButton({ label, hint, icon: Icon, active, more, onClick, ...props }) {
+function RailButton({ label, hint, icon: Icon, active, iconClassName, onClick, ...props }) {
   return (
     <Tooltip label={label} hint={hint} side="right">
       <button
         onClick={onClick}
         aria-label={label}
-        aria-pressed={active}
-        className={cx(
-          'relative flex h-9 w-9 items-center justify-center rounded-md transition-colors duration-150',
-          active ? 'bg-raised text-ink' : 'text-ink-3 hover:bg-raised/70 hover:text-ink-2'
-        )}
+        aria-pressed={Boolean(active)}
+        className="rail-btn"
         {...props}
       >
-        <Icon size={17} strokeWidth={1.75} />
-        {active && <span className="absolute -left-2.5 h-4 w-[2px] rounded-full bg-accent" />}
-        {more && (
-          <span
-            aria-hidden="true"
-            className={cx(
-              'absolute bottom-[3px] right-[3px] h-0 w-0 border-b-[4px] border-l-[4px] border-b-current border-l-transparent',
-              active ? 'opacity-70' : 'opacity-40'
-            )}
-          />
-        )}
+        <Icon size={16} strokeWidth={1.75} className={iconClassName} />
       </button>
     </Tooltip>
   );

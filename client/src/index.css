@@ -11,46 +11,55 @@
 @layer base {
   :root {
     /* Paper (light) */
-    --c-void: 246 245 243;
+    --c-void: 244 243 241;
     --c-surface: 255 255 255;
-    --c-raised: 239 238 235;
-    --c-workspace: 229 227 222;
-    --c-line: 226 224 219;
-    --c-line-strong: 206 203 196;
-    --c-ink: 17 17 16;
-    --c-ink-2: 92 90 85;
-    --c-ink-3: 123 120 113;
-    --c-accent: 191 138 38;
-    --c-accent-text: 138 98 21;
+    --c-raised: 243 242 239;
+    --c-elevated: 255 255 255;
+    --c-workspace: 227 226 222;
+    --c-line: 227 225 220;
+    --c-line-strong: 205 202 195;
+    --c-ink: 20 20 19;
+    --c-ink-2: 94 92 87;
+    --c-ink-3: 132 129 122;
+    --c-accent: 186 133 33;
+    --c-accent-text: 133 93 18;
     --c-accent-ink: 22 16 4;
     --c-danger: 179 38 30;
 
     --shadow-pop: 0 1px 2px rgb(17 17 16 / 0.06), 0 16px 40px -14px rgb(17 17 16 / 0.22);
     --shadow-art: 0 1px 2px rgb(17 17 16 / 0.08), 0 28px 60px -28px rgb(17 17 16 / 0.35);
     --shadow-rail: 6px 0 24px -18px rgb(17 17 16 / 0.35);
+    --shadow-inset: inset 0 1px 0 rgb(255 255 255 / 0.6);
 
     color-scheme: light;
   }
 
+  /*
+   * Graphite (dark) — the editor's home. Four flat greys, each one step apart:
+   * void (gutters) · surface (chrome) · workspace (the room the artboard sits
+   * in) · raised (controls). Borders are hairlines, never boxes, so the canvas
+   * is the only thing on screen with real contrast.
+   */
   [data-theme='dark'] {
-    /* Graphite (dark) */
-    --c-void: 10 10 11;
-    --c-surface: 17 17 18;
-    --c-raised: 26 26 25;
-    --c-workspace: 8 8 9;
-    --c-line: 36 36 35;
-    --c-line-strong: 55 55 51;
-    --c-ink: 245 244 241;
-    --c-ink-2: 166 164 156;
-    --c-ink-3: 125 123 115;
-    --c-accent: 217 164 65;
-    --c-accent-text: 230 188 110;
+    --c-void: 8 8 9;
+    --c-surface: 20 20 22;
+    --c-raised: 31 31 34;
+    --c-elevated: 38 38 42;
+    --c-workspace: 28 28 31;
+    --c-line: 37 37 41;
+    --c-line-strong: 58 58 64;
+    --c-ink: 237 237 240;
+    --c-ink-2: 158 158 167;
+    --c-ink-3: 111 111 120;
+    --c-accent: 226 168 62;
+    --c-accent-text: 240 197 114;
     --c-accent-ink: 20 15 5;
-    --c-danger: 240 119 106;
+    --c-danger: 242 104 92;
 
-    --shadow-pop: 0 1px 2px rgb(0 0 0 / 0.6), 0 20px 48px -18px rgb(0 0 0 / 0.75);
-    --shadow-art: 0 0 0 1px rgb(255 255 255 / 0.04), 0 30px 70px -30px rgb(0 0 0 / 0.9);
+    --shadow-pop: 0 1px 2px rgb(0 0 0 / 0.5), 0 18px 44px -16px rgb(0 0 0 / 0.8);
+    --shadow-art: 0 0 0 1px rgb(255 255 255 / 0.05), 0 32px 72px -28px rgb(0 0 0 / 0.95);
     --shadow-rail: 6px 0 28px -20px rgb(0 0 0 / 0.9);
+    --shadow-inset: inset 0 1px 0 rgb(255 255 255 / 0.03);
 
     color-scheme: dark;
   }
@@ -100,9 +109,11 @@
 }
 
 @layer components {
-  /* --- Form controls ------------------------------------------------- */
+  /* --- Form controls -------------------------------------------------
+     One control height across the whole editor (28px). Dense enough that a
+     full properties column fits without scrolling, tall enough to hit. */
   .field {
-    @apply w-full h-8 px-2 rounded bg-raised border border-line text-ink text-[13px]
+    @apply w-full h-7 px-2 rounded bg-raised border border-line text-ink text-xs
            outline-none transition-colors duration-150
            hover:border-line-strong focus:border-accent/70 focus:bg-surface
            placeholder:text-ink-3;
@@ -118,6 +129,34 @@
     letter-spacing: -0.01em;
   }
 
+  /* --- Editor chrome --------------------------------------------------
+     Rail and dock share one vocabulary: a flat surface, a hairline edge, and
+     a solar marker that shows what is currently on. */
+  .rail-btn {
+    @apply relative flex h-8 w-8 items-center justify-center rounded-md text-ink-3
+           transition-colors duration-150
+           hover:bg-raised hover:text-ink
+           disabled:pointer-events-none disabled:opacity-30;
+  }
+
+  .rail-btn[aria-pressed='true'],
+  .rail-btn[data-active='true'] {
+    @apply bg-raised text-ink;
+  }
+
+  /* The active marker sits inside the button's own box. Anything hanging off
+     the left would be clipped the moment the rail needs to scroll. */
+  .rail-btn[aria-pressed='true']::before,
+  .rail-btn[data-active='true']::before {
+    content: '';
+    @apply absolute left-0 h-4 w-[2px] rounded-full bg-accent;
+  }
+
+  .dock-title {
+    @apply flex h-8 w-full shrink-0 items-center gap-1.5 px-2.5 text-left
+           text-[11px] font-semibold uppercase tracking-[0.09em] text-ink-2
+           transition-colors duration-150 hover:text-ink;
+  }
 }
 
 @layer utilities {
@@ -167,6 +206,18 @@
     user-select: none;
   }
 
+  /* The splitter between stacked dock panels. */
+  .dock-splitter {
+    @apply relative h-px shrink-0 cursor-row-resize bg-line;
+  }
+  .dock-splitter::after {
+    content: '';
+    @apply absolute inset-x-0 -top-[3px] h-[7px];
+  }
+  .dock-splitter:hover {
+    background: rgb(var(--c-accent) / 0.55);
+  }
+
   /* Dialog scrim — always darkens, in both themes. */
   .scrim {
     background: rgb(0 0 0 / 0.34);
@@ -186,33 +237,33 @@ input[type='range'] {
   cursor: pointer;
 }
 input[type='range']::-webkit-slider-runnable-track {
-  height: 2px;
-  border-radius: 2px;
+  height: 3px;
+  border-radius: 3px;
   background: rgb(var(--c-line-strong));
 }
 input[type='range']::-moz-range-track {
-  height: 2px;
-  border-radius: 2px;
+  height: 3px;
+  border-radius: 3px;
   background: rgb(var(--c-line-strong));
 }
 input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 12px;
-  height: 12px;
-  margin-top: -5px;
+  width: 11px;
+  height: 11px;
+  margin-top: -4px;
   border-radius: 50%;
   background: rgb(var(--c-ink));
   border: 2px solid rgb(var(--c-surface));
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
   transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 input[type='range']::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
   background: rgb(var(--c-ink));
   border: 2px solid rgb(var(--c-surface));
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
 }
 input[type='range']:hover::-webkit-slider-thumb {
   transform: scale(1.15);

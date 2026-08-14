@@ -12,6 +12,7 @@ export default {
         void: token('void'),
         surface: token('surface'),
         raised: token('raised'),
+        elevated: token('elevated'),
         workspace: token('workspace'),
         line: token('line'),
         'line-strong': token('line-strong'),
@@ -52,6 +53,7 @@ export default {
         pop: { from: { opacity: '0', transform: 'scale(0.97)' }, to: { opacity: '1', transform: 'none' } },
         'slide-in-right': { from: { opacity: '0', transform: 'translateX(12px)' }, to: { opacity: '1', transform: 'none' } },
         'slide-in-left': { from: { opacity: '0', transform: 'translateX(-8px)' }, to: { opacity: '1', transform: 'none' } },
+        'section-in': { from: { opacity: '0', transform: 'translateY(-2px)' }, to: { opacity: '1', transform: 'none' } },
         shimmer: { '100%': { transform: 'translateX(100%)' } },
       },
       animation: {
@@ -60,6 +62,7 @@ export default {
         pop: 'pop 140ms cubic-bezier(0.16, 1, 0.3, 1) both',
         'slide-in-right': 'slide-in-right 200ms cubic-bezier(0.16, 1, 0.3, 1) both',
         'slide-in-left': 'slide-in-left 180ms cubic-bezier(0.16, 1, 0.3, 1) both',
+        'section-in': 'section-in 140ms cubic-bezier(0.16, 1, 0.3, 1) both',
       },
     },
   },

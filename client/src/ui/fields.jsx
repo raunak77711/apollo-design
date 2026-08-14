@@ -66,12 +66,12 @@ export function NumberField({ label, name, value, onChange, onCommit, step = 1, 
   };
 
   return (
-    <div className={cx('flex h-8 items-center rounded border border-line bg-raised transition-colors focus-within:border-accent/70 focus-within:bg-surface hover:border-line-strong', className)}>
+    <div className={cx('flex h-7 items-center rounded border border-line bg-raised transition-colors focus-within:border-accent/70 focus-within:bg-surface hover:border-line-strong', className)}>
       {label && (
         <span
           onPointerDown={onScrubDown}
           title={`Drag to change ${label}`}
-          className="flex h-full w-7 shrink-0 cursor-ew-resize select-none items-center justify-center font-mono text-2xs uppercase text-ink-3 transition-colors hover:text-ink"
+          className="flex h-full min-w-[1.75rem] shrink-0 cursor-ew-resize select-none items-center justify-center px-1.5 font-mono text-2xs uppercase text-ink-3 transition-colors hover:text-ink"
         >
           {label}
         </span>
@@ -107,10 +107,10 @@ export function NumberField({ label, name, value, onChange, onCommit, step = 1, 
 export function ColorField({ label, value, onChange, onCommit, className }) {
   const hex = toHex(value);
   return (
-    <div className={cx('flex h-8 items-center gap-2', className)}>
-      {label && <span className="label w-[4.25rem] shrink-0 truncate">{label}</span>}
-      <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded border border-line bg-raised px-1.5 transition-colors focus-within:border-accent/70 hover:border-line-strong">
-        <span className="relative h-[18px] w-[18px] shrink-0 overflow-hidden rounded-sm border border-line-strong">
+    <div className={cx('flex h-7 items-center gap-2', className)}>
+      {label && <span className="label w-16 shrink-0 truncate">{label}</span>}
+      <div className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded border border-line bg-raised px-1.5 transition-colors focus-within:border-accent/70 hover:border-line-strong">
+        <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm border border-line-strong">
           <input
             type="color"
             value={hex}
@@ -190,8 +190,8 @@ export function SliderField({ label, value, onChange, onCommit, min = 0, max = 1
 export function PropRow({ label, children, className, align = 'center' }) {
   const top = align === 'start';
   return (
-    <div className={cx('flex min-h-[2rem] gap-2', top ? 'items-start' : 'items-center', className)}>
-      <span className={cx('label w-[4.25rem] shrink-0 truncate', top && 'pt-2')}>{label}</span>
+    <div className={cx('flex min-h-[1.75rem] gap-2', top ? 'items-start' : 'items-center', className)}>
+      <span className={cx('label w-16 shrink-0 truncate', top && 'pt-1.5')}>{label}</span>
       <div className={cx('flex min-w-0 flex-1 gap-1.5', top ? 'items-start' : 'items-center')}>{children}</div>
     </div>
   );
@@ -200,8 +200,8 @@ export function PropRow({ label, children, className, align = 'center' }) {
 /** Label, track and readout on one line — the Appearance panel's workhorse. */
 export function SliderRow({ label, value, display, onChange, onCommit, min = 0, max = 100, step = 1, disabled }) {
   return (
-    <div className={cx('flex h-8 items-center gap-2', disabled && 'pointer-events-none opacity-40')}>
-      <span className="label w-[4.25rem] shrink-0 truncate">{label}</span>
+    <div className={cx('flex h-7 items-center gap-2', disabled && 'pointer-events-none opacity-40')}>
+      <span className="label w-16 shrink-0 truncate">{label}</span>
       <input
         type="range"
         min={min}
@@ -255,15 +255,15 @@ export function IconToggle({ icon: Icon, label, active, onClick, disabled, class
       disabled={disabled}
       onClick={onClick}
       className={cx(
-        'flex h-8 w-8 shrink-0 items-center justify-center rounded border transition-colors duration-150',
+        'flex h-7 w-7 shrink-0 items-center justify-center rounded border transition-colors duration-150',
         'disabled:pointer-events-none disabled:opacity-40',
         active
-          ? 'border-line-strong bg-raised text-ink'
+          ? 'border-accent/60 bg-accent/15 text-accent-text'
           : 'border-line bg-raised text-ink-3 hover:border-line-strong hover:text-ink',
         className
       )}
     >
-      <Icon size={14} />
+      <Icon size={13} />
     </button>
   );
 }
@@ -277,13 +277,13 @@ export function ActionButton({ icon: Icon, label, onClick, disabled, danger, tit
       disabled={disabled}
       title={title || label}
       className={cx(
-        'flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded border border-line bg-raised px-2 text-xs',
+        'flex h-7 min-w-0 flex-1 items-center justify-center gap-1.5 rounded border border-line bg-raised px-2 text-xs',
         'transition-colors duration-150 hover:border-line-strong disabled:pointer-events-none disabled:opacity-40',
         danger ? 'text-danger hover:bg-danger/10' : 'text-ink-2 hover:text-ink',
         className
       )}
     >
-      {Icon && <Icon size={13} className="shrink-0" />}
+      {Icon && <Icon size={12} className="shrink-0" />}
       <span className="truncate">{label}</span>
     </button>
   );
@@ -295,7 +295,7 @@ export function Segmented({ value, options, onChange, className, size = 'md' }) 
     <div
       className={cx(
         'inline-flex items-center gap-0.5 rounded border border-line bg-raised p-0.5',
-        size === 'sm' ? 'h-7' : 'h-8',
+        size === 'sm' ? 'h-6' : 'h-7',
         className
       )}
     >
@@ -310,11 +310,11 @@ export function Segmented({ value, options, onChange, className, size = 'md' }) 
             aria-pressed={active}
             onClick={() => onChange(o.value)}
             className={cx(
-              'flex h-full flex-1 items-center justify-center gap-1.5 rounded-sm px-2 text-xs font-medium transition-colors duration-150',
-              active ? 'bg-surface text-ink shadow-[0_1px_2px_rgb(0_0_0/0.08)]' : 'text-ink-3 hover:text-ink'
+              'flex h-full flex-1 items-center justify-center gap-1.5 rounded-sm px-2 text-2xs font-medium transition-colors duration-150',
+              active ? 'bg-elevated text-ink shadow-[0_1px_2px_rgb(0_0_0/0.18)]' : 'text-ink-3 hover:text-ink'
             )}
           >
-            {Icon && <Icon size={14} />}
+            {Icon && <Icon size={13} />}
             {o.label && <span className={cx(Icon && 'sr-only sm:not-sr-only')}>{o.label}</span>}
           </button>
         );

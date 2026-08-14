@@ -30,7 +30,7 @@ import { useEditor } from '../../state/EditorContext.jsx';
 import { useLayerActions } from '../../state/useLayerActions.js';
 import { useMergeLayers } from '../../state/useMergeLayers.js';
 import { newElementId } from '../../design/operations.js';
-import { defaultPropertiesFor } from '../../design/schema.js';
+import { BLEND_MODES, defaultPropertiesFor } from '../../design/schema.js';
 import { TYPE_META, layerLabel, typeLabel } from '../../design/layers.js';
 import { childrenOf, descendantIds, flattenPanel, indexById } from '../../design/tree.js';
 import { getIcon } from '../../design/icons.js';
@@ -64,6 +64,10 @@ export default function LayersPanel({ renamingId, onRename }) {
   );
   const byId = useMemo(() => indexById(elements), [elements]);
   const groupCount = useMemo(() => elements.filter((el) => el.type === 'group').length, [elements]);
+  // Blend and opacity read from the first selected layer and write to all of
+  // them — the same rule the canvas uses when several layers move together.
+  const primary = selectedIds.length ? byId.get(selectedIds[0]) : null;
+  const hasSelection = selectedIds.length > 0;
 
   // Selecting on the canvas has to reveal the layer, including inside a group
   // that happens to be collapsed.
@@ -218,79 +222,68 @@ export default function LayersPanel({ renamingId, onRename }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex h-9 shrink-0 items-center gap-1 border-b border-line pl-3 pr-1.5">
-        <span className="num flex-1 text-2xs text-ink-3">
-          {elements.length} {elements.length === 1 ? 'layer' : 'layers'}
-        </span>
-        {groupCount > 0 && (
-          <Tooltip label={collapsed.size ? 'Expand all' : 'Collapse all'} side="bottom">
-            <IconButton
-              size="sm"
-              aria-label={collapsed.size ? 'Expand all groups' : 'Collapse all groups'}
-              onClick={() =>
-                setCollapsed(collapsed.size ? new Set() : new Set(elements.filter((el) => el.type === 'group').map((el) => el.id)))
-              }
-            >
-              {collapsed.size ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
-            </IconButton>
-          </Tooltip>
+      {/* Blend and opacity sit above the stack, where they describe whatever
+          the stack currently has selected. */}
+      <div
+        className={cx(
+          'flex h-8 shrink-0 items-center gap-1.5 border-b border-line px-2 transition-opacity duration-150',
+          !primary && 'pointer-events-none opacity-40'
         )}
-        <Tooltip label="Group selection" hint="⌘G" side="bottom">
-          <IconButton
-            size="sm"
-            aria-label="Group selection"
-            disabled={!layers.canGroup()}
-            onClick={() => layers.group()}
+      >
+        <span className="relative min-w-0 flex-1">
+          <select
+            value={primary?.blendMode || 'normal'}
+            aria-label="Blend mode"
+            disabled={!primary}
+            onChange={(e) =>
+              actions.apply(
+                selectedIds.map((id) => ({ type: 'UPDATE_ELEMENT', targetId: id, changes: { blendMode: e.target.value } }))
+              )
+            }
+            className="h-6 w-full appearance-none rounded border border-line bg-raised pl-1.5 pr-5 text-2xs text-ink-2 outline-none transition-colors hover:border-line-strong focus:border-accent/70"
           >
-            <FolderPlus size={13} />
-          </IconButton>
-        </Tooltip>
-        <Tooltip label="Add layer" side="bottom">
-          <IconButton size="sm" aria-label="Add layer" onClick={() => setAddingLayer(true)}>
-            <Plus size={14} />
-          </IconButton>
-        </Tooltip>
-        <Popover
-          align="end"
-          panelClassName="w-48"
-          button={({ toggle }) => (
-            <IconButton size="sm" aria-label="More layer actions" onClick={toggle}>
-              <MoreHorizontal size={13} />
-            </IconButton>
-          )}
-        >
-          {({ close }) => (
-            <>
-              <MenuItem
-                icon={Combine}
-                disabled={!merge.canMergeVisible() || merge.busy}
-                onClick={() => {
-                  close();
-                  merge.mergeVisible();
-                }}
-              >
-                Merge visible
-              </MenuItem>
-              <MenuItem
-                icon={SquareStack}
-                disabled={!merge.canMergeVisible() || merge.busy}
-                onClick={() => {
-                  close();
-                  merge.flatten();
-                }}
-              >
-                Flatten image
-              </MenuItem>
-            </>
-          )}
-        </Popover>
-        {merge.busy && <Spinner size={13} />}
-      </header>
+            {BLEND_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {blendLabel(mode)}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={11} className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-ink-3" />
+        </span>
+        {/* The range lives in a sized wrapper: the base stylesheet sets
+            width:100% on every slider outside a cascade layer, which would
+            otherwise win against a utility class. */}
+        <span className="flex w-[68px] shrink-0 items-center">
+          <input
+            type="range"
+            min={0}
+            max={100}
+            aria-label="Layer opacity"
+            disabled={!primary}
+            value={Math.round((primary?.opacity ?? 1) * 100)}
+            onChange={(e) =>
+              actions.applyTransient(
+                selectedIds.map((id) => ({
+                  type: 'UPDATE_ELEMENT',
+                  targetId: id,
+                  changes: { opacity: parseFloat(e.target.value) / 100 },
+                }))
+              )
+            }
+            onPointerUp={actions.commitTransient}
+            onKeyUp={actions.commitTransient}
+          />
+        </span>
+        <span className="num w-8 shrink-0 text-right text-2xs text-ink-2">
+          {Math.round((primary?.opacity ?? 1) * 100)}%
+        </span>
+      </div>
 
       {addingLayer && <AddLayerModal onClose={() => setAddingLayer(false)} />}
 
       {rows.length === 0 ? (
         <EmptyState
+          className="min-h-0 flex-1"
           icon={LayersIcon}
           title="No layers yet"
           body="Place something from the tool rail, or ask Apollo to draw a first draft."
@@ -331,6 +324,136 @@ export default function LayersPanel({ renamingId, onRename }) {
         </div>
       )}
 
+      {/* Every layer command has a home here, so nothing depends on knowing a
+          right-click menu exists. */}
+      <footer className="flex h-9 shrink-0 items-center gap-px border-t border-line px-1.5">
+        <Tooltip label="Add layer" side="top">
+          <IconButton size="sm" aria-label="Add layer" onClick={() => setAddingLayer(true)}>
+            <Plus size={14} />
+          </IconButton>
+        </Tooltip>
+        <Tooltip label="Duplicate" hint="⌘D" side="top">
+          <IconButton size="sm" aria-label="Duplicate layer" disabled={!hasSelection} onClick={() => layers.duplicate()}>
+            <Copy size={13} />
+          </IconButton>
+        </Tooltip>
+        <Tooltip label="Group" hint="⌘G" side="top">
+          <IconButton size="sm" aria-label="Group layers" disabled={!layers.canGroup()} onClick={() => layers.group()}>
+            <FolderPlus size={13} />
+          </IconButton>
+        </Tooltip>
+        <Tooltip label="Ungroup" hint="⇧⌘G" side="top">
+          <IconButton size="sm" aria-label="Ungroup layers" disabled={!layers.canUngroup()} onClick={() => layers.ungroup()}>
+            <Ungroup size={13} />
+          </IconButton>
+        </Tooltip>
+
+        <span className="mx-1 h-4 w-px bg-line" />
+
+        <Tooltip label="Bring forward" hint="]" side="top">
+          <IconButton size="sm" aria-label="Bring forward" disabled={!hasSelection} onClick={() => layers.arrange('forward')}>
+            <ArrowUp size={13} />
+          </IconButton>
+        </Tooltip>
+        <Tooltip label="Send backward" hint="[" side="top">
+          <IconButton size="sm" aria-label="Send backward" disabled={!hasSelection} onClick={() => layers.arrange('backward')}>
+            <ArrowDown size={13} />
+          </IconButton>
+        </Tooltip>
+
+        <span className="flex-1" />
+
+        {merge.busy && <Spinner size={12} className="mr-1 text-ink-3" />}
+
+        <Popover
+          align="end"
+          panelClassName="w-48 bottom-full mb-2 !mt-0"
+          button={({ toggle }) => (
+            <IconButton size="sm" aria-label="More layer actions" onClick={toggle}>
+              <MoreHorizontal size={13} />
+            </IconButton>
+          )}
+        >
+          {({ close }) => (
+            <>
+              {groupCount > 0 && (
+                <>
+                  <MenuItem
+                    icon={collapsed.size ? ChevronRight : ChevronDown}
+                    onClick={() => {
+                      close();
+                      setCollapsed(
+                        collapsed.size
+                          ? new Set()
+                          : new Set(elements.filter((el) => el.type === 'group').map((el) => el.id))
+                      );
+                    }}
+                  >
+                    {collapsed.size ? 'Expand all groups' : 'Collapse all groups'}
+                  </MenuItem>
+                  <MenuDivider />
+                </>
+              )}
+              <MenuItem
+                icon={ArrowUpToLine}
+                hint="⌘]"
+                disabled={!hasSelection}
+                onClick={() => {
+                  close();
+                  layers.arrange('front');
+                }}
+              >
+                Bring to front
+              </MenuItem>
+              <MenuItem
+                icon={ArrowDownToLine}
+                hint="⌘["
+                disabled={!hasSelection}
+                onClick={() => {
+                  close();
+                  layers.arrange('back');
+                }}
+              >
+                Send to back
+              </MenuItem>
+              <MenuDivider />
+              <MenuItem
+                icon={Combine}
+                disabled={!merge.canMergeVisible() || merge.busy}
+                onClick={() => {
+                  close();
+                  merge.mergeVisible();
+                }}
+              >
+                Merge visible
+              </MenuItem>
+              <MenuItem
+                icon={SquareStack}
+                disabled={!merge.canMergeVisible() || merge.busy}
+                onClick={() => {
+                  close();
+                  merge.flatten();
+                }}
+              >
+                Flatten image
+              </MenuItem>
+            </>
+          )}
+        </Popover>
+
+        <Tooltip label="Delete" hint="⌫" side="top">
+          <IconButton
+            size="sm"
+            variant="danger"
+            aria-label="Delete layer"
+            disabled={!hasSelection}
+            onClick={() => layers.remove()}
+          >
+            <Trash2 size={13} />
+          </IconButton>
+        </Tooltip>
+      </footer>
+
       {menu && menuTarget && (
         <LayerMenu
           x={menu.x}
@@ -345,6 +468,12 @@ export default function LayersPanel({ renamingId, onRename }) {
     </div>
   );
 }
+
+/** "color-dodge" reads as "Colour dodge" in the blend picker. */
+const blendLabel = (mode) => {
+  const words = mode.replace('-', ' ').replace('color', 'colour');
+  return words[0].toUpperCase() + words.slice(1);
+};
 
 const isInherited = (byId, el, key) => {
   let cursor = el.parentId ? byId.get(el.parentId) : null;

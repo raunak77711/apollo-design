@@ -138,10 +138,10 @@ function DesignPanel() {
             button={({ toggle }) => (
               <button
                 onClick={toggle}
-                className="flex h-8 w-full items-center justify-between gap-1.5 rounded border border-line bg-raised px-2 text-xs text-ink-2 transition-colors hover:border-line-strong hover:text-ink"
+                className="flex h-7 w-full items-center justify-between gap-1.5 rounded border border-line bg-raised px-2 text-xs text-ink-2 transition-colors hover:border-line-strong hover:text-ink"
               >
                 <span className="truncate">Resize to preset</span>
-                <Repeat2 size={13} className="shrink-0" />
+                <Repeat2 size={12} className="shrink-0" />
               </button>
             )}
           >
@@ -221,7 +221,7 @@ function DesignPanel() {
         <Stat label="History" value={`${state.past.length} step${state.past.length === 1 ? '' : 's'}`} />
       </Section>
 
-      <p className="px-3 py-3.5 text-xs leading-relaxed text-ink-3">
+      <p className="px-2.5 py-3 text-2xs leading-relaxed text-ink-3">
         Select a layer to edit it, or drag a box on the canvas to select several.
       </p>
     </>
@@ -479,10 +479,10 @@ function LayerHeader({ element, layers, inherited }) {
   }, [element.id, element.name, element.properties]);
 
   return (
-    <header className="border-b border-line px-3 py-2.5">
+    <header className="border-b border-line bg-void/40 px-2.5 py-2">
       <div className="flex items-center gap-2">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-line bg-raised text-ink-2">
-          <Icon size={14} />
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-line bg-raised text-ink-2">
+          <Icon size={13} />
         </span>
         <input
           value={draft}
@@ -502,11 +502,11 @@ function LayerHeader({ element, layers, inherited }) {
               e.currentTarget.blur();
             }
           }}
-          className="h-7 min-w-0 flex-1 rounded border border-transparent bg-transparent px-1.5 text-[13px] font-medium text-ink outline-none transition-colors hover:border-line focus:border-accent/70 focus:bg-raised"
+          className="h-6 min-w-0 flex-1 rounded border border-transparent bg-transparent px-1.5 text-[13px] font-medium text-ink outline-none transition-colors hover:border-line focus:border-accent/70 focus:bg-raised"
         />
       </div>
 
-      <div className="mt-2 flex items-center gap-1">
+      <div className="mt-1.5 flex items-center gap-0.5">
         <span className="label flex-1 truncate">{typeLabel(element)}</span>
         <Tooltip label={element.locked ? 'Unlock' : 'Lock'} hint="⇧⌘L" side="bottom">
           <IconButton
@@ -623,8 +623,8 @@ function ScaleField({ element, onScale }) {
 
   return (
     <Tooltip label="Scale by" side="bottom">
-      <span className="flex h-8 w-[4.5rem] items-center rounded border border-line bg-raised transition-colors focus-within:border-accent/70 hover:border-line-strong">
-        <span className="flex h-full w-6 shrink-0 select-none items-center justify-center font-mono text-2xs uppercase text-ink-3">S</span>
+      <span className="flex h-7 w-16 items-center rounded border border-line bg-raised transition-colors focus-within:border-accent/70 hover:border-line-strong">
+        <span className="flex h-full w-5 shrink-0 select-none items-center justify-center font-mono text-2xs uppercase text-ink-3">S</span>
         <input
           value={draft}
           inputMode="decimal"
@@ -819,11 +819,11 @@ function ArrangePanel({ selection }) {
 
   return (
     <>
-      <header className="flex items-center gap-2 border-b border-line px-3 py-2.5">
-        <span className="flex h-7 shrink-0 items-center rounded border border-line bg-raised px-2 text-[13px] font-medium text-ink">
+      <header className="flex items-center gap-2 border-b border-line bg-void/40 px-2.5 py-2">
+        <span className="flex h-6 shrink-0 items-center rounded border border-line bg-raised px-2 text-xs font-medium text-ink">
           {selection.length}
         </span>
-        <span className="flex-1 truncate text-[13px] text-ink-2">layers selected</span>
+        <span className="flex-1 truncate text-xs text-ink-2">layers selected</span>
         <Tooltip label="Lock all" side="bottom">
           <IconButton aria-label="Lock all" onClick={() => layers.toggleLocked(ids)}>
             <Lock size={13} />
@@ -915,24 +915,24 @@ function Section({ id, label, children, defaultOpen = true }) {
       <button
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="group flex h-9 w-full items-center gap-1.5 px-3 text-left"
+        className="group flex h-7 w-full items-center gap-1.5 px-2.5 text-left"
       >
         <ChevronRight
-          size={12}
+          size={11}
           className={cx('shrink-0 text-ink-3 transition-transform duration-150', open && 'rotate-90')}
         />
         <span className="label flex-1 transition-colors group-hover:text-ink-2">{label}</span>
       </button>
-      {open && <div className="space-y-2 px-3 pb-3.5">{children}</div>}
+      {open && <div className="animate-section-in space-y-1.5 px-2.5 pb-3">{children}</div>}
     </section>
   );
 }
 
 function SwitchRow({ label, hint, checked, onChange }) {
   return (
-    <div className="flex h-8 items-center gap-2">
-      <span className="label w-[4.25rem] shrink-0 truncate">{label}</span>
-      <span className="min-w-0 flex-1 truncate text-xs text-ink-3">{hint}</span>
+    <div className="flex h-7 items-center gap-2">
+      <span className="label w-16 shrink-0 truncate">{label}</span>
+      <span className="min-w-0 flex-1 truncate text-2xs text-ink-3">{hint}</span>
       <Toggle checked={checked} onChange={onChange} label={hint ? `${label} — ${hint}` : label} />
     </div>
   );
@@ -942,7 +942,7 @@ function Stat({ label, value }) {
   return (
     <div className="flex h-6 items-center justify-between">
       <span className="label">{label}</span>
-      <span className="num text-xs text-ink-2">{value}</span>
+      <span className="num text-2xs text-ink-2">{value}</span>
     </div>
   );
 }
@@ -964,9 +964,9 @@ function AlignGrid({ onAlign }) {
           <button
             onClick={() => onAlign(mode)}
             aria-label={label}
-            className="flex h-8 w-full items-center justify-center rounded border border-line bg-raised text-ink-2 transition-colors duration-150 hover:border-line-strong hover:text-ink"
+            className="flex h-7 w-full items-center justify-center rounded border border-line bg-raised text-ink-2 transition-colors duration-150 hover:border-line-strong hover:text-ink"
           >
-            <Icon size={14} />
+            <Icon size={13} />
           </button>
         </Tooltip>
       ))}
@@ -985,9 +985,9 @@ function IconPicker({ value, library, onChange }) {
       button={({ toggle }) => (
         <button
           onClick={toggle}
-          className="flex h-8 w-full items-center gap-2 rounded border border-line bg-raised px-2 text-[13px] text-ink transition-colors hover:border-line-strong"
+          className="flex h-7 w-full items-center gap-2 rounded border border-line bg-raised px-2 text-xs text-ink transition-colors hover:border-line-strong"
         >
-          <Current size={14} className="text-ink-2" />
+          <Current size={13} className="text-ink-2" />
           <span className="flex-1 truncate text-left">{value}</span>
         </button>
       )}
@@ -1013,11 +1013,11 @@ function IconPicker({ value, library, onChange }) {
                     close();
                   }}
                   className={cx(
-                    'flex h-8 w-full items-center justify-center rounded transition-colors duration-150',
-                    name === value ? 'bg-raised text-accent-text' : 'text-ink-2 hover:bg-raised hover:text-ink'
+                    'flex h-7 w-full items-center justify-center rounded transition-colors duration-150',
+                    name === value ? 'bg-accent/15 text-accent-text' : 'text-ink-2 hover:bg-raised hover:text-ink'
                   )}
                 >
-                  <Icon size={15} />
+                  <Icon size={14} />
                 </button>
               );
             })}

@@ -1,4 +1,5 @@
 import { forwardRef } from 'react';
+import { X } from 'lucide-react';
 import { cx } from '../lib/cx.js';
 
 /* ------------------------------- Button ------------------------------- */
@@ -140,6 +141,26 @@ export function Chip({ active, className, children, ...props }) {
     >
       {children}
     </Tag>
+  );
+}
+
+/**
+ * The bar at the top of every rail flyout. One height, one type size and one
+ * close affordance across Text, Shapes, Images, Crop, Effects and Templates,
+ * so moving between them never shifts the content underneath.
+ */
+export function PanelHeader({ icon: Icon, title, action, onClose }) {
+  return (
+    <header className="flex h-9 shrink-0 items-center gap-2 border-b border-line pl-3 pr-1.5">
+      {Icon && <Icon size={13} className="shrink-0 text-ink-3" />}
+      <h2 className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-[0.08em] text-ink-2">{title}</h2>
+      {action}
+      {onClose && (
+        <IconButton size="sm" onClick={onClose} aria-label={`Close ${title.toLowerCase()}`}>
+          <X size={13} />
+        </IconButton>
+      )}
+    </header>
   );
 }
 

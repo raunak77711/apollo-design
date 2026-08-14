@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { SlidersHorizontal, X } from 'lucide-react';
+import { Contrast } from 'lucide-react';
 import { useEditor, useSelection } from '../../state/EditorContext.jsx';
 import { EFFECT_CATEGORIES, effectsInCategory } from '../../design/effects.js';
 import { cssImageFilter } from '../../design/imageFilters.js';
 import { SIGNED_ADJUST_KEYS, UNSIGNED_ADJUST_KEYS } from '../../design/schema.js';
-import { Chip, EmptyState, IconButton } from '../../ui/primitives.jsx';
+import { Chip, EmptyState, PanelHeader } from '../../ui/primitives.jsx';
 
 const NEUTRAL = {
   brightness: 100, contrast: 100, saturation: 100, hue: 0, grayscale: 0, blur: 0,
@@ -29,24 +29,20 @@ export default function FiltersPanel({ onClose }) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-3">
-        <SlidersHorizontal size={14} className="text-ink-3" />
-        <h2 className="flex-1 text-[13px] font-medium text-ink">Filters</h2>
-        <IconButton onClick={onClose} aria-label="Close filters"><X size={14} /></IconButton>
-      </header>
+      <PanelHeader icon={Contrast} title="Effects" onClose={onClose} />
 
       {!element ? (
-        <EmptyState icon={SlidersHorizontal} title="Select an image" body="Pick an image layer on the canvas to filter it." />
+        <EmptyState className="flex-1" icon={Contrast} title="Select an image" body="Pick an image layer on the canvas to filter it." />
       ) : (
         <>
-          <div className="flex flex-wrap gap-1.5 border-b border-line px-3 py-2.5">
+          <div className="flex flex-wrap gap-1.5 border-b border-line p-2">
             {['All', ...EFFECT_CATEGORIES].map((c) => (
               <Chip key={c} active={category === c} onClick={() => setCategory(c)}>
                 {c}
               </Chip>
             ))}
           </div>
-          <div className="thin-scroll grid min-h-0 flex-1 grid-cols-3 gap-2 overflow-y-auto p-3">
+          <div className="thin-scroll grid min-h-0 flex-1 grid-cols-3 gap-2 overflow-y-auto p-2">
             {effectsInCategory(category).map((effect) => (
               <button key={effect.id} onClick={() => apply(effect)} className="group flex flex-col items-center gap-1.5">
                 <span className="w-full overflow-hidden rounded border border-line transition-colors group-hover:border-accent">

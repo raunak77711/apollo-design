@@ -1,9 +1,9 @@
-import { Type, X } from 'lucide-react';
+import { Type } from 'lucide-react';
 import { useEditor } from '../../state/EditorContext.jsx';
 import { defaultPropertiesFor } from '../../design/schema.js';
 import { newElementId } from '../../design/operations.js';
 import { CREATION_TOOLS } from './ToolRail.jsx';
-import { IconButton } from '../../ui/primitives.jsx';
+import { PanelHeader } from '../../ui/primitives.jsx';
 
 const TEXT_TOOL_IDS = ['heading', 'subheading', 'body', 'eyebrow', 'text'];
 
@@ -40,21 +40,17 @@ export default function TextsPanel({ onClose }) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-3">
-        <Type size={14} className="text-ink-3" />
-        <h2 className="flex-1 text-[13px] font-medium text-ink">Texts</h2>
-        <IconButton onClick={onClose} aria-label="Close texts"><X size={14} /></IconButton>
-      </header>
+      <PanelHeader icon={Type} title="Text" onClose={onClose} />
 
-      <div className="thin-scroll min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
-        <p className="label mb-1">Quick add</p>
+      <div className="thin-scroll min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2">
+        <p className="label px-1 pb-1">Click to add</p>
         {TEXT_TOOL_IDS.map((id) => {
           const tool = CREATION_TOOLS.find((t) => t.id === id);
           return (
             <button
               key={id}
               onClick={() => add(id)}
-              className="flex w-full items-center gap-2.5 rounded border border-line bg-raised px-3 py-2.5 text-left transition-colors hover:border-line-strong hover:bg-panel2"
+              className="flex w-full items-center gap-2.5 rounded border border-line bg-raised px-2.5 py-2.5 text-left transition-colors duration-150 hover:border-line-strong hover:bg-elevated"
             >
               <Type size={15} className="shrink-0 text-ink-3" />
               <span
