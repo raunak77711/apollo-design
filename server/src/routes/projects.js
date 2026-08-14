@@ -4,18 +4,39 @@ import { createEmptyDocument, validateDocument } from '../design/schema.js';
 
 export const projectsRouter = Router();
 
+// Cap on the elements sent with each list entry — enough for an accurate card
+// preview without shipping whole documents to the dashboard.
+const PREVIEW_ELEMENTS = 80;
+
 projectsRouter.get('/', async (req, res) => {
   const list = await projects.list();
-  res.json(list.map((p) => ({ id: p.id, name: p.name, type: p.type, thumbnail: p.thumbnail, updatedAt: p.updatedAt, createdAt: p.createdAt })));
+  res.json(
+    list.map((p) => ({
+      id: p.id,
+      name: p.name,
+      type: p.type,
+      updatedAt: p.updatedAt,
+      createdAt: p.createdAt,
+      // The client renders live previews from the document itself, so project
+      // cards can never show a stale thumbnail.
+      preview: p.document
+        ? { canvas: p.document.canvas, elements: (p.document.elements || []).slice(0, PREVIEW_ELEMENTS) }
+        : null,
+    }))
+  );
 });
 
 projectsRouter.post('/', async (req, res) => {
-  const { name, type = 'design', canvas } = req.body || {};
-  const document = createEmptyDocument(canvas || {});
+  const { name, type = 'design', canvas, document } = req.body || {};
+  // A document may be supplied (starting from a template); otherwise an empty
+  // canvas of the requested size is created.
+  if (document !== undefined && !validateDocument(document)) {
+    return res.status(400).json({ error: 'Invalid design document' });
+  }
   const project = await projects.create({
-    name: name || 'Untitled Design',
+    name: name || 'Untitled design',
     type,
-    document,
+    document: document || createEmptyDocument(canvas || {}),
   });
   res.status(201).json(project);
 });
@@ -27,10 +48,9 @@ projectsRouter.get('/:id', async (req, res) => {
 });
 
 projectsRouter.put('/:id', async (req, res) => {
-  const { name, document, thumbnail } = req.body || {};
+  const { name, document } = req.body || {};
   const changes = {};
   if (name !== undefined) changes.name = name;
-  if (thumbnail !== undefined) changes.thumbnail = thumbnail;
   if (document !== undefined) {
     if (!validateDocument(document)) return res.status(400).json({ error: 'Invalid design document' });
     changes.document = document;

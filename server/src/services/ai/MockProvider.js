@@ -26,7 +26,7 @@ export class MockProvider extends AIProvider {
   generateDesign(message, document) {
     const brand = extractBrand(message) || 'Your Brand';
     const headline = extractQuoted(message) || defaultHeadline(message);
-    const accent = extractColor(message) || '#E11D48';
+    const accent = extractColor(message) || '#D9A441';
     const dark = /\bdark|premium|modern|luxury\b/.test(message.toLowerCase());
     const bg = dark ? '#0A0A0A' : '#111827';
     const { width, height } = document?.canvas || { width: 1200, height: 628 };
@@ -88,7 +88,7 @@ export class MockProvider extends AIProvider {
       {
         type: 'CREATE_ELEMENT',
         element: { type: 'button', x: 80, y: 456, width: 220, height: 60, zIndex: 7,
-          properties: { text: extractCTA(message), background: accent, color: '#FFFFFF', fontSize: 20, fontWeight: 800, borderRadius: 10 } },
+          properties: { text: extractCTA(message), background: accent, color: readableOn(accent), fontSize: 20, fontWeight: 800, borderRadius: 8 } },
       },
     ];
 
@@ -185,6 +185,14 @@ function extractBrand(message) {
 function extractQuoted(message) {
   const m = message.match(/["“']([^"”']{2,60})["”']/);
   return m ? m[1] : null;
+}
+
+/** Keeps CTA labels legible whichever accent the prompt asks for. */
+function readableOn(hex) {
+  const match = /^#?([0-9a-f]{6})$/i.exec(String(hex).trim());
+  if (!match) return '#FFFFFF';
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(match[1].slice(i, i + 2), 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.58 ? '#0A0A0A' : '#FFFFFF';
 }
 
 function extractColor(text) {

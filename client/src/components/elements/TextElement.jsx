@@ -1,3 +1,5 @@
+import { fontStack } from '../../design/fonts.js';
+
 export default function TextElement({ element }) {
   const p = element.properties;
   return (
@@ -8,7 +10,7 @@ export default function TextElement({ element }) {
         display: 'flex',
         alignItems: 'flex-start',
         justifyContent: p.align === 'center' ? 'center' : p.align === 'right' ? 'flex-end' : 'flex-start',
-        fontFamily: p.fontFamily,
+        fontFamily: fontStack(p.fontFamily),
         fontSize: p.fontSize,
         fontWeight: p.fontWeight,
         color: p.color,

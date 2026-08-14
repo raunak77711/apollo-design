@@ -14,7 +14,9 @@ async function request(path, { method = 'GET', body, isForm } = {}) {
     try {
       const data = await res.json();
       msg = data.error || msg;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     throw new Error(msg);
   }
   if (res.status === 204) return null;
@@ -38,6 +40,7 @@ export const api = {
   searchImages: (q) => request(`/images/search?q=${encodeURIComponent(q)}`),
 
   // Assets
+  listAssets: () => request('/assets'),
   uploadAsset: (formData) => request('/assets/upload', { method: 'POST', body: formData, isForm: true }),
 
   // Export

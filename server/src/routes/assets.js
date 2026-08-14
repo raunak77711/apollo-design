@@ -43,6 +43,15 @@ assetsRouter.post('/upload', upload.single('file'), async (req, res, next) => {
   }
 });
 
+// GET /api/assets  (everything the user has uploaded, newest first)
+assetsRouter.get('/', async (req, res, next) => {
+  try {
+    res.json(await assets.list());
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/assets/:id  (metadata)
 assetsRouter.get('/:id', async (req, res) => {
   const asset = await assets.get(req.params.id);

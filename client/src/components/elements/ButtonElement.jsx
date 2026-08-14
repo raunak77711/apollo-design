@@ -1,3 +1,5 @@
+import { fontStack } from '../../design/fonts.js';
+
 export default function ButtonElement({ element }) {
   const p = element.properties;
   return (
@@ -8,7 +10,7 @@ export default function ButtonElement({ element }) {
         background: p.background,
         color: p.color,
         borderRadius: p.borderRadius,
-        fontFamily: p.fontFamily,
+        fontFamily: fontStack(p.fontFamily),
         fontSize: p.fontSize,
         fontWeight: p.fontWeight,
         display: 'flex',

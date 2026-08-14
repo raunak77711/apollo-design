@@ -2,40 +2,263 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: dark;
-}
+/* ==========================================================================
+   Apollo — visual system
+   Warm-leaning neutrals (paper & graphite) carried from the Apollo monogram,
+   with a single solar accent reserved for focus, selection and Apollo AI.
+   ========================================================================== */
 
-html, body, #root {
-  height: 100%;
-}
+@layer base {
+  :root {
+    /* Paper (light) */
+    --c-void: 246 245 243;
+    --c-surface: 255 255 255;
+    --c-raised: 239 238 235;
+    --c-workspace: 229 227 222;
+    --c-line: 226 224 219;
+    --c-line-strong: 206 203 196;
+    --c-ink: 17 17 16;
+    --c-ink-2: 92 90 85;
+    --c-ink-3: 123 120 113;
+    --c-accent: 191 138 38;
+    --c-accent-text: 138 98 21;
+    --c-accent-ink: 22 16 4;
+    --c-danger: 179 38 30;
 
-body {
-  margin: 0;
-  background: #0d0d0d;
-  color: #e5e5e5;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
+    --shadow-pop: 0 1px 2px rgb(17 17 16 / 0.06), 0 16px 40px -14px rgb(17 17 16 / 0.22);
+    --shadow-art: 0 1px 2px rgb(17 17 16 / 0.08), 0 28px 60px -28px rgb(17 17 16 / 0.35);
+    --shadow-rail: 6px 0 24px -18px rgb(17 17 16 / 0.35);
 
-@layer components {
-  .input {
-    @apply w-full mt-1 px-2 py-1.5 text-sm rounded bg-panel2 border border-edge text-neutral-100 outline-none focus:border-accent;
+    color-scheme: light;
+  }
+
+  [data-theme='dark'] {
+    /* Graphite (dark) */
+    --c-void: 10 10 11;
+    --c-surface: 17 17 18;
+    --c-raised: 26 26 25;
+    --c-workspace: 8 8 9;
+    --c-line: 36 36 35;
+    --c-line-strong: 55 55 51;
+    --c-ink: 245 244 241;
+    --c-ink-2: 166 164 156;
+    --c-ink-3: 125 123 115;
+    --c-accent: 217 164 65;
+    --c-accent-text: 230 188 110;
+    --c-accent-ink: 20 15 5;
+    --c-danger: 240 119 106;
+
+    --shadow-pop: 0 1px 2px rgb(0 0 0 / 0.6), 0 20px 48px -18px rgb(0 0 0 / 0.75);
+    --shadow-art: 0 0 0 1px rgb(255 255 255 / 0.04), 0 30px 70px -30px rgb(0 0 0 / 0.9);
+    --shadow-rail: 6px 0 28px -20px rgb(0 0 0 / 0.9);
+
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: rgb(var(--c-void));
+    color: rgb(var(--c-ink));
+    font-family: theme('fontFamily.sans');
+    font-feature-settings: 'cv05' 1, 'ss03' 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: rgb(var(--c-accent) / 0.28);
+  }
+
+  /* One focus treatment everywhere: a solar hairline ring. */
+  :focus-visible {
+    outline: 2px solid rgb(var(--c-accent) / 0.6);
+    outline-offset: 1px;
+    border-radius: 4px;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: theme('fontFamily.display');
+    letter-spacing: -0.022em;
   }
 }
 
-/* Thin scrollbars for panels */
-.thin-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
-.thin-scroll::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
-.thin-scroll::-webkit-scrollbar-track { background: transparent; }
+@layer components {
+  /* --- Form controls ------------------------------------------------- */
+  .field {
+    @apply w-full h-8 px-2 rounded bg-raised border border-line text-ink text-[13px]
+           outline-none transition-colors duration-150
+           hover:border-line-strong focus:border-accent/70 focus:bg-surface
+           placeholder:text-ink-3;
+  }
 
-/* Checkerboard for transparent canvas areas */
-.checkerboard {
-  background-image:
-    linear-gradient(45deg, #1a1a1a 25%, transparent 25%),
-    linear-gradient(-45deg, #1a1a1a 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #1a1a1a 75%),
-    linear-gradient(-45deg, transparent 75%, #1a1a1a 75%);
-  background-size: 20px 20px;
-  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  /* Micro label: the instrument voice — mono, uppercase, widely tracked. */
+  .label {
+    @apply font-mono text-2xs uppercase tracking-[0.14em] text-ink-3;
+  }
+
+  .num {
+    @apply font-mono tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+}
+
+@layer utilities {
+  .thin-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--c-line-strong)) transparent;
+  }
+  .thin-scroll::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .thin-scroll::-webkit-scrollbar-thumb {
+    background: rgb(var(--c-line-strong));
+    border-radius: 99px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  .thin-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--c-ink-3));
+    background-clip: content-box;
+  }
+  .thin-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Transparency checkerboard behind artboards. */
+  .checkerboard {
+    background-color: rgb(var(--c-surface));
+    background-image:
+      linear-gradient(45deg, rgb(var(--c-raised)) 25%, transparent 25%),
+      linear-gradient(-45deg, rgb(var(--c-raised)) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, rgb(var(--c-raised)) 75%),
+      linear-gradient(-45deg, transparent 75%, rgb(var(--c-raised)) 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  }
+
+  .drag-none {
+    -webkit-user-drag: none;
+    user-select: none;
+  }
+
+  /* Dialog scrim — always darkens, in both themes. */
+  .scrim {
+    background: rgb(0 0 0 / 0.34);
+  }
+  [data-theme='dark'] .scrim {
+    background: rgb(0 0 0 / 0.68);
+  }
+}
+
+/* --- Range sliders: thin track, precise knob ---------------------------- */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type='range']::-webkit-slider-runnable-track {
+  height: 2px;
+  border-radius: 2px;
+  background: rgb(var(--c-line-strong));
+}
+input[type='range']::-moz-range-track {
+  height: 2px;
+  border-radius: 2px;
+  background: rgb(var(--c-line-strong));
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: rgb(var(--c-ink));
+  border: 2px solid rgb(var(--c-surface));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgb(var(--c-ink));
+  border: 2px solid rgb(var(--c-surface));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+}
+input[type='range']:hover::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+input[type='range']:active::-webkit-slider-thumb {
+  transform: scale(1.05);
+  background: rgb(var(--c-accent));
+}
+
+/* --- Native colour swatch --------------------------------------------- */
+input[type='color'] {
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type='color']::-webkit-color-swatch {
+  border: 1px solid rgb(var(--c-line-strong));
+  border-radius: 4px;
+}
+input[type='color']::-moz-color-swatch {
+  border: 1px solid rgb(var(--c-line-strong));
+  border-radius: 4px;
+}
+
+/* Number inputs read as measurements, not spinners. */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

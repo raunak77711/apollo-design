@@ -88,6 +88,17 @@ export const projects = {
 /* ------------------------------ Assets ------------------------------ */
 
 export const assets = {
+  async list({ limit = 200 } = {}) {
+    if (isMongoConnected()) {
+      const docs = await Asset.find({ type: 'image' }).sort({ createdAt: -1 }).limit(limit).lean();
+      return docs.map(toPlain);
+    }
+    return [...mem.assets.values()]
+      .filter((a) => a.type === 'image')
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, limit);
+  },
+
   async get(id) {
     if (isMongoConnected()) {
       try {

@@ -38,12 +38,12 @@ const DEFAULT_PROPERTIES = {
     hue: 0, grayscale: 0,
   },
   icon: { name: 'Star', size: 48, color: '#FFFFFF', strokeWidth: 2 },
-  rectangle: { fill: '#E11D48', borderRadius: 0, borderColor: '', borderWidth: 0 },
-  circle: { fill: '#E11D48', borderColor: '', borderWidth: 0 },
+  rectangle: { fill: '#D9A441', borderRadius: 0, borderColor: '', borderWidth: 0 },
+  circle: { fill: '#D9A441', borderColor: '', borderWidth: 0 },
   line: { stroke: '#FFFFFF', strokeWidth: 2 },
   button: {
-    text: 'Button', fontFamily: 'Inter', fontSize: 20, fontWeight: 700,
-    color: '#FFFFFF', background: '#E11D48', borderRadius: 8, align: 'center',
+    text: 'Button', fontFamily: 'Inter', fontSize: 18, fontWeight: 700,
+    color: '#141005', background: '#D9A441', borderRadius: 6, align: 'center',
   },
   group: {},
 };

@@ -1,13 +1,65 @@
 /** @type {import('tailwindcss').Config} */
+
+// Every colour is a CSS variable holding an "R G B" triplet, so Tailwind opacity
+// modifiers (bg-surface/60) keep working across both themes.
+const token = (name) => `rgb(var(--c-${name}) / <alpha-value>)`;
+
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
       colors: {
-        panel: '#141414',
-        panel2: '#1b1b1b',
-        edge: '#2a2a2a',
-        accent: '#E11D48',
+        void: token('void'),
+        surface: token('surface'),
+        raised: token('raised'),
+        workspace: token('workspace'),
+        line: token('line'),
+        'line-strong': token('line-strong'),
+        ink: token('ink'),
+        'ink-2': token('ink-2'),
+        'ink-3': token('ink-3'),
+        accent: token('accent'),
+        'accent-text': token('accent-text'),
+        'accent-ink': token('accent-ink'),
+        danger: token('danger'),
+      },
+      fontFamily: {
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+        display: ['"Instrument Sans"', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+      },
+      fontSize: {
+        '2xs': ['10px', { lineHeight: '1.4' }],
+      },
+      borderRadius: {
+        sm: '4px',
+        DEFAULT: '6px',
+        md: '6px',
+        lg: '8px',
+        xl: '12px',
+      },
+      boxShadow: {
+        pop: 'var(--shadow-pop)',
+        art: 'var(--shadow-art)',
+        rail: 'var(--shadow-rail)',
+      },
+      transitionTimingFunction: {
+        out: 'cubic-bezier(0.16, 1, 0.3, 1)',
+      },
+      keyframes: {
+        'fade-in': { from: { opacity: '0' }, to: { opacity: '1' } },
+        rise: { from: { opacity: '0', transform: 'translateY(6px)' }, to: { opacity: '1', transform: 'none' } },
+        pop: { from: { opacity: '0', transform: 'scale(0.97)' }, to: { opacity: '1', transform: 'none' } },
+        'slide-in-right': { from: { opacity: '0', transform: 'translateX(12px)' }, to: { opacity: '1', transform: 'none' } },
+        'slide-in-left': { from: { opacity: '0', transform: 'translateX(-8px)' }, to: { opacity: '1', transform: 'none' } },
+        shimmer: { '100%': { transform: 'translateX(100%)' } },
+      },
+      animation: {
+        'fade-in': 'fade-in 160ms cubic-bezier(0.16, 1, 0.3, 1) both',
+        rise: 'rise 220ms cubic-bezier(0.16, 1, 0.3, 1) both',
+        pop: 'pop 140ms cubic-bezier(0.16, 1, 0.3, 1) both',
+        'slide-in-right': 'slide-in-right 200ms cubic-bezier(0.16, 1, 0.3, 1) both',
+        'slide-in-left': 'slide-in-left 180ms cubic-bezier(0.16, 1, 0.3, 1) both',
       },
     },
   },

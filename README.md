@@ -77,17 +77,22 @@ Vite proxies `/api` and `/storage` to the backend, so no CORS setup is needed in
 > (waas, tsultrim, headless, erp). In Docker, nginx serves the frontend and
 > proxies the API to the backend; MongoDB and storage persist via volumes.
 
-### First milestone walkthrough
+### Walkthrough
 
-1. Open the app → **New design → Banner** (1200 × 628).
-2. In the **Apollo AI** panel (bottom dock), send:
-   > Create a promotional banner for Aryans Gym. Modern, dark, premium, red accents, a muscular athlete, headline "TRANSFORM YOUR BODY", and a "JOIN NOW" button.
-3. Apollo renders a background, hero image, headline, subtitle, button, and icon —
-   all as editable layers.
-4. Select/move/resize/rotate elements, edit typography and colors in **Properties**,
-   reorder in **Layers**, **Undo/Redo** (⌘/Ctrl+Z), then **Export** to PNG/JPG/WebP.
-5. Ask follow-ups: *"make the headline bigger"*, *"change the button color to blue"*,
-   *"move the image to the right"* — each is a minimal, undoable operation.
+1. Open the app. On **Home**, pick a format in the composer and describe what you want:
+   > A dark, premium banner for Aryans Gym with the headline "Transform your body" and a "JOIN NOW" button.
+2. Apollo creates the project and draws a background, hero image, headline, subtitle,
+   button, and icon — all as editable layers. The design saves itself as you work.
+3. Select a layer: the right panel becomes exactly the controls that layer needs
+   (typography for text, fill for shapes, adjustments for images). With nothing
+   selected it shows canvas settings; with several selected, alignment and grouping.
+4. Drag with alignment snapping, marquee-select, nudge with the arrow keys,
+   **⌘K** for every action, **Undo/Redo** (⌘Z), then **Export** to PNG/JPG/WebP.
+5. Keep asking: *"make the headline bigger"*, *"change the button colour to blue"* —
+   each reply is a minimal, undoable operation applied to the same document.
+
+**Templates** opens ten finished layouts as live layers, and **Assets** holds your
+uploads plus the stock photo library.
 
 ---
 
@@ -97,10 +102,12 @@ Vite proxies `/api` and `/storage` to the backend, so no CORS setup is needed in
 apollo-design/
 ├── client/                 # Vite + React editor
 │   └── src/
-│       ├── design/         # schema.js + operations.js (MIRROR of server) + icons.js
+│       ├── design/         # schema.js + operations.js (MIRROR of server), icons,
+│       │                   # templates, presets, fonts, arrange (align/snap)
 │       ├── state/          # EditorContext + reducer (document, selection, history)
-│       ├── components/     # Canvas, panels, and per-type element renderers
-│       └── pages/          # Dashboard, EditorPage
+│       ├── ui/             # design system: primitives, fields, overlays, brand
+│       ├── components/     # editor/ (stage, rail, inspector, panels) + elements/
+│       └── pages/          # Home, Templates, Assets, EditorPage
 └── server/                 # Express API
     └── src/
         ├── design/         # canonical schema.js + operations.js
@@ -117,11 +124,12 @@ apollo-design/
 
 ```
 GET    /api/health
-GET    /api/projects            POST /api/projects
+GET    /api/projects            # list + a capped `preview` document for live cards
+POST   /api/projects            # { name, canvas } or { name, document } (templates)
 GET    /api/projects/:id        PUT  /api/projects/:id     DELETE /api/projects/:id
 POST   /api/ai/chat             # { message, document, selectedElementId } → { operations, message }
 GET    /api/images/search?q=
-POST   /api/assets/upload       # multipart (file, projectId)
+GET    /api/assets              POST /api/assets/upload    # multipart (file, projectId)
 POST   /api/export              # { projectId, document, format }
 ```
 
@@ -143,14 +151,17 @@ POST   /api/export              # { projectId, document, format }
   exports match the on-canvas preview. Lucide **icons render as an outline
   placeholder in exports** (they render fully in the browser). Custom web fonts
   fall back to system fonts in the export renderer.
-- **Mini photo editor (Adjust)** is implemented for image layers — presets
-  (Auto/B&W/Pop), color/light sliders, blur, radius, opacity, and 90° rotate — all
-  editing the design document (one undoable operation). **Pixel crop/flip are not
-  yet included** (rotate is).
+- **Photo editor (Adjust)** is implemented for image layers — presets, colour/light
+  sliders, blur, radius, opacity, hold-to-compare, and 90° rotate — all editing the
+  design document (one undoable operation). **Pixel crop/flip are not yet
+  included** (rotate is).
 - **Groups** exist in the schema/operations but the canvas doesn't yet move a
   group's children together — grouping is structural only for now.
+- **Project cards render the real document** rather than a stored thumbnail, so the
+  list endpoint ships each project's canvas plus its first 80 elements.
+- **Templates** are built-in documents in `client/src/design/templates.js`; they are
+  not yet user-creatable.
 - **Design** documents are embedded in the `Project` record for the MVP rather than
   a separate `Design` collection; the model boundary can be split out later.
 - The **web-app builder** (`type: "webapp"`) is intentionally not built yet; the
   document/operation architecture leaves room for it.
-```

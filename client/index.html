@@ -2,9 +2,51 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%A8%3C/text%3E%3C/svg%3E" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Apollo Design</title>
+    <meta name="description" content="Describe a design and Apollo draws it in editable layers." />
+    <meta name="theme-color" content="#0A0A0B" />
+
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230A0A0B'/%3E%3Cpath d='M6 24 13.5 8 21 24' fill='none' stroke='%23F5F4F1' stroke-width='1.9' stroke-linejoin='round' stroke-linecap='round'/%3E%3Cpath d='M24.5 6.5c.45 3.1 1.45 4.1 4.55 4.55-3.1.45-4.1 1.45-4.55 4.55-.45-3.1-1.45-4.1-4.55-4.55 3.1-.45 4.1-1.45 4.55-4.55Z' fill='%23D9A441'/%3E%3C/svg%3E"
+    />
+
+    <!-- Type: Instrument Sans (display) · Inter (interface) · JetBrains Mono (measurements),
+         plus a small set of canvas faces offered in the editor's font picker.
+         Loaded non-blocking so the app still starts instantly offline. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="preload"
+      as="style"
+      onload="this.onload=null;this.rel='stylesheet'"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Playfair+Display:wght@500;700;900&family=Bebas+Neue&display=swap"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      />
+    </noscript>
+
+    <!-- Resolve the theme before first paint so there is never a flash. -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('apollo.theme');
+          var theme =
+            stored === 'light' || stored === 'dark'
+              ? stored
+              : window.matchMedia('(prefers-color-scheme: light)').matches
+                ? 'light'
+                : 'dark';
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

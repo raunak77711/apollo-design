@@ -61,7 +61,7 @@ async function elementToSvg(el) {
       );
     case 'circle':
       return wrap(
-        `<ellipse cx="${el.x + el.width / 2}" cy="${el.y + el.height / 2}" rx="${el.width / 2}" ry="${el.height / 2}" fill="${esc(p.fill)}"/>`
+        `<ellipse cx="${el.x + el.width / 2}" cy="${el.y + el.height / 2}" rx="${el.width / 2}" ry="${el.height / 2}" fill="${esc(p.fill)}" ${p.borderWidth ? `stroke="${esc(p.borderColor)}" stroke-width="${p.borderWidth}"` : ''}/>`
       );
     case 'line':
       return wrap(

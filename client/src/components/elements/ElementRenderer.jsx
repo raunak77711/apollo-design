@@ -20,10 +20,11 @@ const RENDERERS = {
 
 /**
  * Maps an element to its type-specific renderer. Adding a new element type is
- * as simple as adding a component and one entry here.
+ * as simple as adding a component and one entry here. `preview` tells renderers
+ * they are drawing a thumbnail rather than the live canvas.
  */
-export default function ElementRenderer({ element }) {
+export default function ElementRenderer({ element, preview = false }) {
   const Renderer = RENDERERS[element.type];
   if (!Renderer) return null;
-  return <Renderer element={element} />;
+  return <Renderer element={element} preview={preview} />;
 }

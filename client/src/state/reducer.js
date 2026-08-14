@@ -5,13 +5,20 @@ const MAX_HISTORY = 100;
 
 export const initialState = {
   document: createEmptyDocument(),
-  selectedElementId: null,
+  // Selection is a set: one element shows its own controls, several show
+  // arrangement controls instead.
+  selectedIds: [],
   tool: 'select',
   zoom: 1,
-  // Undo/redo stacks operate on whole design documents.
   past: [],
   future: [],
   transientBase: null, // snapshot captured at the start of a drag
+};
+
+/** Drops ids that no longer exist (after undo, delete, or an AI edit). */
+const prune = (ids, document) => {
+  const alive = new Set(document.elements.map((e) => e.id));
+  return ids.filter((id) => alive.has(id));
 };
 
 export function editorReducer(state, action) {
@@ -20,22 +27,30 @@ export function editorReducer(state, action) {
       return {
         ...state,
         document: action.document,
-        selectedElementId: null,
+        selectedIds: [],
         past: [],
         future: [],
         transientBase: null,
       };
 
-    case 'SELECT_ELEMENT':
-      return { ...state, selectedElementId: action.id };
+    case 'SELECT':
+      return { ...state, selectedIds: action.ids ? [...action.ids] : [] };
+
+    case 'TOGGLE_SELECT': {
+      const has = state.selectedIds.includes(action.id);
+      return {
+        ...state,
+        selectedIds: has ? state.selectedIds.filter((id) => id !== action.id) : [...state.selectedIds, action.id],
+      };
+    }
 
     case 'SET_TOOL':
       return { ...state, tool: action.tool };
 
     case 'SET_ZOOM':
-      return { ...state, zoom: Math.min(3, Math.max(0.1, action.zoom)) };
+      return { ...state, zoom: Math.min(8, Math.max(0.02, action.zoom)) };
 
-    // Records a single history entry. Used by discrete edits and AI operations.
+    // One history entry. Used by discrete edits and by AI operations.
     case 'APPLY': {
       const { document } = applyOperations(state.document, action.operations);
       return {
@@ -44,18 +59,14 @@ export function editorReducer(state, action) {
         past: [...state.past, state.document].slice(-MAX_HISTORY),
         future: [],
         transientBase: null,
-        selectedElementId: action.selectId !== undefined ? action.selectId : state.selectedElementId,
+        selectedIds: action.selectIds !== undefined ? action.selectIds : prune(state.selectedIds, document),
       };
     }
 
     // Live updates during a drag: mutate present, remember the pre-drag snapshot.
     case 'APPLY_TRANSIENT': {
       const { document } = applyOperations(state.document, action.operations);
-      return {
-        ...state,
-        document,
-        transientBase: state.transientBase ?? state.document,
-      };
+      return { ...state, document, transientBase: state.transientBase ?? state.document };
     }
 
     // End of a drag: fold the pre-drag snapshot into history as one entry.
@@ -77,7 +88,7 @@ export function editorReducer(state, action) {
         document: previous,
         past: state.past.slice(0, -1),
         future: [state.document, ...state.future].slice(0, MAX_HISTORY),
-        selectedElementId: null,
+        selectedIds: prune(state.selectedIds, previous),
       };
     }
 
@@ -89,7 +100,7 @@ export function editorReducer(state, action) {
         document: next,
         past: [...state.past, state.document].slice(-MAX_HISTORY),
         future: state.future.slice(1),
-        selectedElementId: null,
+        selectedIds: prune(state.selectedIds, next),
       };
     }
 

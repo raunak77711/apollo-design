@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useMemo, useCallback } from 'react';
+import { createContext, useContext, useMemo, useReducer } from 'react';
 import { editorReducer, initialState } from './reducer.js';
 
 const EditorContext = createContext(null);
@@ -6,18 +6,24 @@ const EditorContext = createContext(null);
 export function EditorProvider({ children }) {
   const [state, dispatch] = useReducer(editorReducer, initialState);
 
-  // Convenience action creators — all mutations funnel through the operation system.
+  // Every mutation funnels through the operation system, so manual edits and AI
+  // edits share one code path, one validation pass and one history.
   const actions = useMemo(
     () => ({
       loadDocument: (document) => dispatch({ type: 'LOAD_DOCUMENT', document }),
-      select: (id) => dispatch({ type: 'SELECT_ELEMENT', id }),
+
+      select: (id) => dispatch({ type: 'SELECT', ids: id ? [id] : [] }),
+      selectMany: (ids) => dispatch({ type: 'SELECT', ids }),
+      toggleSelect: (id) => dispatch({ type: 'TOGGLE_SELECT', id }),
+      clearSelection: () => dispatch({ type: 'SELECT', ids: [] }),
+
       setTool: (tool) => dispatch({ type: 'SET_TOOL', tool }),
       setZoom: (zoom) => dispatch({ type: 'SET_ZOOM', zoom }),
 
-      // Discrete, undoable edits (properties panel, layers, AI apply).
+      // Discrete, undoable edits (inspector, layers, AI apply).
       apply: (operations, opts = {}) => dispatch({ type: 'APPLY', operations, ...opts }),
 
-      // Drag lifecycle.
+      // Drag lifecycle — many frames, one history entry.
       applyTransient: (operations) => dispatch({ type: 'APPLY_TRANSIENT', operations }),
       commitTransient: () => dispatch({ type: 'COMMIT_TRANSIENT' }),
 
@@ -37,11 +43,11 @@ export function useEditor() {
   return ctx;
 }
 
-/** Selector helper for the currently selected element. */
-export function useSelectedElement() {
+/** The elements currently selected, in document order. */
+export function useSelection() {
   const { state } = useEditor();
-  return useCallback(
-    () => state.document.elements.find((e) => e.id === state.selectedElementId) || null,
-    [state.document, state.selectedElementId]
-  )();
+  return useMemo(
+    () => state.document.elements.filter((el) => state.selectedIds.includes(el.id)),
+    [state.document, state.selectedIds]
+  );
 }
