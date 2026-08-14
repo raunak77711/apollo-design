@@ -1,24 +1,36 @@
 import { useEffect, useRef, useState } from 'react';
-import { ImageIcon, Search, Upload, X } from 'lucide-react';
+import { Circle, Hexagon, ImageIcon, Minus, RectangleHorizontal, Search, Square, Star, Triangle, Upload, X } from 'lucide-react';
 import { api } from '../../api/client.js';
 import { cx } from '../../lib/cx.js';
 import { useToast } from '../../lib/toast.jsx';
 import { useEditor } from '../../state/EditorContext.jsx';
 import { defaultPropertiesFor } from '../../design/schema.js';
 import { inkFor } from '../../design/color.js';
+import { newElementId } from '../../design/operations.js';
 import { ICON_LIBRARIES, getIcon, iconNames } from '../../design/icons.js';
 import { EmptyState, IconButton, Spinner } from '../../ui/primitives.jsx';
 import { Segmented } from '../../ui/fields.jsx';
 
+const SHAPES = [
+  { id: 'rectangle', label: 'Rectangle', icon: Square, size: { width: 320, height: 200 } },
+  { id: 'circle', label: 'Ellipse', icon: Circle, size: { width: 220, height: 220 } },
+  { id: 'triangle', label: 'Triangle', type: 'polygon', icon: Triangle, size: { width: 240, height: 210 }, props: { sides: 3 } },
+  { id: 'polygon', label: 'Polygon', type: 'polygon', icon: Hexagon, size: { width: 220, height: 220 }, props: { sides: 6 } },
+  { id: 'star', label: 'Star', icon: Star, size: { width: 220, height: 220 }, props: { points: 5, depth: 0.45 } },
+  { id: 'line', label: 'Line', icon: Minus, size: { width: 320, height: 12 } },
+  { id: 'button', label: 'Button', icon: RectangleHorizontal, size: { width: 220, height: 56 }, props: { text: 'Button' } },
+];
+
 /**
- * Left flyout for everything you drop onto the canvas. With an image layer
- * selected, picking a photo replaces it in place — otherwise a new layer lands
- * in the middle of the canvas.
+ * "Elements" — everything you drop onto the canvas that isn't text: shapes,
+ * icons, and photos (stock or your own uploads). With an image layer selected,
+ * picking a photo replaces it in place — otherwise a new layer lands in the
+ * middle of the canvas.
  */
 export default function LibraryPanel({ projectId, onClose }) {
   const toast = useToast();
   const { state, actions } = useEditor();
-  const [tab, setTab] = useState('photos');
+  const [tab, setTab] = useState('shapes');
 
   const [query, setQuery] = useState('');
   const [photos, setPhotos] = useState([]);
@@ -87,6 +99,27 @@ export default function LibraryPanel({ projectId, onClose }) {
     );
   };
 
+  const placeShape = (shape) => {
+    const id = newElementId(shape.type || shape.id);
+    const type = shape.type || shape.id;
+    actions.apply(
+      [
+        {
+          type: 'CREATE_ELEMENT',
+          element: {
+            id,
+            type,
+            x: Math.round(canvas.width / 2 - shape.size.width / 2),
+            y: Math.round(canvas.height / 2 - shape.size.height / 2),
+            ...shape.size,
+            properties: { ...defaultPropertiesFor(type), ...(shape.props || {}) },
+          },
+        },
+      ],
+      { selectIds: [id] }
+    );
+  };
+
   const placeIcon = (name, library) => {
     const id = `icon-${Date.now().toString(36)}`;
     const size = Math.round(Math.min(canvas.width, canvas.height) * 0.12);
@@ -134,8 +167,8 @@ export default function LibraryPanel({ projectId, onClose }) {
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line px-3">
-        <h2 className="flex-1 text-[13px] font-medium text-ink">Library</h2>
-        <IconButton onClick={onClose} aria-label="Close library">
+        <h2 className="flex-1 text-[13px] font-medium text-ink">Elements</h2>
+        <IconButton onClick={onClose} aria-label="Close elements">
           <X size={14} />
         </IconButton>
       </header>
@@ -147,17 +180,38 @@ export default function LibraryPanel({ projectId, onClose }) {
           value={tab}
           onChange={setTab}
           options={[
+            { value: 'shapes', label: 'Shapes' },
+            { value: 'icons', label: 'Icons' },
             { value: 'photos', label: 'Photos' },
             { value: 'uploads', label: 'Uploads' },
-            { value: 'icons', label: 'Icons' },
           ]}
         />
-        {selected && (
+        {selected && tab === 'photos' && (
           <p className="mt-2 text-2xs leading-relaxed text-ink-3">
             Replacing the selected image layer.
           </p>
         )}
       </div>
+
+      {tab === 'shapes' && (
+        <div className="thin-scroll min-h-0 flex-1 overflow-y-auto p-2.5">
+          <div className="grid grid-cols-3 gap-1.5">
+            {SHAPES.map((shape) => {
+              const Icon = shape.icon;
+              return (
+                <button
+                  key={shape.id}
+                  onClick={() => placeShape(shape)}
+                  className="flex flex-col items-center gap-1.5 rounded border border-line bg-raised py-3 text-ink-2 transition-colors hover:border-line-strong hover:text-ink"
+                >
+                  <Icon size={18} />
+                  <span className="text-2xs">{shape.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {tab === 'photos' && (
         <div className="flex min-h-0 flex-1 flex-col">

@@ -29,6 +29,8 @@ import { EditorProvider, useEditor } from '../state/EditorContext.jsx';
 import { useLayerActions } from '../state/useLayerActions.js';
 import { alignOperations } from '../design/arrange.js';
 import { expandWithDescendants, indexById, topLevelOf } from '../design/tree.js';
+import { defaultPropertiesFor } from '../design/schema.js';
+import { newElementId } from '../design/operations.js';
 import { Spinner } from '../ui/primitives.jsx';
 import { Spark } from '../ui/brand.jsx';
 import TopBar from '../components/editor/TopBar.jsx';
@@ -39,6 +41,10 @@ import RightPanel from '../components/editor/RightPanel.jsx';
 import LibraryPanel from '../components/editor/LibraryPanel.jsx';
 import AIPanel from '../components/editor/AIPanel.jsx';
 import PhotoEditor from '../components/editor/PhotoEditor.jsx';
+import DrawStudio from '../components/editor/DrawStudio.jsx';
+import CropPanel from '../components/editor/CropPanel.jsx';
+import FiltersPanel from '../components/editor/FiltersPanel.jsx';
+import TextsPanel from '../components/editor/TextsPanel.jsx';
 import CommandPalette from '../components/editor/CommandPalette.jsx';
 import ShortcutsDialog from '../components/editor/ShortcutsDialog.jsx';
 import OnboardingOverlay from '../ui/onboarding.jsx';
@@ -78,12 +84,14 @@ function EditorShell() {
   const [generating, setGenerating] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  const [leftPanel, setLeftPanel] = useState(null); // 'library' | 'templates'
+  const [leftPanel, setLeftPanel] = useState(null); // 'elements' | 'templates'
   const [rightPanel, setRightPanel] = useState('inspector'); // 'inspector' | 'ai'
   const [rightTab, setRightTab] = useState('properties'); // 'properties' | 'layers'
   const [renamingId, setRenamingId] = useState(null);
   const [inspectorOpen, setInspectorOpen] = useState(false); // only used when narrow
   const [photoEditId, setPhotoEditId] = useState(null);
+  const [photoEditView, setPhotoEditView] = useState('adjust');
+  const [drawStudioId, setDrawStudioId] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
@@ -206,10 +214,66 @@ function EditorShell() {
   const pickImageFor = useCallback(
     (elementId) => {
       if (elementId) actions.select(elementId);
-      setLeftPanel('library');
+      setLeftPanel('elements');
     },
     [actions]
   );
+
+  /** Draws on the selected image if there is one, otherwise starts a fresh blank layer. */
+  const openDraw = useCallback(
+    (elementId) => {
+      if (elementId) {
+        setDrawStudioId(elementId);
+        return;
+      }
+      const selected = state.document.elements.find((el) => state.selectedIds.includes(el.id) && el.type === 'image');
+      if (selected) {
+        setDrawStudioId(selected.id);
+        return;
+      }
+      const canvas = state.document.canvas;
+      const width = Math.round(Math.min(canvas.width * 0.6, 640));
+      const height = Math.round(width * 0.7);
+      const id = newElementId('image');
+      actions.apply(
+        [
+          {
+            type: 'CREATE_ELEMENT',
+            element: {
+              id,
+              type: 'image',
+              x: Math.round(canvas.width / 2 - width / 2),
+              y: Math.round(canvas.height / 2 - height / 2),
+              width,
+              height,
+              properties: { ...defaultPropertiesFor('image'), src: '' },
+            },
+          },
+        ],
+        { selectIds: [id] }
+      );
+      setDrawStudioId(id);
+    },
+    [actions, state.document, state.selectedIds]
+  );
+
+  const togglePanel = useCallback((name) => setLeftPanel((panel) => (panel === name ? null : name)), []);
+
+  const openAdjust = useCallback((elementId) => {
+    setPhotoEditView('adjust');
+    setPhotoEditId(elementId);
+  }, []);
+
+  /** Opens the photo editor straight to Retouch, for the selected image. */
+  const openRetouch = useCallback(() => {
+    const selected = state.document.elements.find((el) => state.selectedIds.includes(el.id) && el.type === 'image');
+    if (!selected) {
+      toast.error('Select an image first', 'Retouch works on an image layer.');
+      return;
+    }
+    setPhotoEditView('retouch');
+    setPhotoEditId(selected.id);
+  }, [state.document.elements, state.selectedIds, toast]);
 
   /**
    * Samples a colour from anywhere on screen and drops it where it belongs for
@@ -435,7 +499,7 @@ function EditorShell() {
       }
       if (e.key.toLowerCase() === 'm') {
         e.preventDefault();
-        setLeftPanel((panel) => (panel === 'library' ? null : 'library'));
+        setLeftPanel((panel) => (panel === 'elements' ? null : 'elements'));
         return;
       }
       if (e.key.toLowerCase() === 'c' && 'EyeDropper' in window) {
@@ -465,7 +529,7 @@ function EditorShell() {
         icon: tool.icon,
         run: () => actions.setTool(tool.id),
       })),
-      { id: 'library', group: 'Insert', label: 'Open image library', hint: 'M', icon: ImageIcon, run: () => setLeftPanel('library') },
+      { id: 'elements', group: 'Insert', label: 'Open elements (shapes, icons, photos)', hint: 'M', icon: ImageIcon, run: () => togglePanel('elements') },
       { id: 'templates', group: 'Insert', label: 'Browse templates', icon: LayoutTemplate, run: () => setLeftPanel('templates') },
       { id: 'layers', group: 'Panels', label: 'Show layers', icon: Layers, run: () => openTab('layers') },
       { id: 'properties', group: 'Panels', label: 'Show properties', icon: SlidersHorizontal, run: () => openTab('properties') },
@@ -589,10 +653,18 @@ function EditorShell() {
 
       <div className="relative flex min-h-0 flex-1">
         <ToolRail
-          libraryOpen={leftPanel === 'library'}
-          onLibrary={() => setLeftPanel((panel) => (panel === 'library' ? null : 'library'))}
+          cropOpen={leftPanel === 'crop'}
+          onCrop={() => togglePanel('crop')}
+          filtersOpen={leftPanel === 'filters'}
+          onFilters={() => togglePanel('filters')}
+          onRetouch={openRetouch}
+          onDraw={() => openDraw()}
+          textsOpen={leftPanel === 'texts'}
+          onTexts={() => togglePanel('texts')}
+          elementsOpen={leftPanel === 'elements'}
+          onElements={() => togglePanel('elements')}
           templatesOpen={leftPanel === 'templates'}
-          onTemplates={() => setLeftPanel((panel) => (panel === 'templates' ? null : 'templates'))}
+          onTemplates={() => togglePanel('templates')}
           layersOpen={rightTab === 'layers' && rightPanel === 'inspector' && showRight}
           onLayers={() => openTab(rightTab === 'layers' ? 'properties' : 'layers')}
           onSampleColour={'EyeDropper' in window ? sampleColour : undefined}
@@ -605,15 +677,15 @@ function EditorShell() {
               !wide && 'absolute inset-y-0 left-[52px] z-30 shadow-pop'
             )}
           >
-            {leftPanel === 'templates' ? (
-              <TemplatesPanel onClose={() => setLeftPanel(null)} />
-            ) : (
-              <LibraryPanel projectId={id} onClose={() => setLeftPanel(null)} />
-            )}
+            {leftPanel === 'templates' && <TemplatesPanel onClose={() => setLeftPanel(null)} />}
+            {leftPanel === 'elements' && <LibraryPanel projectId={id} onClose={() => setLeftPanel(null)} />}
+            {leftPanel === 'crop' && <CropPanel onClose={() => setLeftPanel(null)} />}
+            {leftPanel === 'filters' && <FiltersPanel onClose={() => setLeftPanel(null)} />}
+            {leftPanel === 'texts' && <TextsPanel onClose={() => setLeftPanel(null)} />}
           </div>
         )}
 
-        <Stage ref={stageRef} onEditImage={setPhotoEditId} onPickImage={pickImageFor} />
+        <Stage ref={stageRef} onEditImage={openAdjust} onPickImage={pickImageFor} />
 
         {showRight && (
           <div className={cx('animate-slide-in-right', !wide && 'absolute inset-y-0 right-0 z-30 shadow-pop')}>
@@ -628,8 +700,9 @@ function EditorShell() {
                 onTab={setRightTab}
                 renamingId={renamingId}
                 onRenaming={setRenamingId}
-                onEditImage={setPhotoEditId}
+                onEditImage={openAdjust}
                 onPickImage={pickImageFor}
+                onDraw={openDraw}
                 onAskApollo={openAI}
                 onClose={wide ? undefined : () => setInspectorOpen(false)}
               />
@@ -638,7 +711,17 @@ function EditorShell() {
         )}
       </div>
 
-      {photoEditId && <PhotoEditor elementId={photoEditId} onClose={() => setPhotoEditId(null)} />}
+      {photoEditId && (
+        <PhotoEditor
+          elementId={photoEditId}
+          initialView={photoEditView}
+          onClose={() => {
+            setPhotoEditId(null);
+            setPhotoEditView('adjust');
+          }}
+        />
+      )}
+      {drawStudioId && <DrawStudio elementId={drawStudioId} onClose={() => setDrawStudioId(null)} />}
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />
       <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />

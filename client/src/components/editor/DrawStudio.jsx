@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Eraser, PaintBucket, Pencil, Shapes as ShapesIcon, X, Brush as BrushIcon } from 'lucide-react';
 import { useEditor } from '../../state/EditorContext.jsx';
-import { loadImage } from '../../raster/imageIO.js';
+import { isCanvasReadable, loadImage } from '../../raster/imageIO.js';
 import { drawSegment, floodFill, PEN_MODE_IDS } from '../../raster/draw.js';
 import { drawRasterShape, SHAPE_TYPES } from '../../raster/rasterShapes.js';
 import { useBrushStroke } from '../../raster/useBrushStroke.js';
@@ -50,6 +50,7 @@ export default function DrawStudio({ elementId, onClose }) {
   const [outlineWidth, setOutlineWidth] = useState(4);
   const [loading, setLoading] = useState(true);
   const [displayScale, setDisplayScale] = useState(1);
+  const [blocked, setBlocked] = useState(false);
   const [, forceRepaint] = useState(0);
 
   const canvasRef = useRef(null);
@@ -80,6 +81,7 @@ export default function DrawStudio({ elementId, onClose }) {
         if (!active) return;
         const scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
         setup(Math.round(img.naturalWidth * scale), Math.round(img.naturalHeight * scale), (ctx) => ctx.drawImage(img, 0, 0, ctx.canvas.width, ctx.canvas.height));
+        if (!isCanvasReadable(canvasRef.current)) setBlocked(true);
       });
     } else {
       setup(Math.max(1, Math.round(element.width)), Math.max(1, Math.round(element.height)));
@@ -178,7 +180,7 @@ export default function DrawStudio({ elementId, onClose }) {
   });
 
   const apply = () => {
-    if (touchedRef.current) {
+    if (touchedRef.current && !blocked) {
       const src = canvasRef.current.toDataURL('image/png');
       actions.apply([{ type: 'UPDATE_ELEMENT', targetId: element.id, changes: { src, fit: 'fill' } }]);
     }
@@ -191,9 +193,14 @@ export default function DrawStudio({ elementId, onClose }) {
     <div className="fixed inset-0 z-[70] flex flex-col bg-void">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-surface px-3">
         <h2 className="text-[13px] font-medium text-ink">Draw</h2>
+        {blocked && (
+          <span className="text-2xs text-ink-3">
+            This image blocks pixel editing (hosted externally) — Apply is disabled. Upload it first to draw on it.
+          </span>
+        )}
         <div className="flex-1" />
         <Button variant="secondary" onClick={onClose}>Cancel</Button>
-        <Button variant="primary" onClick={apply}>Apply</Button>
+        <Button variant="primary" onClick={apply} disabled={blocked}>Apply</Button>
         <IconButton size="lg" onClick={onClose} aria-label="Close"><X size={15} /></IconButton>
       </header>
 

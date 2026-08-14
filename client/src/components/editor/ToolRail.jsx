@@ -1,26 +1,27 @@
-import { useRef, useState } from 'react';
 import {
   Circle,
+  Crop,
   Hand,
   Hexagon,
-  ImageIcon,
   Layers,
   LayoutTemplate,
   Minus,
   MousePointer2,
+  PenTool,
   Pipette,
   RectangleHorizontal,
+  Shapes,
+  SlidersHorizontal,
   Square,
   Star,
   Sticker,
+  SunDim,
   Triangle,
   Type,
 } from 'lucide-react';
 import { cx } from '../../lib/cx.js';
-import { useLocalState } from '../../lib/useLocalState.js';
 import { useEditor } from '../../state/EditorContext.jsx';
 import { Tooltip } from '../../ui/primitives.jsx';
-import { ContextMenu, MenuItem } from '../../ui/overlay.jsx';
 
 /**
  * Everything the rail can place. `size` is the footprint a click drops on the
@@ -48,36 +49,26 @@ export const toolById = (id) => CREATION_TOOLS.find((t) => t.id === id) || null;
 /** The document element a tool produces — several tools share one type. */
 export const typeOfTool = (id) => toolById(id)?.type || id;
 
-const TEXT_TOOLS = ['text', 'heading', 'subheading', 'body', 'eyebrow'];
-const SHAPE_TOOLS = ['rectangle', 'circle', 'triangle', 'polygon', 'star', 'line'];
-
 /**
- * Tool rail. Picking a tool arms it — the next click on the canvas places the
- * element there, so nothing lands somewhere you didn't choose. Related tools
- * share one slot: the slot keeps whichever you used last, and a press-and-hold
- * (or right-click) opens the rest.
+ * Tool rail: Select, Hand, then the panel tools in the order a photo editor
+ * expects them — Crop, Filters, Retouch, Drawing, Texts, Elements. Each of
+ * those opens its own panel rather than arming a place-on-click tool, so
+ * there's nothing to "drop" — click it and it's already there or already
+ * applied. Shape/text/icon keyboard shortcuts (R, O, T, I…) still work from
+ * anywhere; this is just what's visible.
  */
-export default function ToolRail({ libraryOpen, onLibrary, templatesOpen, onTemplates, layersOpen, onLayers, onSampleColour }) {
+export default function ToolRail({
+  cropOpen, onCrop,
+  filtersOpen, onFilters,
+  onRetouch,
+  onDraw,
+  textsOpen, onTexts,
+  elementsOpen, onElements,
+  templatesOpen, onTemplates,
+  layersOpen, onLayers,
+  onSampleColour,
+}) {
   const { state, actions } = useEditor();
-  const [lastText, setLastText] = useLocalState('apollo.tool.text', 'text');
-  const [lastShape, setLastShape] = useLocalState('apollo.tool.shape', 'rectangle');
-  const [flyout, setFlyout] = useState(null);
-
-  const arm = (id) => {
-    if (TEXT_TOOLS.includes(id)) setLastText(id);
-    if (SHAPE_TOOLS.includes(id)) setLastShape(id);
-    actions.setTool(state.tool === id ? 'select' : id);
-  };
-
-  const group = (ids, active) => ({
-    ids,
-    active,
-    onPick: (id) => {
-      if (TEXT_TOOLS.includes(id)) setLastText(id);
-      if (SHAPE_TOOLS.includes(id)) setLastShape(id);
-      actions.setTool(id);
-    },
-  });
 
   return (
     <nav className="z-20 flex w-[52px] shrink-0 flex-col items-center gap-1 border-r border-line bg-surface py-2.5">
@@ -98,40 +89,15 @@ export default function ToolRail({ libraryOpen, onLibrary, templatesOpen, onTemp
 
       <Divider />
 
-      <RailGroup
-        tools={TEXT_TOOLS}
-        current={TEXT_TOOLS.includes(state.tool) ? state.tool : lastText}
-        armed={state.tool}
-        onArm={arm}
-        onFlyout={setFlyout}
-        group={group}
-      />
-      <RailGroup
-        tools={SHAPE_TOOLS}
-        current={SHAPE_TOOLS.includes(state.tool) ? state.tool : lastShape}
-        armed={state.tool}
-        onArm={arm}
-        onFlyout={setFlyout}
-        group={group}
-      />
-
-      {['button', 'icon'].map((id) => {
-        const tool = toolById(id);
-        return (
-          <RailButton
-            key={id}
-            label={tool.label}
-            hint={tool.hint}
-            icon={tool.icon}
-            active={state.tool === id}
-            onClick={() => arm(id)}
-          />
-        );
-      })}
+      <RailButton label="Crop" icon={Crop} active={cropOpen} onClick={onCrop} />
+      <RailButton label="Filters" icon={SlidersHorizontal} active={filtersOpen} onClick={onFilters} />
+      <RailButton label="Retouch" icon={SunDim} onClick={onRetouch} />
+      <RailButton label="Drawing" icon={PenTool} onClick={onDraw} />
 
       <Divider />
 
-      <RailButton label="Images" hint="M" icon={ImageIcon} active={libraryOpen} onClick={onLibrary} />
+      <RailButton label="Texts" hint="T" icon={Type} active={textsOpen} onClick={onTexts} />
+      <RailButton label="Elements" hint="M" icon={Shapes} active={elementsOpen} onClick={onElements} />
       <RailButton label="Templates" icon={LayoutTemplate} active={templatesOpen} onClick={onTemplates} />
 
       <div className="flex-1" />
@@ -140,74 +106,11 @@ export default function ToolRail({ libraryOpen, onLibrary, templatesOpen, onTemp
         <RailButton label="Pick a colour" hint="C" icon={Pipette} onClick={onSampleColour} />
       )}
       <RailButton label="Layers" icon={Layers} active={layersOpen} onClick={onLayers} />
-
-      {flyout && (
-        <ContextMenu x={flyout.x} y={flyout.y} onClose={() => setFlyout(null)} className="w-44">
-          {flyout.ids.map((id) => {
-            const tool = toolById(id);
-            const Icon = tool.icon;
-            return (
-              <MenuItem
-                key={id}
-                icon={Icon}
-                hint={tool.hint}
-                className={cx(id === flyout.active && 'text-ink')}
-                onClick={() => {
-                  flyout.onPick(id);
-                  setFlyout(null);
-                }}
-              >
-                {tool.label}
-              </MenuItem>
-            );
-          })}
-        </ContextMenu>
-      )}
     </nav>
   );
 }
 
 const Divider = () => <span className="my-1 h-px w-6 bg-line" />;
-
-/** One rail slot standing in for a family of tools. */
-function RailGroup({ tools, current, armed, onArm, onFlyout, group }) {
-  const tool = toolById(current) || toolById(tools[0]);
-  const ref = useRef(null);
-  const hold = useRef(null);
-
-  const open = () => {
-    const box = ref.current?.getBoundingClientRect();
-    if (!box) return;
-    onFlyout({ x: box.right + 8, y: box.top - 4, ...group(tools, current) });
-  };
-
-  return (
-    <span ref={ref} className="relative flex">
-      <RailButton
-        label={tool.label}
-        hint={tool.hint}
-        icon={tool.icon}
-        active={tools.includes(armed)}
-        more
-        onContextMenu={(e) => {
-          e.preventDefault();
-          open();
-        }}
-        onPointerDown={() => {
-          hold.current = setTimeout(open, 240);
-        }}
-        onPointerUp={() => clearTimeout(hold.current)}
-        onPointerLeave={() => clearTimeout(hold.current)}
-        onClick={() => {
-          clearTimeout(hold.current);
-          // A second click on the armed slot reveals its siblings.
-          if (armed === current) open();
-          else onArm(current);
-        }}
-      />
-    </span>
-  );
-}
 
 function RailButton({ label, hint, icon: Icon, active, more, onClick, ...props }) {
   return (

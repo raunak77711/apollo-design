@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Flame, Snowflake, SunDim, Waves } from 'lucide-react';
-import { loadImageToCanvas } from '../../raster/imageIO.js';
+import { isCanvasReadable, loadImageToCanvas } from '../../raster/imageIO.js';
 import { blurStamp, dodgeBurnStamp, sharpenStamp } from '../../raster/retouch.js';
 import { useBrushStroke } from '../../raster/useBrushStroke.js';
 import { SliderField } from '../../ui/fields.jsx';
@@ -28,6 +28,7 @@ export default function RetouchTab({ src, onReady }) {
   const [strength, setStrength] = useState(40);
   const [loading, setLoading] = useState(true);
   const [displayScale, setDisplayScale] = useState(1);
+  const [blocked, setBlocked] = useState(false);
 
   const canvasRef = useRef(null);
   const touchedRef = useRef(false);
@@ -42,6 +43,10 @@ export default function RetouchTab({ src, onReady }) {
       canvas.height = source.height;
       canvas.getContext('2d').drawImage(source, 0, 0);
       setLoading(false);
+      if (!isCanvasReadable(canvas)) {
+        setBlocked(true);
+        return;
+      }
       onReady?.({ canvasRef, touchedRef });
     });
     return () => {
@@ -152,14 +157,19 @@ export default function RetouchTab({ src, onReady }) {
             <Spinner /> Loading image…
           </div>
         )}
-        <div className="relative" style={{ display: loading ? 'none' : 'block' }}>
+        {!loading && blocked && (
+          <p className="max-w-xs text-center text-sm leading-relaxed text-ink-3">
+            This image is hosted somewhere that blocks pixel-level editing. Upload it instead (Library → Uploads) to retouch it.
+          </p>
+        )}
+        <div className="relative" style={{ display: loading || blocked ? 'none' : 'block' }}>
           <canvas
             ref={canvasRef}
-            {...handlers}
+            {...(blocked ? {} : handlers)}
             className="block max-h-[70vh] max-w-full touch-none shadow-art"
             style={{ cursor: 'none' }}
           />
-          {hover && (
+          {hover && !blocked && (
             <span
               className="pointer-events-none absolute rounded-full border-2 border-accent"
               style={{

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Maximize2, Minimize2, RotateCcw, RotateCwSquare, Shrink, Wind } from 'lucide-react';
-import { loadImageToCanvas } from '../../raster/imageIO.js';
+import { isCanvasReadable, loadImageToCanvas } from '../../raster/imageIO.js';
 import { liquifyStamp } from '../../raster/liquify.js';
 import { useBrushStroke } from '../../raster/useBrushStroke.js';
 import { SliderField } from '../../ui/fields.jsx';
@@ -28,6 +28,7 @@ export default function LiquifyTab({ src, onReady }) {
   const [density, setDensity] = useState(50);
   const [loading, setLoading] = useState(true);
   const [displayScale, setDisplayScale] = useState(1);
+  const [blocked, setBlocked] = useState(false);
 
   const canvasRef = useRef(null);
   const originalRef = useRef(null);
@@ -51,6 +52,10 @@ export default function LiquifyTab({ src, onReady }) {
       originalRef.current = original;
 
       setLoading(false);
+      if (!isCanvasReadable(canvas)) {
+        setBlocked(true);
+        return;
+      }
       onReady?.({ canvasRef, touchedRef });
     });
     return () => {
@@ -153,14 +158,19 @@ export default function LiquifyTab({ src, onReady }) {
             <Spinner /> Loading image…
           </div>
         )}
-        <div className="relative" style={{ display: loading ? 'none' : 'block' }}>
+        {!loading && blocked && (
+          <p className="max-w-xs text-center text-sm leading-relaxed text-ink-3">
+            This image is hosted somewhere that blocks pixel-level editing. Upload it instead (Library → Uploads) to use Liquify on it.
+          </p>
+        )}
+        <div className="relative" style={{ display: loading || blocked ? 'none' : 'block' }}>
           <canvas
             ref={canvasRef}
-            {...handlers}
+            {...(blocked ? {} : handlers)}
             className="block max-h-[70vh] max-w-full touch-none shadow-art"
             style={{ cursor: 'none' }}
           />
-          {hover && (
+          {hover && !blocked && (
             <span
               className="pointer-events-none absolute rounded-full border-2 border-accent"
               style={{

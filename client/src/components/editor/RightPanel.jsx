@@ -16,7 +16,7 @@ const TABS = [
  * and Layers share it through a switcher rather than a second sidebar, so the
  * canvas keeps the width it deserves.
  */
-export default function RightPanel({ tab, onTab, renamingId, onRenaming, onEditImage, onPickImage, onAskApollo, onClose }) {
+export default function RightPanel({ tab, onTab, renamingId, onRenaming, onEditImage, onPickImage, onDraw, onAskApollo, onClose }) {
   const { state } = useEditor();
   const count = state.selectedIds.length;
 
@@ -61,7 +61,7 @@ export default function RightPanel({ tab, onTab, renamingId, onRenaming, onEditI
       {tab === 'layers' ? (
         <LayersPanel renamingId={renamingId} onRename={onRenaming} />
       ) : (
-        <Inspector onEditImage={onEditImage} onPickImage={onPickImage} />
+        <Inspector onEditImage={onEditImage} onPickImage={onPickImage} onDraw={onDraw} />
       )}
     </aside>
   );

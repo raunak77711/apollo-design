@@ -31,11 +31,11 @@ const PRESETS = [
  * are overlay effects that render identically here and on the live canvas,
  * but are approximated or omitted in the exported file — see the README.
  */
-export default function PhotoEditor({ elementId, onClose }) {
+export default function PhotoEditor({ elementId, initialView = 'adjust', onClose }) {
   const { state, actions } = useEditor();
   const element = state.document.elements.find((el) => el.id === elementId);
   const [comparing, setComparing] = useState(false);
-  const [view, setView] = useState('adjust'); // 'adjust' | 'effects' | 'liquify' | 'retouch'
+  const [view, setView] = useState(initialView); // 'adjust' | 'effects' | 'liquify' | 'retouch'
   const [effectCategory, setEffectCategory] = useState('All');
   const liquifyRef = useRef(null); // { canvasRef, touchedRef }, set once LiquifyTab has loaded
   const retouchRef = useRef(null);

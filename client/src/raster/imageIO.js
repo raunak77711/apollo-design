@@ -22,6 +22,21 @@ export async function loadImageToCanvas(src) {
   return canvas;
 }
 
+/**
+ * A canvas is "tainted" — every pixel read throws a SecurityError — when its
+ * source image came from a host that doesn't grant cross-origin pixel access
+ * (Pexels/Unsplash do; the keyless Picsum placeholder fallback doesn't). Brush
+ * tools need to know this up front rather than fail on the first stroke.
+ */
+export function isCanvasReadable(canvas) {
+  try {
+    canvas.getContext('2d').getImageData(0, 0, 1, 1);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function loadImage(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();

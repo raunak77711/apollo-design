@@ -127,12 +127,21 @@ Vite proxies `/api` and `/storage` to the backend, so no CORS setup is needed in
    contrast/saturation/hue/blur/rotate) and **Effects** (ten moods — B&W,
    Faded, Vintage, Tone, Portrait, Food, Urban, Nature, Vivid, Artsy — six
    one-click presets each). Hold **Eye** to compare against the original.
-7. In the **Layers** panel: rename, lock, hide, reorder, group, and — new —
+   The same editor also has **Liquify** (push/enlarge/shrink/swirl/restore —
+   a real pixel warp, with a resizable brush circle and size/strength/density)
+   and **Retouch** (dodge & burn by tonal range, plus a local sharpen and
+   blur brush).
+7. The **Draw** tool (rail, or an image's "Draw" button) opens a full canvas:
+   brush, eraser, an 8-mode pen (plain/parallel/sketchy/shaded/furry/trail/
+   crayon/ink), a fill bucket (tolerance, opacity, anti-alias, contiguous),
+   and shape tools (rectangle/circle/triangle/star/heart/line) you drag to
+   size, each with independent fill and outline.
+8. In the **Layers** panel: rename, lock, hide, reorder, group, and — new —
    **Merge down**, **Merge visible**, and **Flatten image** (right-click a
    layer, or the **···** menu), which rasterize the target layers into one new
    image layer via the same Sharp pipeline export uses. The **+** button adds
    an empty image, a frame, text, or a shape.
-8. The icon picker (in Properties and in the Library panel) has two sets —
+9. The icon picker (in Properties and in the Library panel) has two sets —
    **Line** (Lucide, what the AI uses) and **Fun** (Game Icons — animals,
    food, party, nature) — each searchable.
 
@@ -154,8 +163,10 @@ apollo-design/
 │       │                   # useMergeLayers (merge/flatten)
 │       ├── ui/             # design system: primitives, fields, overlays, brand,
 │       │                   # onboarding (the AI-generating overlay + hints)
-│       ├── components/     # editor/ (stage, rail, inspector, panels, PhotoEditor)
-│       │                   # + elements/ (one renderer per type)
+│       ├── components/     # editor/ (stage, rail, inspector, panels, PhotoEditor,
+│       │                   # LiquifyTab, RetouchTab, DrawStudio) + elements/
+│       ├── raster/         # pixel tools: liquify.js, retouch.js, draw.js,
+│       │                   # rasterShapes.js, imageIO.js, useBrushStroke.js
 │       └── pages/          # Home, Templates, Assets, EditorPage
 ├── docker-compose.yml      # production build (nginx)
 ├── docker-compose.dev.yml  # hot-reload dev stack (vite + nodemon, bind mounts)
@@ -221,13 +232,31 @@ POST   /api/export/flatten      # { document } → { dataUrl }  — layer merge/
   operation, not a placeholder, but it's a one-way conversion: the merged
   layers' individual properties are gone once merged (undo still restores them,
   since it's one operation like any other).
-- **Liquify, Retouch (dodge/burn/heal), and a freehand Draw suite** (brush/pen/
-  eraser/fill-bucket/drag-to-create shapes) were requested but are **not
-  built**. Apollo edits a structured document, not a pixel buffer — those tools
-  need a genuine raster-editing engine (pixel warping, brush stamping, a paint
-  history) that's a substantial subsystem on its own. Rather than ship a
-  half-working version, this is the clear next milestone.
-- The editor bundle (~155KB gzipped) is larger than ideal because
+- **Liquify, Retouch, and a freehand Draw studio** are implemented as real
+  pixel tools (`client/src/raster/`) — a canvas is loaded from the image, the
+  brush paints/warps it live, and Apply bakes the result back into the
+  element's `src` as one undoable step (Liquify/Retouch live as tabs inside
+  the photo editor; Draw is its own full-screen tool, reachable from the tool
+  rail or an image's "Draw" button, and can start from a blank layer or an
+  existing photo). Liquify does real per-pixel backward-mapped warping
+  (push/enlarge/shrink/swirl/restore); Retouch does tonal-range-aware dodge
+  & burn plus local sharpen/blur; Draw has a soft brush, eraser, an 8-mode
+  pen (plain/parallel/sketchy/shaded/furry/trail/crayon/ink — each a
+  genuinely different render, not a reskin), a flood fill (contiguous or
+  global, with tolerance/anti-alias), and drag-to-create shapes
+  (rectangle/circle/triangle/star/heart/line) with independent fill/outline.
+  One real limitation: a photo from a host that doesn't grant cross-origin
+  pixel access (the keyless Picsum placeholder fallback; Pexels and Unsplash
+  both do) can't be read back into pixels — the tool detects this and tells
+  you to upload the image first rather than failing silently.
+- **Merge/flatten and the pixel tools don't move a group's frame** — see the
+  groups note above; this is the same limitation, not a new one.
+- The editor bundle is larger than ideal because
+  `ElementRenderer` statically imports every element type — including the icon
+  libraries — so `DesignPreview` (used on Home for recent-project thumbnails)
+  pulls them into the eagerly-loaded bundle despite the editor route itself
+  being lazy-loaded. Splitting the icon libraries out behind their own lazy
+  boundary is a reasonable follow-up.
   `ElementRenderer` statically imports every element type — including the icon
   libraries — so `DesignPreview` (used on Home for recent-project thumbnails)
   pulls them into the eagerly-loaded bundle despite the editor route itself

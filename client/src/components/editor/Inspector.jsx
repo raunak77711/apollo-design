@@ -28,6 +28,7 @@ import {
   Link2Off,
   Lock,
   LockOpen,
+  PenTool,
   Repeat2,
   SlidersHorizontal,
   Trash2,
@@ -82,14 +83,14 @@ const HAS_STROKE = new Set(['rectangle', 'circle', 'polygon', 'star', 'line', 'b
  * selected — document settings when nothing is, arrangement when several things
  * are — and leads with whatever matters most for the type in hand.
  */
-export default function Inspector({ onEditImage, onPickImage }) {
+export default function Inspector({ onEditImage, onPickImage, onDraw }) {
   const selection = useSelection();
 
   return (
     <div className="thin-scroll min-h-0 flex-1 overflow-y-auto">
       {selection.length === 0 && <DesignPanel />}
       {selection.length === 1 && (
-        <ElementPanel element={selection[0]} onEditImage={onEditImage} onPickImage={onPickImage} />
+        <ElementPanel element={selection[0]} onEditImage={onEditImage} onPickImage={onPickImage} onDraw={onDraw} />
       )}
       {selection.length > 1 && <ArrangePanel selection={selection} />}
     </div>
@@ -229,7 +230,7 @@ function DesignPanel() {
 
 /* ---------------------------- single selection --------------------------- */
 
-function ElementPanel({ element, onEditImage, onPickImage }) {
+function ElementPanel({ element, onEditImage, onPickImage, onDraw }) {
   const { state, actions } = useEditor();
   const layers = useLayerActions();
   const p = element.properties;
@@ -302,7 +303,7 @@ function ElementPanel({ element, onEditImage, onPickImage }) {
         )}
 
         {element.type === 'image' && (
-          <ImageSection element={element} set={set} live={live} commit={commit} onEditImage={onEditImage} onPickImage={onPickImage} />
+          <ImageSection element={element} set={set} live={live} commit={commit} onEditImage={onEditImage} onPickImage={onPickImage} onDraw={onDraw} />
         )}
 
         {element.type === 'icon' && (
@@ -691,7 +692,7 @@ function ShadowControls({ element, set, live, commit }) {
 
 /* --------------------------------- image --------------------------------- */
 
-function ImageSection({ element, set, live, commit, onEditImage, onPickImage }) {
+function ImageSection({ element, set, live, commit, onEditImage, onPickImage, onDraw }) {
   const p = element.properties;
 
   return (
@@ -701,6 +702,7 @@ function ImageSection({ element, set, live, commit, onEditImage, onPickImage }) 
           <ActionButton label={p.src ? 'Replace' : 'Choose image'} onClick={() => onPickImage?.(element.id)} />
           <ActionButton icon={SlidersHorizontal} label="Adjust" disabled={!p.src} onClick={() => onEditImage?.(element.id)} />
         </div>
+        <ActionButton icon={PenTool} label="Draw" onClick={() => onDraw?.(element.id)} />
         <PropRow label="Fit">
           <Segmented
             className="w-full"
