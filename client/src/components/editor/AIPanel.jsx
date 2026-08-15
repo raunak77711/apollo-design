@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Layers, Undo2, X } from 'lucide-react';
+import { ArrowUp, Columns3, Layers, Undo2, X } from 'lucide-react';
 import { api } from '../../api/client.js';
 import { cx } from '../../lib/cx.js';
 import { useEditor, useSelection } from '../../state/EditorContext.jsx';
 import { layerLabel } from '../../design/layers.js';
+import { applyOperations } from '../../design/operations.js';
 import { IconButton, Spinner, Tooltip } from '../../ui/primitives.jsx';
 import { Spark } from '../../ui/brand.jsx';
+import DesignPreview from '../DesignPreview.jsx';
 
 /**
  * Apollo AI, scoped to the design you are looking at. It never returns markup —
@@ -18,19 +20,24 @@ export default function AIPanel({ onClose, onShowLayers }) {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [messages, setMessages] = useState([]);
+  const [directions, setDirections] = useState(null);
   const listRef = useRef(null);
 
   const target = selection.length === 1 ? selection[0] : null;
   const empty = state.document.elements.length === 0;
+  // The last thing asked for is the brief a set of alternative directions works
+  // from, so the button only appears once there is something to reinterpret.
+  const lastBrief = [...messages].reverse().find((m) => m.role === 'user')?.text || '';
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages, busy]);
+  }, [messages, busy, directions]);
 
   const send = async (text) => {
     const message = (text ?? input).trim();
     if (!message || busy) return;
     setInput('');
+    setDirections(null);
     setMessages((m) => [...m, { role: 'user', text: message }]);
     setBusy(true);
     try {
@@ -47,8 +54,30 @@ export default function AIPanel({ onClose, onShowLayers }) {
           text: res.message || 'Done.',
           applied: res.operations?.length || 0,
           rejected: res.skipped?.length || 0,
+          direction: res.direction || null,
         },
       ]);
+    } catch (err) {
+      setMessages((m) => [...m, { role: 'apollo', text: err.message, error: true }]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Three complete alternatives — different layout and type voice, not the same
+   * design recoloured. Each is previewed live from its own operations, so what
+   * you pick is exactly what lands on the canvas.
+   */
+  const explore = async () => {
+    if (!lastBrief || busy) return;
+    setBusy(true);
+    setDirections(null);
+    try {
+      const res = await api.aiVariations({ message: lastBrief, document: state.document });
+      setDirections(
+        (res.directions || []).map((d) => ({ ...d, preview: applyOperations(state.document, d.operations).document }))
+      );
     } catch (err) {
       setMessages((m) => [...m, { role: 'apollo', text: err.message, error: true }]);
     } finally {
@@ -104,6 +133,7 @@ export default function AIPanel({ onClose, onShowLayers }) {
                 <Spark size={12} className={cx('mt-1 shrink-0', m.error ? 'text-danger' : 'text-accent')} />
                 <p className={cx('text-[13px] leading-relaxed', m.error ? 'text-danger' : 'text-ink-2')}>{m.text}</p>
               </div>
+              {m.direction && <DirectionNote direction={m.direction} />}
               {m.applied > 0 && (
                 <div className="mt-1.5 flex items-center gap-2 pl-5">
                   <span className="num text-2xs text-ink-3">
@@ -124,6 +154,31 @@ export default function AIPanel({ onClose, onShowLayers }) {
           )
         )}
 
+        {directions?.length > 0 && (
+          <div className="animate-fade-in space-y-2">
+            <p className="label">Three directions</p>
+            <div className="space-y-2">
+              {directions.map((d) => (
+                <button
+                  key={d.id}
+                  onClick={() => {
+                    actions.apply(d.operations);
+                    setDirections(null);
+                    setMessages((m) => [...m, { role: 'apollo', text: d.message, applied: d.operations.length }]);
+                  }}
+                  className="group block w-full overflow-hidden rounded-md border border-line text-left transition-colors hover:border-line-strong"
+                >
+                  <DesignPreview document={d.preview} className="w-full" />
+                  <span className="flex items-baseline justify-between gap-2 border-t border-line bg-raised px-2 py-1.5">
+                    <span className="text-xs font-medium text-ink">{d.label}</span>
+                    <span className="truncate text-2xs text-ink-3">{d.layout}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {busy && (
           <div className="flex items-center gap-2 text-[13px] text-ink-3">
             <Spinner size={12} /> Apollo is working…
@@ -133,6 +188,14 @@ export default function AIPanel({ onClose, onShowLayers }) {
 
       {!busy && (
         <div className="flex flex-wrap gap-1.5 border-t border-line px-3 py-2.5">
+          {lastBrief && !directions && (
+            <button
+              onClick={explore}
+              className="flex items-center gap-1.5 rounded border border-line bg-raised px-2 py-1 text-xs text-ink-2 transition-colors duration-150 hover:border-line-strong hover:text-ink"
+            >
+              <Columns3 size={11} /> Three directions
+            </button>
+          )}
           {suggestionsFor(target, empty).map((s) => (
             <button
               key={s}
@@ -179,18 +242,43 @@ export default function AIPanel({ onClose, onShowLayers }) {
   );
 }
 
-/** Prompts that fit what is selected — and that Apollo can actually act on. */
-function suggestionsFor(target, empty) {
-  if (empty) return ['Design a premium gym banner', 'Create a bold sale poster'];
-  if (!target) return ['Make the headline bigger', 'Change the button colour to blue'];
-  if (target.type === 'text') return ['Make this bigger', 'Make it bolder and more premium'];
-  if (target.type === 'button') return ['Change the colour to blue', 'Make it bigger'];
-  if (target.type === 'image') return ['Move it right', 'Make it bigger'];
-  return ['Make it bigger', 'Change the colour to gold'];
+/**
+ * The art direction behind a generated design, shown rather than hidden: the
+ * palette Apollo chose, the structure it used, and how its own review went.
+ */
+function DirectionNote({ direction }) {
+  const swatches = ['background', 'surface', 'accent', 'primary']
+    .map((key) => direction.palette?.[key])
+    .filter(Boolean);
+
+  return (
+    <div className="mt-2 space-y-1.5 pl-5">
+      <div className="flex items-center gap-2">
+        <span className="flex gap-0.5">
+          {swatches.map((color, i) => (
+            <span key={`${color}-${i}`} className="h-3 w-3 rounded-sm border border-line" style={{ background: color }} />
+          ))}
+        </span>
+        <span className="truncate text-2xs text-ink-3">
+          {direction.style} · {direction.layout?.replace(/-/g, ' ')}
+        </span>
+      </div>
+      {direction.fixed?.length > 0 && (
+        <p className="text-2xs leading-relaxed text-ink-3">Review: {direction.fixed.length} refinement{direction.fixed.length === 1 ? '' : 's'} applied</p>
+      )}
+      {direction.outstanding?.length > 0 && (
+        <p className="text-2xs leading-relaxed text-ink-3">Worth a look: {direction.outstanding[0]}</p>
+      )}
+    </div>
+  );
 }
 
-function labelFor(el) {
-  if (el.type === 'text' || el.type === 'button') return el.properties.text?.split('\n')[0]?.slice(0, 28) || 'Empty';
-  if (el.type === 'icon') return el.properties.name;
-  return el.id.split('-')[0];
+/** Prompts that fit what is selected — and that Apollo can actually act on. */
+function suggestionsFor(target, empty) {
+  if (empty) return ['Instagram post for a gym New Year offer', 'Poster for a jazz night'];
+  if (!target) return ['Make the headline bigger', 'Try a different layout'];
+  if (target.type === 'text') return ['Make this bigger', 'Make it bolder and more premium'];
+  if (target.type === 'button') return ['Change the colour to blue', 'Make it bigger'];
+  if (target.type === 'image') return ['Replace this photo', 'Move it right'];
+  return ['Make it bigger', 'Change the colour to gold'];
 }

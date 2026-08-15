@@ -146,7 +146,7 @@ function EditorShell() {
           didGenerate.current = true;
           setGenerating(true);
           try {
-            const res = await api.aiChat({ message: initialPrompt, document: project.document });
+            const res = await api.aiGenerate({ message: initialPrompt, document: project.document });
             if (active && res.operations?.length) {
               actions.apply(res.operations);
               setRightPanel('ai');

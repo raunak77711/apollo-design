@@ -35,6 +35,9 @@ export const api = {
 
   // AI
   aiChat: (payload) => request('/ai/chat', { method: 'POST', body: payload }),
+  // Always takes the full art-direction pipeline, whatever the document holds.
+  aiGenerate: (payload) => request('/ai/generate', { method: 'POST', body: payload }),
+  aiVariations: (payload) => request('/ai/variations', { method: 'POST', body: payload }),
 
   // Images
   searchImages: (q) => request(`/images/search?q=${encodeURIComponent(q)}`),

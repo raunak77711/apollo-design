@@ -93,14 +93,18 @@ async function elementToSvg(el, opacity) {
   const stroke = strokeAttrs(p);
 
   switch (el.type) {
-    case 'rectangle':
+    case 'rectangle': {
+      const paint = paintFor(el, p);
       return wrap(
-        `<rect x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}" rx="${p.borderRadius || 0}" fill="${esc(p.fill)}" fill-opacity="${p.fillOpacity ?? 1}"${stroke}/>`
+        `${paint.def}<rect x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}" rx="${p.borderRadius || 0}" fill="${paint.fill}" fill-opacity="${p.fillOpacity ?? 1}"${stroke}/>`
       );
-    case 'circle':
+    }
+    case 'circle': {
+      const paint = paintFor(el, p);
       return wrap(
-        `<ellipse cx="${cx}" cy="${cy}" rx="${el.width / 2}" ry="${el.height / 2}" fill="${esc(p.fill)}" fill-opacity="${p.fillOpacity ?? 1}"${stroke}/>`
+        `${paint.def}<ellipse cx="${cx}" cy="${cy}" rx="${el.width / 2}" ry="${el.height / 2}" fill="${paint.fill}" fill-opacity="${p.fillOpacity ?? 1}"${stroke}/>`
       );
+    }
     case 'polygon':
     case 'star':
       // Points are inset by half the stroke so the outline stays in frame,
@@ -139,6 +143,45 @@ async function elementToSvg(el, opacity) {
     default:
       return '';
   }
+}
+
+/**
+ * A shape's fill: a gradient definition when it has one, otherwise the flat
+ * colour. The document stores gradients in CSS terms (0deg points up, angles
+ * clockwise), so the vector here is derived rather than copied — that is what
+ * keeps an exported scrim identical to the one on screen.
+ */
+function paintFor(el, p) {
+  const gradient = p.gradient;
+  if (!gradient?.stops?.length) return { fill: esc(p.fill), def: '' };
+
+  const id = `grad-${el.id}`;
+  const stops = gradient.stops
+    .map((stop) => {
+      const { color, alpha } = splitAlpha(stop.color);
+      return `<stop offset="${stop.offset}%" stop-color="${esc(color)}" stop-opacity="${alpha}"/>`;
+    })
+    .join('');
+
+  if (gradient.type === 'radial') {
+    return {
+      fill: `url(#${id})`,
+      def: `<radialGradient id="${id}" cx="50%" cy="50%" r="50%">${stops}</radialGradient>`,
+    };
+  }
+
+  const radians = ((((gradient.angle ?? 180) % 360) + 360) % 360) * (Math.PI / 180);
+  const dx = Math.sin(radians);
+  const dy = -Math.cos(radians);
+  // Project the unit direction onto the shape's box, in objectBoundingBox units.
+  const x1 = round(0.5 - dx / 2);
+  const y1 = round(0.5 - dy / 2);
+  const x2 = round(0.5 + dx / 2);
+  const y2 = round(0.5 + dy / 2);
+  return {
+    fill: `url(#${id})`,
+    def: `<linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${stops}</linearGradient>`,
+  };
 }
 
 /** Shadow and layer blur, mirroring the CSS filters the canvas applies. */
@@ -309,7 +352,13 @@ async function fetchImageBuffer(src) {
 
 /** Shadow colours carry their alpha as #RRGGBBAA; SVG wants the two apart. */
 function splitAlpha(value) {
-  const match = /^#?([0-9a-f]{6})([0-9a-f]{2})?$/i.exec(String(value || '').trim());
+  const raw = String(value || '').trim();
+  const short = /^#?([0-9a-f]{3})$/i.exec(raw);
+  if (short) {
+    const [r, g, b] = short[1].split('');
+    return { color: `#${r}${r}${g}${g}${b}${b}`, alpha: 1 };
+  }
+  const match = /^#?([0-9a-f]{6})([0-9a-f]{2})?$/i.exec(raw);
   if (!match) return { color: '#000000', alpha: 0.35 };
   return { color: `#${match[1]}`, alpha: match[2] ? parseInt(match[2], 16) / 255 : 1 };
 }

@@ -42,7 +42,7 @@ import { useLayerActions } from '../../state/useLayerActions.js';
 import { alignOperations, boundsOf, distributeOperations } from '../../design/arrange.js';
 import { childrenOf } from '../../design/tree.js';
 import { TYPE_META, layerLabel, typeLabel } from '../../design/layers.js';
-import { joinAlpha, splitAlpha } from '../../design/color.js';
+import { cssGradient, joinAlpha, splitAlpha } from '../../design/color.js';
 import { FONTS } from '../../design/fonts.js';
 import { ICON_LIBRARIES, getIcon, iconNames } from '../../design/icons.js';
 import { PRESETS, presetLabel, ratioLabel } from '../../design/presets.js';
@@ -367,6 +367,9 @@ function ElementPanel({ element, onEditImage, onPickImage, onDraw }) {
           <Section id="fill" label="Fill & stroke">
             {HAS_FILL.has(element.type) && (
               <>
+                {/* A gradient paints over the flat fill, so it is shown here
+                    rather than left to silently override the colour above. */}
+                {p.gradient && <GradientRow gradient={p.gradient} onClear={() => set({ gradient: null })} />}
                 <ColorField label="Fill" value={p.fill} onChange={(fill) => live({ fill })} onCommit={commit} />
                 <SliderRow
                   label="Fill %"
@@ -925,6 +928,30 @@ function Section({ id, label, children, defaultOpen = true }) {
       </button>
       {open && <div className="animate-section-in space-y-1.5 px-2.5 pb-3">{children}</div>}
     </section>
+  );
+}
+
+/**
+ * Apollo paints scrims and colour fields with gradients. This shows the one in
+ * play and lets it go — without it, the Fill swatch below would look broken,
+ * since a gradient always wins over a flat colour.
+ */
+function GradientRow({ gradient, onClear }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="label w-14 shrink-0">Gradient</span>
+      <span
+        className="h-5 min-w-0 flex-1 rounded border border-line"
+        style={{ backgroundImage: cssGradient(gradient), backgroundColor: '#00000010' }}
+      />
+      <button
+        onClick={onClear}
+        title="Remove the gradient and use the flat fill"
+        className="shrink-0 rounded border border-line px-1.5 py-0.5 text-2xs text-ink-3 transition-colors hover:border-line-strong hover:text-ink"
+      >
+        Clear
+      </button>
+    </div>
   );
 }
 

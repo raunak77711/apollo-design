@@ -35,3 +35,21 @@ export function joinAlpha(hex, alpha) {
     .padStart(2, '0');
   return `${base}${value}`;
 }
+
+/* ------------------------------- gradients ------------------------------ */
+
+/**
+ * A shape's paint: its gradient if it has one, otherwise its flat fill. The
+ * angle follows the CSS convention the document stores (0deg = up), so this is
+ * a direct translation rather than a conversion.
+ */
+export function paintFor(properties = {}) {
+  return cssGradient(properties.gradient) || properties.fill;
+}
+
+export function cssGradient(gradient) {
+  if (!gradient?.stops?.length) return null;
+  const stops = gradient.stops.map((s) => `${s.color} ${s.offset}%`).join(', ');
+  if (gradient.type === 'radial') return `radial-gradient(circle at center, ${stops})`;
+  return `linear-gradient(${gradient.angle ?? 180}deg, ${stops})`;
+}

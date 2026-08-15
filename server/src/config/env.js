@@ -2,9 +2,15 @@ import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-dotenv.config();
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Load the server's own .env first, then the repo-root one. Docker passes the
+// root file in as env_file, but `npm run dev --prefix server` runs with the
+// server directory as its cwd, where dotenv would otherwise find nothing — and
+// a silently keyless server falls back to mock AI and placeholder photos.
+dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 export const config = {
   port: Number(process.env.PORT) || 5010,

@@ -60,6 +60,7 @@ export const BLEND_MODES = [
 export const TEXT_CASES = ['none', 'uppercase', 'lowercase', 'capitalize'];
 export const STROKE_STYLES = ['solid', 'dashed', 'dotted'];
 export const IMAGE_FITS = ['cover', 'contain', 'fill'];
+export const GRADIENT_TYPES = ['linear', 'radial'];
 
 export const DEFAULT_SHADOW = { x: 0, y: 10, blur: 24, color: '#00000059' };
 
@@ -92,8 +93,9 @@ const DEFAULT_PROPERTIES = {
     focalX: 50, focalY: 50, zoom: 1,
   },
   icon: { name: 'Star', library: 'lucide', size: 48, color: '#FFFFFF', strokeWidth: 2 },
-  rectangle: { fill: '#D9A441', fillOpacity: 1, borderRadius: 0, borderColor: '', borderWidth: 0, strokeStyle: 'solid' },
-  circle: { fill: '#D9A441', fillOpacity: 1, borderColor: '', borderWidth: 0, strokeStyle: 'solid' },
+  // `gradient` (null by default) overrides `fill` when set — see sanitizeGradient.
+  rectangle: { fill: '#D9A441', fillOpacity: 1, borderRadius: 0, borderColor: '', borderWidth: 0, strokeStyle: 'solid', gradient: null },
+  circle: { fill: '#D9A441', fillOpacity: 1, borderColor: '', borderWidth: 0, strokeStyle: 'solid', gradient: null },
   // `sides` covers triangles through dodecagons; `points`/`depth` shape a star.
   polygon: { fill: '#D9A441', fillOpacity: 1, sides: 3, borderColor: '', borderWidth: 0, strokeStyle: 'solid' },
   star: { fill: '#D9A441', fillOpacity: 1, points: 5, depth: 0.45, borderColor: '', borderWidth: 0, strokeStyle: 'solid' },
@@ -126,6 +128,31 @@ export function sanitizeShadow(shadow) {
     y: clamp(num(shadow.y, DEFAULT_SHADOW.y), -200, 200),
     blur: clamp(num(shadow.blur, DEFAULT_SHADOW.blur), 0, 200),
     color: typeof shadow.color === 'string' && shadow.color ? shadow.color : DEFAULT_SHADOW.color,
+  };
+}
+
+/**
+ * Gradients are how a flat colour field gets depth and how type stays legible
+ * over photography without a heavy slab of black. Stops carry their own alpha
+ * (#RRGGBBAA), so one value survives the document, CSS and the SVG export.
+ * Returns null for anything that would not paint, and `fill` is used instead.
+ */
+export function sanitizeGradient(gradient) {
+  if (!gradient || typeof gradient !== 'object') return null;
+  const stops = (Array.isArray(gradient.stops) ? gradient.stops : [])
+    .filter((s) => s && typeof s.color === 'string' && /^#?([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(s.color.trim()))
+    .map((s) => ({
+      color: s.color.trim().startsWith('#') ? s.color.trim() : `#${s.color.trim()}`,
+      offset: clamp(num(s.offset, 0), 0, 100),
+    }))
+    .sort((a, b) => a.offset - b.offset)
+    .slice(0, 8);
+  if (stops.length < 2) return null;
+  return {
+    type: oneOf(gradient.type, GRADIENT_TYPES, 'linear'),
+    // CSS convention: 0deg points up, angles increase clockwise.
+    angle: clamp(num(gradient.angle, 180), 0, 360),
+    stops,
   };
 }
 
@@ -192,6 +219,7 @@ export function sanitizeProperties(type, props = {}) {
     for (const key of UNSIGNED_ADJUST_KEYS) out[key] = clamp(num(out[key], 0), 0, 100);
   }
   if (out.fillOpacity !== undefined) out.fillOpacity = clamp(num(out.fillOpacity, 1), 0, 1);
+  if (out.gradient !== undefined) out.gradient = sanitizeGradient(out.gradient);
   if (type === 'polygon') out.sides = Math.round(clamp(num(out.sides, 3), 3, 24));
   if (type === 'star') {
     out.points = Math.round(clamp(num(out.points, 5), 3, 24));

@@ -1,18 +1,36 @@
 import { getAIProvider } from './ai/index.js';
 import { resolveImageUrl } from './images/index.js';
 import { validateOperation, applyOperations } from '../design/operations.js';
+import { buildDesign, buildVariations } from './designService.js';
 
 /**
- * Orchestrates an AI edit request:
- *  1. Ask the provider for operations.
- *  2. Resolve any image `query` fields into real photo URLs.
- *  3. Validate every operation (AI output is untrusted).
- *  4. Return validated operations + a preview document.
+ * The AI entry point, which routes a request down one of two very different
+ * paths:
  *
- * The client applies the returned operations through the SAME operation system
- * used for manual edits, creating a single undoable history entry.
+ *  - "design me something"  → the generation pipeline (art direction →
+ *    photography → composition → critique). The model never places elements.
+ *  - "change this thing"    → the operation path, where the model edits the
+ *    existing document directly.
+ *
+ * Both return validated operations that the client applies through the same
+ * operation system used for manual edits, so anything Apollo makes is one
+ * undoable step and stays editable by hand.
  */
 export async function runAIEdit({ message, document, selectedElementId }) {
+  if (wantsNewDesign(message, document)) {
+    const result = await buildDesign({ message, document });
+    const operations = result.operations.filter((op) => validateOperation(op).ok);
+    const { document: preview, skipped } = applyOperations(document, operations);
+    return {
+      operations,
+      message: result.message,
+      preview,
+      skipped,
+      // Surfaced so the editor can show what Apollo decided, and why.
+      direction: summary(result),
+    };
+  }
+
   const provider = getAIProvider();
   const { operations: raw, message: reply } = await provider.generateOperations({
     message,
@@ -23,14 +41,49 @@ export async function runAIEdit({ message, document, selectedElementId }) {
   const operations = [];
   for (const op of raw) {
     const resolved = await resolveImageQueries(op);
-    const { ok } = validateOperation(resolved);
-    if (ok) operations.push(resolved);
+    if (validateOperation(resolved).ok) operations.push(resolved);
   }
 
-  // Compute a preview document so the server can validate the end state.
   const { document: preview, skipped } = applyOperations(document, operations);
-
   return { operations, message: reply, preview, skipped };
+}
+
+/** Three genuinely different directions for the same brief. */
+export async function runVariations({ message, document }) {
+  const directions = await buildVariations({ message, document });
+  return {
+    directions: directions.map((direction) => ({
+      ...direction,
+      operations: direction.operations.filter((op) => validateOperation(op).ok),
+    })),
+  };
+}
+
+/**
+ * Generation is the right path when there is nothing to edit, or when the ask
+ * is plainly for a new design rather than a change to the current one.
+ */
+function wantsNewDesign(message = '', document) {
+  if (!(document?.elements || []).length) return true;
+  const text = message.toLowerCase();
+  if (/\b(redesign|start over|start again|from scratch|regenerate|try again|another design|different design|new design|new version)\b/.test(text)) return true;
+
+  const creates = /\b(create|design|make|generate|build)\b/.test(text);
+  // "make it bigger" is an edit; "make an instagram post" is a design.
+  const edits = /\b(it|this|that|the (headline|title|button|text|image|photo|background|colour|color)|bigger|smaller|move|change|replace|delete|remove|swap|instead)\b/.test(text);
+  return creates && !edits;
+}
+
+function summary(result) {
+  return {
+    style: result.brief.styleRef.label,
+    layout: result.brief.layout,
+    mood: result.brief.mood,
+    palette: result.brief.palette,
+    score: result.review.score,
+    fixed: result.review.fixed.map((i) => i.message),
+    outstanding: result.review.outstanding.map((i) => i.message),
+  };
 }
 
 async function resolveImageQueries(op) {
@@ -45,7 +98,6 @@ async function resolveImageQueries(op) {
     delete el.properties.query;
     return { ...op, element: el };
   }
-  // UPDATE with an image query (e.g. "replace the hero image").
   if ((op.type === 'UPDATE_ELEMENT' || op.type === 'SET_CONTENT') && op.changes?.query) {
     const changes = { ...op.changes };
     changes.src = await resolveImageUrl(changes.query);

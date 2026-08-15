@@ -1,16 +1,23 @@
 import { AIProvider } from './AIProvider.js';
 import { OPERATION_TYPES } from '../../design/operations.js';
 import { ELEMENT_TYPES, ALLOWED_ICONS, BLEND_MODES, STROKE_STYLES, SIGNED_ADJUST_KEYS, UNSIGNED_ADJUST_KEYS } from '../../design/schema.js';
-import { INDUSTRIES, detectIndustry } from '../../design/industries.js';
+import { FONT_PAIRINGS, LAYOUTS, STYLES } from '../../design/artDirection.js';
 
 /**
- * DeepSeek-backed provider. Uses the chat-completions API in JSON mode and asks
- * the model to return a strict { operations, message } payload. We never let the
- * model emit raw HTML/SVG — only Apollo operations, which are re-validated by the
- * operation system before anything touches a document. The system prompt covers
- * the full current schema (shapes, blend modes, shadows, image adjustments, text
- * styling, grouping) so DeepSeek can edit layout, shape, and effects — not just
- * colour and text.
+ * DeepSeek-backed provider, used for two very different jobs.
+ *
+ * 1. `planDesign` — the creative-director pass. It returns a *design brief*:
+ *    style, palette, type pairing, layout, copy and photographic direction.
+ *    No coordinates. Deciding where pixels go is the composer's job, and
+ *    keeping the model out of geometry is what stops designs coming back
+ *    misaligned, overflowing or randomly placed.
+ *
+ * 2. `generateOperations` — the editing pass, used once a design exists. Here
+ *    the model does emit operations, because the user is asking for a specific
+ *    change to a specific layer.
+ *
+ * The model never returns HTML, SVG or CSS, and everything it does return is
+ * re-validated before it touches a document.
  */
 export class DeepSeekProvider extends AIProvider {
   constructor({ apiKey, baseUrl, model }) {
@@ -20,24 +27,20 @@ export class DeepSeekProvider extends AIProvider {
     this.model = model;
   }
 
-  async generateOperations({ message, document, selectedElementId }) {
-    const body = {
-      model: this.model,
-      messages: [
-        { role: 'system', content: buildSystemPrompt() },
-        { role: 'user', content: buildUserPrompt({ message, document, selectedElementId }) },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.4,
-    };
-
+  async chat({ system, user, temperature = 0.6, maxTokens = 2400 }) {
     const res = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
+      body: JSON.stringify({
+        model: this.model,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        response_format: { type: 'json_object' },
+        temperature,
+        max_tokens: maxTokens,
+      }),
     });
 
     if (!res.ok) {
@@ -47,13 +50,37 @@ export class DeepSeekProvider extends AIProvider {
 
     const data = await res.json();
     const content = data?.choices?.[0]?.message?.content || '{}';
-    let parsed;
     try {
-      parsed = JSON.parse(content);
+      return JSON.parse(content);
     } catch {
       throw new Error('DeepSeek returned non-JSON content');
     }
+  }
 
+  /**
+   * Turn a one-line request into a full art-direction brief.
+   *
+   * `critique` is fed back on a second attempt, which is how a weak first pass
+   * gets genuinely reconsidered rather than nudged.
+   */
+  async planDesign({ message, canvas, variation, critique, previous }) {
+    const parsed = await this.chat({
+      system: buildDirectorPrompt(),
+      user: buildBriefPrompt({ message, canvas, variation, critique, previous }),
+      // Art direction benefits from real temperature; the schema keeps it safe.
+      temperature: critique ? 0.85 : 1.0,
+      maxTokens: 1800,
+    });
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  }
+
+  async generateOperations({ message, document, selectedElementId }) {
+    const parsed = await this.chat({
+      system: buildEditorPrompt(),
+      user: buildEditPrompt({ message, document, selectedElementId }),
+      temperature: 0.3,
+      maxTokens: 3000,
+    });
     return {
       operations: Array.isArray(parsed.operations) ? parsed.operations : [],
       message: typeof parsed.message === 'string' ? parsed.message : 'Done.',
@@ -61,89 +88,197 @@ export class DeepSeekProvider extends AIProvider {
   }
 }
 
-function buildSystemPrompt() {
-  const industryList = INDUSTRIES.map((i) => `${i.label} (accent ${i.accent}, ${i.dark ? 'dark' : 'light'} background)`).join('; ');
+/* ---------------------------- creative director --------------------------- */
 
-  return `You are Apollo, an AI design assistant. You NEVER output HTML, SVG, CSS, or code.
-You modify a design ONLY by returning JSON operations. Layout, shapes, colours, effects, text
-styling and grouping are ALL under your control through these operations — never say you can't
-do something the schema below supports.
+function buildDirectorPrompt() {
+  const styles = STYLES.map((s) => `- ${s.id}: ${s.label} — ${s.mood.join(', ')}`).join('\n');
+  const layouts = LAYOUTS.map((l) => `- ${l.id}: ${l.description}`).join('\n');
+  const pairings = Object.values(FONT_PAIRINGS)
+    .map((p) => `- ${p.id}: ${p.display} headlines with ${p.body} body`)
+    .join('\n');
 
-Return a JSON object: { "operations": [...], "message": "short human summary" }.
+  return `You are the art director at a design studio whose work wins awards. You are briefing a
+compositor who will build the artwork exactly to your specification. You decide the *creative
+direction*; the compositor handles grid, alignment, sizing and spacing — so never give coordinates,
+pixel sizes or font sizes.
 
-Allowed operation types: ${OPERATION_TYPES.join(', ')}.
+Return ONLY a JSON object with this shape:
+
+{
+  "designType": "instagram post" | "poster" | "banner" | ...,
+  "audience": "who this speaks to, one short phrase",
+  "mood": ["three", "adjectives", "max"],
+  "style": "<one style id>",
+  "layout": "<one layout id>",
+  "fontPairing": "<one pairing id>",
+  "focal": "image" | "type",
+  "palette": {
+    "background": "#hex", "surface": "#hex", "primary": "#hex",
+    "accent": "#hex", "muted": "#hex"
+  },
+  "copy": {
+    "eyebrow": "SHORT LABEL ABOVE THE HEADLINE (2-4 words, may be empty)",
+    "headline": "the line that carries the design",
+    "subhead": "one supporting sentence, may be empty",
+    "cta": "2-3 word action, may be empty",
+    "details": ["short factual lines: date, place, price — 0 to 3 of them"],
+    "meta": "brand or url line, may be empty"
+  },
+  "images": [
+    {
+      "role": "hero",
+      "query": "a described photograph, not a subject",
+      "subject": "the literal subject, 2-4 words",
+      "orientation": "landscape" | "portrait" | "square" | "any",
+      "negativeSpace": "left" | "right" | "top" | "bottom" | "center" | "any"
+    }
+  ],
+  "rationale": "one sentence on why this direction suits the brief"
+}
+
+STYLES — pick the one that genuinely fits the subject:
+${styles}
+
+LAYOUTS — pick for the message, not out of habit. Do not default to the same one:
+${layouts}
+
+TYPE PAIRINGS:
+${pairings}
+
+How to art-direct well:
+
+COLOUR. Choose a palette with intent, from the product and the emotion — not grey on white. Dark,
+saturated or deeply tinted grounds usually look more expensive than pale ones. The accent must be a
+real colour that can carry a button and a rule, and must be clearly visible on the background.
+Three colours plus neutrals, never more. Colour psychology matters: a fine-dining brand is not
+cyan, a children's party is not charcoal.
+
+COPY. Write like a copywriter, not a placeholder generator. The headline is 2-6 words, specific and
+confident — no "Welcome to", no "Your headline here", no exclamation marks, no filler like "Elevate
+your experience". Prefer a concrete promise or a sharp image. The eyebrow is a category or a date,
+not a sentence. The subhead is one sentence that adds information the headline does not.
+Only include a CTA if the design is genuinely asking for an action.
+
+PHOTOGRAPHY. Write the query as a photographer's brief: subject, angle, lighting, environment,
+mood. "low angle of a boxer wrapping their hands, single hard light, dark gym" — not "gym". Say
+where the frame should be quiet via negativeSpace, because the type will sit there. Match the
+orientation to the layout. For layouts with no images, return an empty array.
+
+LAYOUT. Match structure to message. A short punchy offer wants type-poster or full-bleed-hero. A
+premium brand wants minimal-frame or editorial-asymmetric. A multi-item story wants grid-editorial.
+Do not put everything in the middle of the canvas.
+
+RESTRAINT. Every element must earn its place. A design can be almost empty and still be powerful;
+it cannot be crowded and be good. Never add decoration for its own sake.
+
+Respond with valid JSON only.`;
+}
+
+function buildBriefPrompt({ message, canvas, variation, critique, previous }) {
+  const ratio = canvas ? (canvas.width / canvas.height).toFixed(2) : '1.00';
+  const shape = Number(ratio) > 1.25 ? 'landscape' : Number(ratio) < 0.85 ? 'portrait' : 'square';
+
+  const parts = [
+    `Request: ${message}`,
+    `Canvas: ${canvas?.width}×${canvas?.height}px (${shape}, ratio ${ratio}).`,
+  ];
+
+  if (variation) {
+    parts.push(
+      `This is the "${variation.label}" direction. It must be a genuinely different composition from the other directions — prefer one of these layouts: ${variation.layouts.join(', ')}. ${
+        variation.id === 'bold'
+          ? 'Go large, graphic and high-contrast.'
+          : variation.id === 'minimal'
+            ? 'Strip it back: more space, less type, quieter palette.'
+            : 'Treat it as an editorial spread: structure, hairlines, small confident type.'
+      }`
+    );
+  }
+
+  if (critique?.length) {
+    parts.push(
+      `Your previous direction was built and reviewed. It failed on: ${critique.join('; ')}.`,
+      `Previous direction was style "${previous?.style}" with layout "${previous?.layout}" and headline "${previous?.copy?.headline}".`,
+      'Fix this properly — change the layout, palette or copy length as needed. Do not repeat the same choices.'
+    );
+  }
+
+  return parts.join('\n\n');
+}
+
+/* -------------------------------- editor --------------------------------- */
+
+function buildEditorPrompt() {
+  return `You are Apollo, an AI design assistant editing an existing design. You NEVER output HTML,
+SVG, CSS or code — only JSON operations, which Apollo re-validates before applying.
+
+Return: { "operations": [...], "message": "short human summary" }.
+
+Allowed operations: ${OPERATION_TYPES.join(', ')}.
 Allowed element types: ${ELEMENT_TYPES.join(', ')}.
-Allowed icon names (use ONLY these — the "lucide" library; do not invent names): ${ALLOWED_ICONS.lucide.join(', ')}.
+Allowed icon names (use ONLY these, from "lucide"): ${ALLOWED_ICONS.lucide.join(', ')}.
 Blend modes: ${BLEND_MODES.join(', ')}. Stroke styles: ${STROKE_STYLES.join(', ')}.
 
-Element shape — every element (regardless of type) may carry these on top of its type-specific
-"properties": x, y, width, height, rotation, opacity (0-1), zIndex, blendMode, layerBlur (0-40px
-layer-level blur), shadow ({x,y,blur,color} or null to remove it), flipH, flipV, lockAspect,
-locked, hidden, name (a human label for the Layers panel).
+Every element may carry: x, y, width, height, rotation, opacity (0-1), zIndex, blendMode,
+layerBlur (0-40), shadow ({x,y,blur,color} or null), flipH, flipV, lockAspect, locked, hidden, name.
 
 Type-specific "properties":
-- text / button: text, fontFamily, fontSize, fontWeight (100-900), color (#hex), align
-  (left|center|right), lineHeight, letterSpacing, italic (bool), underline (bool), textCase
-  (none|uppercase|lowercase|capitalize). button also has: background (#hex), borderRadius,
-  borderColor, borderWidth, strokeStyle.
-- rectangle / circle / polygon / star: fill (#hex), fillOpacity (0-1), borderColor, borderWidth,
-  strokeStyle. rectangle also has borderRadius. polygon has "sides" (3-24). star has "points"
-  (3-24) and "depth" (0.05-0.95, how sharp the points are).
-- line: stroke (#hex), strokeWidth, strokeStyle.
-- icon: name (from the allowed list above), library (always "lucide" for anything you create),
-  size, color, strokeWidth.
-- image: DO NOT invent a URL. Set "query":"search terms" on the element/changes and Apollo
-  resolves a real photo. Other properties: fit (cover|contain|fill), borderRadius, focalX/focalY
-  (0-100, crop focal point), zoom (1-4). Baseline tone: brightness/contrast/saturation (0-200,
-  100 = neutral), hue (-180..180), grayscale (0-100), blur (0-20px). Extended adjustments, all
-  neutral at 0: ${SIGNED_ADJUST_KEYS.join(', ')} (all -100..100, signed), and
-  ${UNSIGNED_ADJUST_KEYS.join(', ')} (all 0..100).
-- group: has no own properties; groups elements via CREATE/GROUP_ELEMENTS.
+- text / button: text, fontFamily, fontSize, fontWeight (100-900), color, align (left|center|right),
+  lineHeight, letterSpacing, italic, underline, textCase (none|uppercase|lowercase|capitalize).
+  button also: background, borderRadius, borderColor, borderWidth, strokeStyle.
+- rectangle / circle / polygon / star: fill, fillOpacity (0-1), borderColor, borderWidth, strokeStyle.
+  rectangle also: borderRadius and "gradient" —
+  { "type":"linear"|"radial", "angle":0-360 (0 = up, 90 = right), "stops":[{"color":"#RRGGBBAA","offset":0-100}] }.
+  Use a gradient for scrims over photography and for depth in flat colour fields; a gradient
+  overrides fill. polygon has "sides" (3-24). star has "points" (3-24) and "depth" (0.05-0.95).
+- line: stroke, strokeWidth, strokeStyle.
+- icon: name (from the list), library "lucide", size, color, strokeWidth.
+- image: never invent a URL — set "query":"a described photograph" and Apollo sources it. Other
+  properties: fit (cover|contain|fill), borderRadius, focalX/focalY (0-100), zoom (1-4),
+  brightness/contrast/saturation (0-200, 100 = neutral), hue (-180..180), grayscale (0-100),
+  blur (0-20). Signed adjustments (-100..100): ${SIGNED_ADJUST_KEYS.join(', ')}.
+  Unsigned (0..100): ${UNSIGNED_ADJUST_KEYS.join(', ')}.
 
 Operation shapes:
-- CREATE_ELEMENT: { "type":"CREATE_ELEMENT", "element": { "type":"<element type>", "x":num,
-  "y":num, "width":num, "height":num, "zIndex":num, "properties": {...}, plus any element-level
-  fields above } }
+- CREATE_ELEMENT: { "type":"CREATE_ELEMENT", "element": { "type":"...", "x":n, "y":n, "width":n,
+  "height":n, "zIndex":n, "properties":{...} } }
 - UPDATE_ELEMENT / SET_STYLE / SET_CONTENT: { "type":"UPDATE_ELEMENT", "targetId":"<id>",
-  "changes": { ...any element-level or properties field, flattened, e.g. fontSize, color,
-  background, blendMode, shadow, x, y } }
-- MOVE_ELEMENT: { "type":"MOVE_ELEMENT", "targetId":"<id>", "changes": { "x":num, "y":num } }
-- RESIZE_ELEMENT: { "type":"RESIZE_ELEMENT", "targetId":"<id>", "changes": { "width":num,
-  "height":num } }
+  "changes": { ...flattened element or property fields } }
+- MOVE_ELEMENT / RESIZE_ELEMENT: { "type":"...", "targetId":"<id>", "changes": {...} }
 - DELETE_ELEMENT / DUPLICATE_ELEMENT: { "type":"...", "targetId":"<id>" }
 - REORDER_ELEMENT: { "type":"REORDER_ELEMENT", "targetId":"<id>", "direction":"front|back|forward|backward" }
 - GROUP_ELEMENTS: { "type":"GROUP_ELEMENTS", "targetIds":["<id>","<id>"] }
-- UNGROUP_ELEMENTS: { "type":"UNGROUP_ELEMENTS", "targetId":"<group id>" }
-- ADD_ICON: { "type":"ADD_ICON", "name":"Dumbbell", "x":num, "y":num, "size":num, "color":"#fff" }
-- SET_CANVAS: { "type":"SET_CANVAS", "changes": { "background":"#hex", "width":num, "height":num } }
-
-Common industries and a sensible visual direction for each, when the brand type is clear from the
-prompt (use as a starting point, not a rule — an explicit instruction always wins):
-${industryList}.
+- UNGROUP_ELEMENTS / SET_CANVAS: { "type":"UNGROUP_ELEMENTS", "targetId":"<id>" } /
+  { "type":"SET_CANVAS", "changes": { "background":"#hex", "width":n, "height":n } }
 
 Rules:
-- Make the SMALLEST change necessary. To edit, use UPDATE/MOVE/RESIZE/REORDER on existing
-  targetId; do NOT recreate the whole design for a small request.
-- Coordinates are in canvas pixels. Keep elements inside the canvas bounds.
-- When asked to restyle, rearrange, reshape or apply an effect, actually change the relevant
-  properties above (shape sides/points, blendMode, shadow, adjustments, etc.) — do not just
-  change colour when more is asked for.
+- Make the SMALLEST change that satisfies the request. Edit existing layers by targetId; never
+  rebuild the design for a small ask.
+- Keep the existing design's grid: match the x positions, margins and spacing already in use, and
+  keep new elements aligned to the same axes. Read the current elements before choosing numbers.
+- Preserve the design's palette and type pairing unless asked to change them. Do not introduce a
+  new font or a new hue casually.
+- Keep text inside its frame: roughly, a line holds width / (fontSize × 0.55) characters. If you
+  enlarge type, widen or re-wrap its box too.
+- Maintain contrast: light text on dark grounds, dark on light. Never place mid-grey on mid-grey.
+- When asked to restyle, rearrange or apply an effect, actually change the relevant properties
+  (shape, blendMode, shadow, gradient, adjustments) — do not just change a colour.
 - Respond with valid JSON only.`;
 }
 
-function buildUserPrompt({ message, document, selectedElementId }) {
-  const industry = detectIndustry(message);
+function buildEditPrompt({ message, document, selectedElementId }) {
   const summary = {
     canvas: document?.canvas,
     elements: (document?.elements || []).map((e) => ({
       id: e.id,
       type: e.type,
-      x: e.x, y: e.y, width: e.width, height: e.height, rotation: e.rotation, zIndex: e.zIndex,
+      name: e.name,
+      x: e.x, y: e.y, width: e.width, height: e.height,
+      rotation: e.rotation, zIndex: e.zIndex, opacity: e.opacity,
       blendMode: e.blendMode, shadow: e.shadow, parentId: e.parentId,
       properties: e.properties,
     })),
     selectedElementId: selectedElementId || null,
   };
-  const industryHint = industry ? `\n\nDetected brand type: ${industry.label}.` : '';
-  return `Current design document:\n${JSON.stringify(summary)}\n\nUser instruction: ${message}${industryHint}`;
+  return `Current design document:\n${JSON.stringify(summary)}\n\nUser instruction: ${message}`;
 }

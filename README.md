@@ -14,6 +14,42 @@ Prompt → AI → Operations → (validate) → Apollo Document → React Render
 DeepSeek is replaceable. The document format, operation system, renderer, and
 component registry are the core of the product.
 
+## How a design gets made
+
+Generation is not one prompt to one model. It is a pipeline where each stage
+does the thing it is actually good at:
+
+```
+prompt
+  → art direction   DeepSeek returns a design brief: style, palette, type
+                    pairing, layout, copy, photographic direction. No coordinates.
+  → photography     Pexels + Unsplash searched together; candidates are downloaded
+                    at thumbnail size and analysed for tone, detail and flat areas.
+  → composition     A grid, a modular type scale and one of ten layout archetypes
+                    turn the brief into precisely placed, aligned elements.
+  → critique        Contrast, hierarchy, margins, collisions, density and colour
+                    discipline are measured, and what can be repaired is repaired.
+  → operations      Ordinary CREATE_ELEMENT calls — every layer stays editable.
+```
+
+**The model is never asked for geometry.** Language models place elements badly:
+a headline that overflows its box, margins that differ on each edge, a 7px
+misalignment. Those small errors are what make generated work look cheap. So
+DeepSeek art-directs and `server/src/design/layout.js` composes.
+
+**Photographs are chosen, not taken off the top of the list.** The curator
+(`server/src/services/images/curator.js`) scores candidates on relevance,
+orientation, resolution, tonal fit with the palette, and — from a 48px thumbnail
+analysed with Sharp — where the frame is quiet enough to carry type. That gives
+the composition a real focal point to crop to and tells it which side has usable
+negative space, so the layout responds to the picture instead of dropping it in
+a box.
+
+**Apollo reviews its own work.** `server/src/design/critique.js` measures the
+result and repairs what it can (weak contrast, clipped type, broken margins,
+off-axis edges). If the design still scores badly, the brief goes back to
+DeepSeek with the specific failures attached and is reconsidered.
+
 ---
 
 ## Stack
@@ -33,20 +69,26 @@ component registry are the core of the product.
 To make the MVP demonstrable out of the box, three graceful fallbacks exist:
 
 - **No MongoDB?** The server uses an in-memory store (data won't persist across restarts).
-- **No `DEEPSEEK_API_KEY`?** A deterministic `MockProvider` plans real Apollo
-  operations from your prompt, so the full pipeline works. Add a key to switch
-  to real DeepSeek — nothing else changes.
+- **No `DEEPSEEK_API_KEY`?** A deterministic `MockProvider` art-directs from your
+  prompt using the same brief format DeepSeek returns, so the composer, curator
+  and critic all still run — a keyless install gets real layouts and palettes,
+  not a placeholder. Add a key to switch to real DeepSeek; nothing else changes.
 - **No image API key?** A keyless `PlaceholderProvider` returns stock-style photos.
 
-Add real keys to a root `.env` (Docker) or `server/.env` (local dev) — copy
-`.env.example` — to activate the real providers. With DeepSeek connected it can
-edit **everything** in the schema (shape, colour, blend modes, shadows, crop,
-image adjustments, grouping — not just text/colour), and it's given a short
-list of common industries (gym, restaurant, real estate, SaaS, healthcare,
-finance, etc. — see `server/src/design/industries.js`) so a vague prompt like
-"banner for my gym" gets a sensible starting palette and imagery. Every
-provider result — real or mock — goes through the same operation validator, so
-a bad or malformed AI response can't corrupt the document.
+Add real keys to a root `.env` or `server/.env` — copy `.env.example`. Both are
+loaded, so it does not matter which you use.
+
+Both stock libraries are used **together** when both keys are present: they
+index very different photography, and giving the curator two pools to choose
+from is the cheapest available upgrade to what lands on the canvas.
+
+With DeepSeek connected, editing an existing design can reach **everything** in
+the schema (shape, colour, gradients, blend modes, shadows, crop, image
+adjustments, grouping — not just text/colour). Vague prompts are handled by the
+art-direction stage rather than by keyword matching, though a short industry
+list (`server/src/design/industries.js`) still backs the keyless planner. Every
+provider result — real or mock — goes through the same operation validator, so a
+bad or malformed AI response can't corrupt the document.
 
 Stock photo searches (manual or AI-triggered) are cached in Mongo for two
 weeks (in-memory if Mongo isn't running), so repeat searches are instant and
@@ -172,10 +214,17 @@ apollo-design/
 ├── docker-compose.dev.yml  # hot-reload dev stack (vite + nodemon, bind mounts)
 └── server/                 # Express API
     └── src/
-        ├── design/         # canonical schema.js + operations.js + industries.js
+        ├── design/         # canonical schema.js + operations.js, plus the
+        │                   # design engine: artDirection.js (styles, palettes,
+        │                   # pairings, formats), layout.js (grid + 10 layout
+        │                   # archetypes), typography.js (metrics, fitting,
+        │                   # scale), critique.js (review + repair), color.js
+        │                   # (contrast, scrims, harmony), industries.js
         ├── services/
         │   ├── ai/         # AIProvider → DeepSeekProvider | MockProvider
-        │   ├── images/     # ImageProvider → Pexels | Unsplash | Placeholder
+        │   ├── images/     # Pexels + Unsplash together, + curator.js (scores
+        │   │               # candidates on composition, tone, negative space)
+        │   ├── designService.js  # plan → source → compose → critique → revise
         │   ├── aiService.js, exportService.js, storageService.js
         ├── models/         # Project, Asset, ImageSearchCache (Mongoose) — no user/auth
         ├── store/          # repository w/ in-memory fallback
@@ -190,7 +239,12 @@ GET    /api/projects            # list + a capped `preview` document for live ca
 POST   /api/projects            # { name, canvas } or { name, document } (templates)
 GET    /api/projects/:id        PUT  /api/projects/:id     DELETE /api/projects/:id
 POST   /api/ai/chat             # { message, document, selectedElementId } → { operations, message }
-GET    /api/images/search?q=
+                                # routes itself: a design request takes the full
+                                # pipeline, an edit goes straight to operations
+POST   /api/ai/generate         # always takes the art-direction pipeline
+POST   /api/ai/variations       # → three complete directions (bold / minimal / editorial),
+                                # each a different composition, not a recolour
+GET    /api/images/search?q=    # searches every configured library, interleaved
 GET    /api/assets              POST /api/assets/upload    # multipart (file, projectId)
 POST   /api/export              # { projectId, document, format }
 POST   /api/export/flatten      # { document } → { dataUrl }  — layer merge/flatten
@@ -251,12 +305,26 @@ POST   /api/export/flatten      # { document } → { dataUrl }  — layer merge/
   you to upload the image first rather than failing silently.
 - **Merge/flatten and the pixel tools don't move a group's frame** — see the
   groups note above; this is the same limitation, not a new one.
+- **Type fitting is measured, not rendered.** The server has no font rasteriser,
+  so `design/typography.js` estimates line widths from per-face advance-width
+  metrics (biased ~2% wide, since under-estimating clips text and
+  over-estimating only costs a fraction of a point). It is accurate enough to
+  keep headlines inside their frames, but it is an estimate, not a shaped run.
+- **Negative-space detection is coarse.** The curator analyses a 48px thumbnail
+  as a 3×3 field of luminance and local variance. That reliably finds which
+  third of a frame is quiet and roughly where the subject sits; it is not
+  saliency detection and won't understand a subject it can't see at that size.
+- **Generation takes a few seconds** (roughly 4–7s): one DeepSeek call, two
+  stock searches, and a handful of thumbnail downloads. A design that fails its
+  own critique badly costs a second DeepSeek call. Searches are cached, analysis
+  is cached in-process, and the three-directions view runs its three designs in
+  parallel.
+- **Gradients** are supported on rectangles and circles, render identically on
+  canvas and in the SVG export, and survive the document round-trip — but there
+  is no gradient *editor* in the Properties panel. You can see the one Apollo
+  used and clear it back to a flat fill; authoring a new one by hand is not
+  wired up.
 - The editor bundle is larger than ideal because
-  `ElementRenderer` statically imports every element type — including the icon
-  libraries — so `DesignPreview` (used on Home for recent-project thumbnails)
-  pulls them into the eagerly-loaded bundle despite the editor route itself
-  being lazy-loaded. Splitting the icon libraries out behind their own lazy
-  boundary is a reasonable follow-up.
   `ElementRenderer` statically imports every element type — including the icon
   libraries — so `DesignPreview` (used on Home for recent-project thumbnails)
   pulls them into the eagerly-loaded bundle despite the editor route itself
