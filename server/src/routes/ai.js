@@ -30,13 +30,28 @@ aiRouter.post('/chat', async (req, res, next) => {
 /** POST /api/ai/generate — always takes the full art-direction pipeline. */
 aiRouter.post('/generate', async (req, res, next) => {
   try {
-    const { message, document } = req.body || {};
+    const { message, document, referenceImages } = req.body || {};
     if (!validateDocument(document)) return res.status(400).json({ error: 'valid document is required' });
 
-    const result = await buildDesign({ message: message || 'Create a design', document });
+    const cleanReferenceImages = Array.isArray(referenceImages)
+      ? referenceImages.filter((s) => typeof s === 'string').slice(0, 3)
+      : [];
+    const result = await buildDesign({
+      message: message || 'Create a design',
+      document,
+      referenceImages: cleanReferenceImages,
+    });
     const operations = result.operations.filter((op) => validateOperation(op).ok);
     const { document: preview, skipped } = applyOperations(document, operations);
-    res.json({ operations, message: result.message, preview, skipped });
+
+    // The image generator was configured and attempted but had to fall back
+    // to stock photography for at least one image — worth telling the user,
+    // since it silently means no bespoke artwork (or logo) was produced.
+    const imageNotice = result.imageFallbacks?.length
+      ? "Couldn't generate bespoke artwork right now (Hugging Face is rate-limited or out of credits) — used stock photography instead."
+      : null;
+
+    res.json({ operations, message: result.message, preview, skipped, imageNotice });
   } catch (err) {
     next(err);
   }

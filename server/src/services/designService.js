@@ -62,7 +62,7 @@ export function resolveCanvas(message, document) {
  * Build one complete design. Returns the operations, the brief that produced
  * them and the critique — the caller decides what to do with each.
  */
-export async function buildDesign({ message, document, variation = null, provider = getAIProvider() }) {
+export async function buildDesign({ message, document, variation = null, provider = getAIProvider(), referenceImages = [] }) {
   const canvas = resolveCanvas(message, document);
   let best = null;
   let plan = null;
@@ -79,14 +79,14 @@ export async function buildDesign({ message, document, variation = null, provide
     plan = raw;
 
     const brief = normalizeBrief(raw, { canvas, prompt: message });
-    const images = brief.images.length
-      ? await curateImages(brief.images, { slots: slotsFor(brief), palette: brief.palette })
-      : [];
+    const { images, fallbacks } = brief.images.length
+      ? await curateImages(brief.images, { slots: slotsFor(brief), palette: brief.palette, referenceImages })
+      : { images: [], fallbacks: [] };
 
     const composed = compose(adaptToImagery(brief, images), images, { seed: `${message}:${variation?.id || ''}:${attempt}` });
     const review = critique(composed.elements, { canvas: brief.canvas, brief, grid: composed.grid });
 
-    const candidate = { brief, images, composed, review };
+    const candidate = { brief, images, imageFallbacks: fallbacks, composed, review };
     if (!best || review.score > best.review.score) best = candidate;
 
     // A second pass is only worth the latency when the first one genuinely
@@ -95,14 +95,14 @@ export async function buildDesign({ message, document, variation = null, provide
     notes = review.outstanding.map((issue) => issue.message);
   }
 
-  const { brief, images, review } = best;
+  const { brief, images, imageFallbacks, review } = best;
   const operations = [
     ...clearOperations(document),
     { type: 'SET_CANVAS', changes: { width: brief.canvas.width, height: brief.canvas.height, background: brief.palette.background } },
     ...review.elements.map((element) => ({ type: 'CREATE_ELEMENT', element })),
   ];
 
-  return { operations, brief, images, review, message: describe(brief, images, review) };
+  return { operations, brief, images, imageFallbacks, review, message: describe(brief, images, review) };
 }
 
 /** Generate the three directions side by side. */

@@ -14,7 +14,7 @@ export function useCreateDesign() {
   const [creating, setCreating] = useState(false);
 
   const create = useCallback(
-    async ({ name, canvas, document, prompt } = {}) => {
+    async ({ name, canvas, document, prompt, referenceImages } = {}) => {
       setCreating(true);
       try {
         const project = await api.createProject({
@@ -22,7 +22,7 @@ export function useCreateDesign() {
           canvas,
           document,
         });
-        navigate(`/editor/${project.id}`, { state: { prompt: prompt || '' } });
+        navigate(`/editor/${project.id}`, { state: { prompt: prompt || '', referenceImages: referenceImages || [] } });
         return project;
       } catch (err) {
         toast.error('Apollo could not create that design', err.message);

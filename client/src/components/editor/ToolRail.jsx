@@ -55,9 +55,13 @@ export const typeOfTool = (id) => toolById(id)?.type || id;
 
 /**
  * The rail is the editor's spine: every major tool hangs off it, in the order
- * work actually happens — point at something, make something, adjust it — and
- * the panels that describe the result (Layers, Properties, Apollo) are pinned
- * to the bottom where they are always one click away, never buried in a tab.
+ * work actually happens — point at something, make something, adjust it.
+ *
+ * Properties sits with the rest of the contextual tool panels (Text, Shapes,
+ * Crop, ...) and opens on the left next to the rail, right where Select's own
+ * tab belongs. Layers and Apollo share the right dock instead, as two states
+ * of one slot: Apollo's own button doubles as the way back to Layers once
+ * it's open, so its label reads "Show layers" rather than closing outright.
  *
  * Two kinds of button live here and they behave differently on purpose:
  * arming tools (Select, Hand) change what a canvas click does, while panel
@@ -66,10 +70,9 @@ export const typeOfTool = (id) => toolById(id)?.type || id;
 export default function ToolRail({
   panel,
   onPanel,
-  dock,
-  onDock,
-  aiOpen,
-  onAI,
+  rightPanel,
+  onShowLayers,
+  onToggleApollo,
   onRetouch,
   onDraw,
   onSampleColour,
@@ -100,6 +103,16 @@ export default function ToolRail({
         <Divider />
 
         <RailButton
+          label="Properties"
+          hint="F8"
+          icon={SlidersHorizontal}
+          active={panel === 'properties'}
+          onClick={() => onPanel('properties')}
+        />
+
+        <Divider />
+
+        <RailButton
           label="Text"
           hint="T"
           icon={Type}
@@ -125,23 +138,24 @@ export default function ToolRail({
         {onSampleColour && <RailButton label="Pick a colour" hint="C" icon={Pipette} onClick={onSampleColour} />}
       </div>
 
-      {/* Pinned dock: what the design is made of, and who else can change it. */}
+      {/* Pinned dock: who else can change the design, and what it's made of.
+          One toggle, two faces — Apollo's button becomes the way back to
+          Layers the moment Apollo is the one showing. */}
       <div className="flex shrink-0 flex-col items-center gap-px border-t border-line py-2">
         <RailButton
-          label="Ask Apollo"
+          label={rightPanel === 'ai' ? 'Show layers' : 'Ask Apollo'}
           hint="⌘J"
-          icon={Spark}
-          active={aiOpen}
-          onClick={onAI}
-          iconClassName={cx(!aiOpen && 'text-accent')}
+          icon={rightPanel === 'ai' ? Layers : Spark}
+          active={rightPanel === 'ai'}
+          onClick={onToggleApollo}
+          iconClassName={cx(rightPanel !== 'ai' && 'text-accent')}
         />
-        <RailButton label="Layers" hint="F7" icon={Layers} active={dock.layers} onClick={() => onDock('layers')} />
         <RailButton
-          label="Properties"
-          hint="F8"
-          icon={SlidersHorizontal}
-          active={dock.properties}
-          onClick={() => onDock('properties')}
+          label="Layers"
+          hint="F7"
+          icon={Layers}
+          active={rightPanel === 'layers'}
+          onClick={onShowLayers}
         />
       </div>
     </nav>

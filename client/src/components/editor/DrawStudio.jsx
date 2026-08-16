@@ -28,6 +28,10 @@ const SHAPE_LABELS = { rectangle: 'Square', circle: 'Circle', triangle: 'Triangl
  * canvas for a fresh layer, or the element's existing picture to draw on top
  * of. Every tool paints straight onto a working canvas; nothing touches the
  * document until Apply, matching the Adjust/Liquify/Retouch tabs.
+ *
+ * Renders inline in the editor's main row (TopBar and the tool rail stay put
+ * around it) rather than as a full-screen takeover, so it reads as a tab —
+ * Home and every other tool button stay one click away while drawing.
  */
 export default function DrawStudio({ elementId, onClose }) {
   const { state, actions } = useEditor();
@@ -190,7 +194,7 @@ export default function DrawStudio({ elementId, onClose }) {
   const cursorSize = tool === 'brush' || tool === 'eraser' || tool === 'pen' ? size : 0;
 
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-void">
+    <div className="flex min-w-0 flex-1 flex-col bg-void">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-surface px-3">
         <h2 className="text-[13px] font-medium text-ink">Draw</h2>
         {blocked && (
@@ -305,26 +309,26 @@ export default function DrawStudio({ elementId, onClose }) {
         </aside>
 
         <div className="checkerboard relative flex min-w-0 flex-1 items-center justify-center overflow-auto p-10">
-          {loading ? (
-            <p className="text-sm text-ink-3">Preparing canvas…</p>
-          ) : (
-            <div className="relative">
-              <canvas ref={canvasRef} className="block max-h-[70vh] max-w-full shadow-art" style={{ cursor: cursorSize ? 'none' : tool === 'fill' ? 'crosshair' : 'crosshair' }} {...handlers} />
-              <canvas ref={previewCanvasRef} className="pointer-events-none absolute inset-0 block max-h-[70vh] max-w-full" />
-              {hover && cursorSize > 0 && (
-                <span
-                  className="pointer-events-none absolute rounded-full border-2 border-accent"
-                  style={{
-                    left: hover.x * displayScale - (cursorSize / 2) * displayScale,
-                    top: hover.y * displayScale - (cursorSize / 2) * displayScale,
-                    width: cursorSize * displayScale,
-                    height: cursorSize * displayScale,
-                    boxShadow: '0 0 0 1px rgba(0,0,0,0.4)',
-                  }}
-                />
-              )}
-            </div>
-          )}
+          {/* The canvases stay mounted throughout — the setup effect needs a
+              real ref to size on the very first run, before there is
+              anything to show, so "loading" is an overlay, not a swap. */}
+          <div className="relative" style={{ visibility: loading ? 'hidden' : 'visible' }}>
+            <canvas ref={canvasRef} className="block max-h-[70vh] max-w-full shadow-art" style={{ cursor: cursorSize ? 'none' : tool === 'fill' ? 'crosshair' : 'crosshair' }} {...handlers} />
+            <canvas ref={previewCanvasRef} className="pointer-events-none absolute inset-0 block max-h-[70vh] max-w-full" />
+            {hover && cursorSize > 0 && (
+              <span
+                className="pointer-events-none absolute rounded-full border-2 border-accent"
+                style={{
+                  left: hover.x * displayScale - (cursorSize / 2) * displayScale,
+                  top: hover.y * displayScale - (cursorSize / 2) * displayScale,
+                  width: cursorSize * displayScale,
+                  height: cursorSize * displayScale,
+                  boxShadow: '0 0 0 1px rgba(0,0,0,0.4)',
+                }}
+              />
+            )}
+          </div>
+          {loading && <p className="absolute text-sm text-ink-3">Preparing canvas…</p>}
         </div>
       </div>
     </div>

@@ -63,10 +63,10 @@ export class DeepSeekProvider extends AIProvider {
    * `critique` is fed back on a second attempt, which is how a weak first pass
    * gets genuinely reconsidered rather than nudged.
    */
-  async planDesign({ message, canvas, variation, critique, previous }) {
+  async planDesign({ message, canvas, variation, critique, previous, referenceNote }) {
     const parsed = await this.chat({
       system: buildDirectorPrompt(),
-      user: buildBriefPrompt({ message, canvas, variation, critique, previous }),
+      user: buildBriefPrompt({ message, canvas, variation, critique, previous, referenceNote }),
       // Art direction benefits from real temperature; the schema keeps it safe.
       temperature: critique ? 0.85 : 1.0,
       maxTokens: 1800,
@@ -126,7 +126,7 @@ Return ONLY a JSON object with this shape:
   },
   "images": [
     {
-      "role": "hero",
+      "role": "hero" | "logo",
       "query": "a described photograph, not a subject",
       "subject": "the literal subject, 2-4 words",
       "orientation": "landscape" | "portrait" | "square" | "any",
@@ -162,7 +162,12 @@ Only include a CTA if the design is genuinely asking for an action.
 PHOTOGRAPHY. Write the query as a photographer's brief: subject, angle, lighting, environment,
 mood. "low angle of a boxer wrapping their hands, single hard light, dark gym" — not "gym". Say
 where the frame should be quiet via negativeSpace, because the type will sit there. Match the
-orientation to the layout. For layouts with no images, return an empty array.
+orientation to the layout. For layouts with no images, return an empty array. Images are generated
+or sourced separately and NEVER contain rendered words, letters or logotype text — headlines and
+labels are always their own live text layers, so never rely on an image to carry a message. Only
+propose role "logo" when the brief genuinely calls for a distinct brand mark (a real business name,
+not a generic offer) — describe it as an icon-like graphic, not a photograph, and keep it to at most
+one per design.
 
 LAYOUT. Match structure to message. A short punchy offer wants type-poster or full-bleed-hero. A
 premium brand wants minimal-frame or editorial-asymmetric. A multi-item story wants grid-editorial.
@@ -174,7 +179,7 @@ it cannot be crowded and be good. Never add decoration for its own sake.
 Respond with valid JSON only.`;
 }
 
-function buildBriefPrompt({ message, canvas, variation, critique, previous }) {
+function buildBriefPrompt({ message, canvas, variation, critique, previous, referenceNote }) {
   const ratio = canvas ? (canvas.width / canvas.height).toFixed(2) : '1.00';
   const shape = Number(ratio) > 1.25 ? 'landscape' : Number(ratio) < 0.85 ? 'portrait' : 'square';
 
@@ -182,6 +187,12 @@ function buildBriefPrompt({ message, canvas, variation, critique, previous }) {
     `Request: ${message}`,
     `Canvas: ${canvas?.width}×${canvas?.height}px (${shape}, ratio ${ratio}).`,
   ];
+
+  if (referenceNote) {
+    parts.push(
+      `The user also attached a reference image. What it shows: ${referenceNote} Let it inform subject, mood and palette choices — the image itself will be generated separately using this same reference.`
+    );
+  }
 
   if (variation) {
     parts.push(

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, ArrowUp, Check, Copy, Ellipsis, LayoutTemplate, Trash2, TriangleAlert } from 'lucide-react';
+import { ArrowRight, ArrowUp, Check, Copy, Ellipsis, ImagePlus, LayoutTemplate, Trash2, TriangleAlert, X } from 'lucide-react';
 import { api } from '../api/client.js';
 import { cx } from '../lib/cx.js';
 import { relativeTime, shorten } from '../lib/format.js';
@@ -214,11 +214,15 @@ export default function Home() {
 
 /* ------------------------------- Composer ------------------------------- */
 
+const MAX_REFERENCES = 3;
+
 function Composer({ onCreate, creating }) {
   const [prompt, setPrompt] = useState('');
   const [format, setFormat] = useState(() => findPreset('banner'));
   const [custom, setCustom] = useState(null);
+  const [references, setReferences] = useState([]); // [{ id, name, dataUrl }]
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const canvas = custom || format;
 
@@ -228,6 +232,23 @@ function Composer({ onCreate, creating }) {
     el.style.height = `${Math.min(el.scrollHeight, 168)}px`;
   };
 
+  const addFiles = async (files) => {
+    const room = MAX_REFERENCES - references.length;
+    if (room <= 0) return;
+    const picked = Array.from(files)
+      .filter((f) => f.type.startsWith('image/'))
+      .slice(0, room);
+    const read = (file) =>
+      new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({ id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: file.name, dataUrl: reader.result });
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    const loaded = await Promise.all(picked.map(read));
+    setReferences((r) => [...r, ...loaded]);
+  };
+
   const submit = () => {
     const text = prompt.trim();
     if (!text || creating) return;
@@ -235,12 +256,37 @@ function Composer({ onCreate, creating }) {
       name: shorten(text, 60),
       canvas: { width: canvas.width, height: canvas.height, background: '#0A0A0B' },
       prompt: text,
+      referenceImages: references.map((r) => r.dataUrl),
     });
   };
 
   return (
     <div className="mx-auto mt-8 w-full max-w-[46rem] text-left">
-      <div className="rounded-xl border border-line bg-surface transition-colors duration-150 focus-within:border-line-strong">
+      <div
+        className="rounded-xl border border-line bg-surface transition-colors duration-150 focus-within:border-line-strong"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
+        }}
+      >
+        {references.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-3 pt-3">
+            {references.map((ref) => (
+              <span key={ref.id} className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-md border border-line">
+                <img src={ref.dataUrl} alt={ref.name} className="h-full w-full object-cover" />
+                <button
+                  onClick={() => setReferences((r) => r.filter((x) => x.id !== ref.id))}
+                  aria-label={`Remove ${ref.name}`}
+                  className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
         <textarea
           ref={inputRef}
           value={prompt}
@@ -268,6 +314,28 @@ function Composer({ onCreate, creating }) {
             }}
             onCustom={(size) => setCustom({ name: 'Custom', ...size })}
           />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={(e) => {
+              if (e.target.files?.length) addFiles(e.target.files);
+              e.target.value = '';
+            }}
+          />
+          <Tooltip label="Attach a reference image" side="top">
+            <IconButton
+              size="lg"
+              variant="secondary"
+              aria-label="Attach a reference image"
+              disabled={references.length >= MAX_REFERENCES}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <ImagePlus size={15} />
+            </IconButton>
+          </Tooltip>
           <div className="flex-1" />
           <Tooltip label="Generate" hint="⏎" side="top">
             <Button variant="primary" onClick={submit} disabled={!prompt.trim() || creating} aria-label="Generate design">

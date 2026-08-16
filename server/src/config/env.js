@@ -34,4 +34,22 @@ export const config = {
     pexelsApiKey: process.env.PEXELS_API_KEY || '',
     unsplashAccessKey: process.env.UNSPLASH_ACCESS_KEY || '',
   },
+
+  // Gemini — kept configurable but unused by the active pipeline right now
+  // (see huggingface below). Optional either way.
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY || '',
+    imageModel: process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image',
+    visionModel: process.env.GEMINI_VISION_MODEL || 'gemini-flash-latest',
+    baseUrl: process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta',
+  },
+
+  // Hugging Face — bespoke image generation (FLUX.1 Krea by default), routed
+  // through whichever Inference Provider Hugging Face has live for the model.
+  // Optional: when unset, hero/logo images fall back to the stock-photo
+  // curator untouched.
+  huggingface: {
+    apiKey: process.env.HUGGINGFACE_API_KEY || '',
+    imageModel: process.env.HUGGINGFACE_IMAGE_MODEL || 'black-forest-labs/FLUX.1-Krea-dev',
+  },
 };

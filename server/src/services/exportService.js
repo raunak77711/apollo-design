@@ -2,19 +2,20 @@ import sharp from 'sharp';
 import { saveBuffer } from './storageService.js';
 import { effectiveOpacity, flattenPaint, indexById, inherits, normalizeTree } from '../design/tree.js';
 import { pointsAttr, pointsFor } from '../design/shapes.js';
+import { renderIconSvg } from '../design/icons.js';
 
 /**
  * Render a design document to a raster image using Sharp.
  *
  * Strategy: serialize the document to an SVG (shapes + text), embedding any
  * remote images as base64 data URIs so librsvg can rasterize them, then let
- * Sharp convert the SVG to PNG/JPG/WebP.
+ * Sharp convert the SVG to PNG/JPG/WebP. Icons are rendered server-side with
+ * react-dom/server from the same component registry the client uses (see
+ * ../design/icons.js), so an export or a Merge/Flatten of an icon layer shows
+ * the real glyph rather than a placeholder.
  *
  * The element walk, stacking order and inherited group state come from the same
  * tree helpers the editor uses, so an export is the picture on screen.
- *
- * Known MVP limitation: Lucide icons are rendered as a simple colored dot
- * placeholder in server exports (the browser renders them fully). See README.
  */
 export async function exportDesign({ projectId, document, format = 'png', quality = 90 }) {
   const svg = await documentToSvg(document);
@@ -125,11 +126,19 @@ async function elementToSvg(el, opacity) {
         `<rect x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}" rx="${p.borderRadius || 0}" fill="${esc(p.background)}"${stroke}/>` +
           `<text x="${cx}" y="${cy}" font-family="${esc(p.fontFamily || 'Inter, sans-serif')}" font-size="${p.fontSize || 20}" font-weight="${p.fontWeight || 700}"${p.italic ? ' font-style="italic"' : ''}${p.underline ? ' text-decoration="underline"' : ''} letter-spacing="${p.letterSpacing || 0}" fill="${esc(p.color)}" text-anchor="middle" dominant-baseline="central">${esc(applyCase(p.text, p.textCase))}</text>`
       );
-    case 'icon':
-      // Placeholder dot for server export (see file header note).
-      return wrap(
-        `<circle cx="${cx}" cy="${cy}" r="${Math.min(el.width, el.height) / 2}" fill="none" stroke="${esc(p.color)}" stroke-width="2"/>`
-      );
+    case 'icon': {
+      const markup = renderIconSvg(p.name, p.library || 'lucide', {
+        size: 24,
+        color: p.color || '#000000',
+        strokeWidth: p.strokeWidth ?? 2,
+      });
+      const positioned = markup && positionIconSvg(markup, { x: el.x, y: el.y, width: el.width, height: el.height });
+      if (!positioned) {
+        // Only reachable if the icon name/library couldn't be resolved at all.
+        return wrap(`<circle cx="${cx}" cy="${cy}" r="${Math.min(el.width, el.height) / 2}" fill="none" stroke="${esc(p.color)}" stroke-width="2"/>`);
+      }
+      return wrap(positioned);
+    }
     case 'image': {
       const image = await processedImage(p.src, p);
       if (!image) return '';
@@ -361,6 +370,21 @@ function splitAlpha(value) {
   const match = /^#?([0-9a-f]{6})([0-9a-f]{2})?$/i.exec(raw);
   if (!match) return { color: '#000000', alpha: 0.35 };
   return { color: `#${match[1]}`, alpha: match[2] ? parseInt(match[2], 16) / 255 : 1 };
+}
+
+/**
+ * Re-target a rendered icon's own `<svg width height viewBox="0 0 24 24">`
+ * root onto the element's box: drop the intrinsic width/height, add x/y/width
+ * /height for the box, and keep the viewBox so the 24×24 glyph scales into it.
+ * A nested `<svg>` is exactly what SVG's own viewport nesting is for, and
+ * librsvg (which Sharp uses) supports it natively.
+ */
+function positionIconSvg(markup, { x, y, width, height }) {
+  const match = /^<svg([^>]*)>/.exec(markup);
+  if (!match) return null;
+  const attrs = match[1].replace(/\swidth="[^"]*"/, '').replace(/\sheight="[^"]*"/, '');
+  const rest = markup.slice(match[0].length);
+  return `<svg${attrs} x="${round(x)}" y="${round(y)}" width="${round(width)}" height="${round(height)}">${rest}`;
 }
 
 const round = (n) => Math.round(n * 100) / 100;

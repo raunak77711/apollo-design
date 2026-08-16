@@ -1,5 +1,6 @@
 import sharp from 'sharp';
 import { searchImages } from './index.js';
+import { getHuggingFaceProvider } from './HuggingFaceProvider.js';
 import { contrastRatio, distance, isDark, luminance, parseHex, rgbToHsl, toHex } from '../../design/color.js';
 
 /**
@@ -57,6 +58,19 @@ async function analyze(candidate) {
   const buffer = await fetchBuffer(url);
   if (!buffer) return null;
 
+  const result = await analyzeBuffer(buffer);
+  analysisCache.set(url, result);
+  // Keep the cache from growing without bound across a long-lived server.
+  if (analysisCache.size > 400) analysisCache.delete(analysisCache.keys().next().value);
+  return result;
+}
+
+/**
+ * The same tone/detail/negative-space analysis as `analyze`, but for a buffer
+ * already in hand — used for freshly generated (rather than fetched) imagery,
+ * e.g. Gemini's output, which has no URL to cache against.
+ */
+export async function analyzeBuffer(buffer) {
   let result = null;
   try {
     const size = 48;
@@ -119,9 +133,6 @@ async function analyze(candidate) {
     result = null;
   }
 
-  analysisCache.set(url, result);
-  // Keep the cache from growing without bound across a long-lived server.
-  if (analysisCache.size > 400) analysisCache.delete(analysisCache.keys().next().value);
   return result;
 }
 
@@ -340,20 +351,36 @@ export async function curateImage(plan, { slot, palette, exclude = new Set(), an
   };
 }
 
-/** Curate every slot in a brief, keeping the set visually distinct. */
-export async function curateImages(plans, { slots, palette }) {
+/**
+ * Curate every slot in a brief, keeping the set visually distinct.
+ *
+ * Returns `{ images, fallbacks }` — `fallbacks` lists every slot that had the
+ * generator configured and available but had to fall back to stock
+ * photography (a failed generation, a credit limit), so the caller can tell
+ * the user a bespoke image wasn't actually produced, instead of the result
+ * just silently not matching what they asked for.
+ */
+export async function curateImages(plans, { slots, palette, referenceImages = [] }) {
   const used = new Set();
   const out = [];
+  const fallbacks = [];
+  const generator = getHuggingFaceProvider();
+
   for (let i = 0; i < plans.length; i += 1) {
     const slot = slots[i] || slots[slots.length - 1] || { width: 1080, height: 1080 };
+    // A configured generator means bespoke imagery beats stock for every
+    // slot; stock curation is the fallback, not a second choice made per-slot.
+    const generated = await generateImageForSlot(plans[i], { slot, palette, referenceImages });
+    if (!generated && generator.configured) fallbacks.push({ role: plans[i].role, query: plans[i].query });
+
     // Only the hero is worth a full analysis pass; supporting frames get a
     // smaller shortlist so a grid layout does not cost a dozen downloads.
-    const image = await curateImage(plans[i], {
+    const image = generated || (await curateImage(plans[i], {
       slot,
       palette,
       exclude: used,
       analysisBudget: i === 0 ? SHORTLIST : 4,
-    });
+    }));
     if (image) {
       used.add(image.url);
       out.push(image);
@@ -361,7 +388,90 @@ export async function curateImages(plans, { slots, palette }) {
       out.push({ ...plans[i], url: '' });
     }
   }
-  return out;
+  return { images: out, fallbacks };
+}
+
+/* ------------------------------ generation ------------------------------- */
+
+/**
+ * A photographer's-brief-turned-image-prompt: what the plan asked for, reduced
+ * to plain language the model can act on, plus the composition constraints
+ * (frame shape, quiet side, palette) so the generated picture drops into the
+ * layout the same way a curated photo would.
+ */
+function buildImagePrompt(plan, { slot, palette }) {
+  const parts = [];
+
+  if (plan.role === 'logo') {
+    parts.push(`A simple, iconic logo mark for: ${plan.subject || plan.query}.`);
+    parts.push('Flat, modern, vector-style graphic — bold geometry, one or two colours, reads clearly at small sizes.');
+    parts.push('Centred on a plain, uncluttered background (transparent or a single flat colour), nothing else in frame.');
+  } else {
+    parts.push(plan.query || plan.subject || 'a photograph that fits the brief');
+    if (plan.subject && plan.subject !== plan.query) parts.push(`Subject: ${plan.subject}.`);
+    if (plan.treatment) parts.push(`Treatment: ${plan.treatment}.`);
+  }
+
+  const ratio = slot?.width && slot?.height ? slot.width / slot.height : null;
+  if (ratio) {
+    const shape = ratio > 1.2 ? 'wide landscape' : ratio < 0.85 ? 'tall portrait' : 'square';
+    parts.push(`Compose for a ${shape} frame.`);
+  }
+  if (plan.negativeSpace && plan.negativeSpace !== 'any') {
+    parts.push(`Leave the ${plan.negativeSpace} side of the frame visually calm and uncluttered — headline text will be placed there.`);
+  }
+  if (palette?.background && palette?.accent) {
+    parts.push(`The palette this sits alongside is ${palette.dark ? 'dark' : 'light'}-toned with an accent colour around ${palette.accent} — keep the image's own colours compatible rather than clashing.`);
+  }
+
+  return parts.join(' ');
+}
+
+/**
+ * One generated candidate, shaped exactly like `curateImage`'s return value.
+ *
+ * `referenceImages` is accepted for interface parity with the curator's other
+ * callers, but the Hugging Face route currently in use (FLUX.1 Krea via its
+ * live inference provider) is text-to-image only — it has no image-input
+ * parameter to condition on, so a reference photo cannot steer this
+ * generation yet. It's silently unused rather than passed nowhere.
+ */
+async function generateImageForSlot(plan, { slot, palette }) {
+  const generator = getHuggingFaceProvider();
+  if (!generator.configured) return null;
+
+  try {
+    const result = await generator.generateImage({ prompt: buildImagePrompt(plan, { slot, palette }) });
+    if (!result) return null;
+
+    const [analysis, meta] = await Promise.all([
+      analyzeBuffer(result.buffer),
+      sharp(result.buffer).metadata(),
+    ]);
+    const dataUrl = `data:${result.mimeType};base64,${result.buffer.toString('base64')}`;
+
+    return {
+      ...plan,
+      url: dataUrl,
+      thumbnail: dataUrl,
+      alt: plan.subject || plan.query,
+      provider: 'huggingface',
+      photographer: 'Generated with FLUX.1 Krea',
+      sourceUrl: '',
+      width: meta.width,
+      height: meta.height,
+      score: 1,
+      focalX: analysis?.focalX ?? 50,
+      focalY: analysis?.focalY ?? 50,
+      averageColor: analysis?.averageColor || '#6E6E6E',
+      luminance: analysis?.luminance ?? 0.45,
+      negativeSpace: analysis?.negativeSpace || plan.negativeSpace,
+      space: analysis?.space || null,
+    };
+  } catch (err) {
+    console.warn(`[huggingface] image generation failed for "${plan.query}": ${err.message}`);
+    return null;
+  }
 }
 
 function dedupe(list) {

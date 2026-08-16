@@ -15,14 +15,22 @@ export function createApp() {
 
   app.use(cors({ origin: config.clientOrigin }));
   app.use(compression()); // gzip every JSON/SVG response — the AI ops payload and image search results both benefit
-  app.use(express.json({ limit: '5mb' }));
+  // 25mb covers a few base64 reference photos on the /ai/generate path; every
+  // other route's payload is tiny by comparison.
+  app.use(express.json({ limit: '25mb' }));
 
   // Serve locally-stored assets & exports. Filenames are content-addressed
   // (nanoid, never reused), so a long cache lifetime is safe.
   app.use('/storage', express.static(`${config.storageRoot}`, { maxAge: '7d', immutable: true }));
 
   app.get('/api/health', (req, res) => {
-    res.json({ ok: true, mongo: isMongoConnected(), aiProvider: config.ai.provider, imageProvider: config.images.provider });
+    res.json({
+      ok: true,
+      mongo: isMongoConnected(),
+      aiProvider: config.ai.provider,
+      imageProvider: config.images.provider,
+      huggingFaceConfigured: Boolean(config.huggingface.apiKey),
+    });
   });
 
   app.use('/api/projects', projectsRouter);

@@ -42,6 +42,7 @@ import ToolRail, { CREATION_TOOLS } from '../components/editor/ToolRail.jsx';
 import TemplatesPanel from '../components/editor/TemplatesPanel.jsx';
 import Stage from '../components/editor/Stage.jsx';
 import RightDock from '../components/editor/RightPanel.jsx';
+import PropertiesPanel from '../components/editor/PropertiesPanel.jsx';
 import LibraryPanel from '../components/editor/LibraryPanel.jsx';
 import AIPanel from '../components/editor/AIPanel.jsx';
 import PhotoEditor from '../components/editor/PhotoEditor.jsx';
@@ -88,12 +89,12 @@ function EditorShell() {
   const [generating, setGenerating] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  // Left flyout: 'texts' | 'library' | 'templates' | 'crop' | 'filters'
+  // Left flyout: 'texts' | 'library' | 'templates' | 'crop' | 'filters' | 'properties'
   const [leftPanel, setLeftPanel] = useState(null);
   const [libraryTab, setLibraryTab] = useState('shapes'); // 'shapes' | 'icons' | 'photos' | 'uploads'
-  const [rightPanel, setRightPanel] = useState('inspector'); // 'inspector' | 'ai'
-  // The dock's two panels are independent — either, both or neither.
-  const [dock, setDock] = useLocalState('apollo.dock', { properties: true, layers: true });
+  // The right dock's one tab: 'layers' | 'ai' | null (closed). Mutually
+  // exclusive by construction — there is only ever one value here.
+  const [rightPanel, setRightPanel] = useLocalState('apollo.rightPanel', 'layers');
   const [renamingId, setRenamingId] = useState(null);
   const [inspectorOpen, setInspectorOpen] = useState(false); // only used when narrow
   const [photoEditId, setPhotoEditId] = useState(null);
@@ -110,13 +111,12 @@ function EditorShell() {
 
   latest.current = { name, document: state.document };
 
-  /* The right column is one of two things: Apollo, or the dock. It shows at
-     all only when something in it is open — a shut dock gives its width back
-     to the canvas, which is the point of putting the toggles on the rail. */
+  /* The right column shows at all only when a tab is open — closing the
+     active tab gives its width back to the canvas, which is the point of
+     putting the toggles on the rail. */
   const rightRoom = wide || inspectorOpen;
-  const dockVisible = rightRoom && rightPanel !== 'ai';
-  const showRight = rightRoom && (rightPanel === 'ai' || dock.properties || dock.layers);
-  const railDock = { properties: dockVisible && dock.properties, layers: dockVisible && dock.layers };
+  const showRight = rightRoom && rightPanel !== null;
+  const railRightPanel = showRight ? rightPanel : null;
   // Which rail button the open flyout belongs to.
   const railPanel =
     leftPanel === 'library'
@@ -132,6 +132,7 @@ function EditorShell() {
   useEffect(() => {
     let active = true;
     const initialPrompt = location.state?.prompt || '';
+    const initialReferenceImages = location.state?.referenceImages || [];
 
     (async () => {
       try {
@@ -146,10 +147,11 @@ function EditorShell() {
           didGenerate.current = true;
           setGenerating(true);
           try {
-            const res = await api.aiGenerate({ message: initialPrompt, document: project.document });
+            const res = await api.aiGenerate({ message: initialPrompt, document: project.document, referenceImages: initialReferenceImages });
             if (active && res.operations?.length) {
               actions.apply(res.operations);
               setRightPanel('ai');
+              if (res.imageNotice) toast.show(res.imageNotice, { tone: 'error', duration: 8000 });
             }
           } catch (err) {
             if (active) toast.error('Apollo could not draw that', err.message);
@@ -219,35 +221,28 @@ function EditorShell() {
     [id, toast]
   );
 
-  const openAI = useCallback(() => {
-    setRightPanel((current) => (current === 'ai' && (wide || inspectorOpen) ? 'inspector' : 'ai'));
+  /** The Layers rail button, F7, and the dock header's close all share this:
+      open Layers if something else (or nothing) is showing, otherwise close
+      the column outright. */
+  const showLayers = useCallback(() => {
+    const isOpen = wide || inspectorOpen;
+    if (!wide) setInspectorOpen(!isOpen || rightPanel !== 'layers');
+    setRightPanel(isOpen && rightPanel === 'layers' ? null : 'layers');
+  }, [wide, inspectorOpen, rightPanel, setRightPanel]);
+
+  /** Reveals Layers without ever closing it — for commands that need it. */
+  const revealLayers = useCallback(() => {
+    setRightPanel('layers');
     if (!wide) setInspectorOpen(true);
-  }, [wide, inspectorOpen]);
+  }, [wide, setRightPanel]);
 
-  /**
-   * Rail and dock header share this. Pressing a dock button while the column
-   * is showing something else (Apollo, or nothing at all on a narrow screen)
-   * means "bring that panel back", not "toggle it off".
-   */
-  const toggleDock = useCallback(
-    (panel) => {
-      const hidden = rightPanel === 'ai' || (!wide && !inspectorOpen);
-      if (rightPanel === 'ai') setRightPanel('inspector');
-      if (!wide) setInspectorOpen(true);
-      setDock((current) => ({ ...current, [panel]: hidden ? true : !current[panel] }));
-    },
-    [rightPanel, wide, inspectorOpen, setDock]
-  );
-
-  /** Reveals a dock panel without ever closing it — for commands that need it. */
-  const openDock = useCallback(
-    (panel) => {
-      setRightPanel('inspector');
-      if (!wide) setInspectorOpen(true);
-      setDock((current) => (current[panel] ? current : { ...current, [panel]: true }));
-    },
-    [wide, setDock]
-  );
+  /** Ask Apollo's own button is the way back to Layers once Apollo is open —
+      a two-way swap, not open-then-close, which is why it never fully shuts
+      the column the way the Layers button does. */
+  const toggleApollo = useCallback(() => {
+    if (!wide) setInspectorOpen(true);
+    setRightPanel((current) => (current === 'ai' ? 'layers' : 'ai'));
+  }, [wide, setRightPanel]);
 
   /** Rail flyouts. The three library buttons share one panel, on their own tab. */
   const openRailPanel = useCallback(
@@ -365,10 +360,10 @@ function EditorShell() {
 
   const startRename = useCallback(
     (layerId) => {
-      openDock('layers');
+      revealLayers();
       setRenamingId(layerId);
     },
-    [openDock]
+    [revealLayers]
   );
 
   /**
@@ -438,7 +433,7 @@ function EditorShell() {
       }
       if (mod && e.key.toLowerCase() === 'j') {
         e.preventDefault();
-        openAI();
+        toggleApollo();
         return;
       }
       if (mod && e.key.toLowerCase() === 'z') {
@@ -479,12 +474,12 @@ function EditorShell() {
       }
       if (e.key === 'F7') {
         e.preventDefault();
-        toggleDock('layers');
+        showLayers();
         return;
       }
       if (e.key === 'F8') {
         e.preventDefault();
-        toggleDock('properties');
+        openRailPanel('properties');
         return;
       }
 
@@ -579,7 +574,7 @@ function EditorShell() {
         sampleColour();
       }
     },
-    [actions, layers, state.selectedIds, state.document.elements, state.tool, leftPanel, save, openAI, openRailPanel, toggleDock, startRename, sampleColour, copySelection, pasteClipboard]
+    [actions, layers, state.selectedIds, state.document.elements, state.tool, leftPanel, save, toggleApollo, openRailPanel, showLayers, startRename, sampleColour, copySelection, pasteClipboard]
   );
 
   useEffect(() => {
@@ -606,9 +601,9 @@ function EditorShell() {
       { id: 'uploads', group: 'Insert', label: 'Upload an image', icon: Upload, run: () => openRailPanel('uploads') },
       { id: 'texts', group: 'Insert', label: 'Text styles', icon: Type, run: () => openRailPanel('texts') },
       { id: 'templates', group: 'Insert', label: 'Browse templates', icon: LayoutTemplate, run: () => setLeftPanel('templates') },
-      { id: 'layers', group: 'Panels', label: 'Show layers', hint: 'F7', icon: Layers, run: () => openDock('layers') },
-      { id: 'properties', group: 'Panels', label: 'Show properties', hint: 'F8', icon: SlidersHorizontal, run: () => openDock('properties') },
-      { id: 'ai', group: 'Panels', label: 'Ask Apollo', hint: '⌘J', icon: Spark, run: openAI },
+      { id: 'layers', group: 'Panels', label: 'Show layers', hint: 'F7', icon: Layers, run: revealLayers },
+      { id: 'properties', group: 'Panels', label: 'Show properties', hint: 'F8', icon: SlidersHorizontal, run: () => openRailPanel('properties') },
+      { id: 'ai', group: 'Panels', label: 'Ask Apollo', hint: '⌘J', icon: Spark, run: toggleApollo },
       {
         id: 'group',
         group: 'Arrange',
@@ -684,7 +679,7 @@ function EditorShell() {
       { id: 'export-webp', group: 'Export', label: 'Export WebP', icon: Download, run: () => exportDesign('webp') },
       { id: 'shortcuts', group: 'Help', label: 'Keyboard shortcuts', hint: '?', icon: Keyboard, run: () => setShortcutsOpen(true) },
     ];
-  }, [actions, layers, state.selectedIds, state.document, state.view, theme, toggleTheme, exportDesign, openAI, openDock, openRailPanel, sampleColour]);
+  }, [actions, layers, state.selectedIds, state.document, state.view, theme, toggleTheme, exportDesign, toggleApollo, revealLayers, openRailPanel, sampleColour]);
 
   /* -------------------------------- render ------------------------------- */
 
@@ -728,59 +723,69 @@ function EditorShell() {
         <ToolRail
           panel={railPanel}
           onPanel={openRailPanel}
-          dock={railDock}
-          onDock={toggleDock}
-          aiOpen={rightPanel === 'ai' && rightRoom}
-          onAI={openAI}
+          rightPanel={railRightPanel}
+          onShowLayers={showLayers}
+          onToggleApollo={toggleApollo}
           onRetouch={openRetouch}
           onDraw={() => openDraw()}
           onSampleColour={'EyeDropper' in window ? sampleColour : undefined}
         />
 
-        {leftPanel && (
-          <div
-            className={cx(
-              'flex w-[268px] shrink-0 animate-slide-in-left flex-col border-r border-line bg-surface',
-              !wide && 'absolute inset-y-0 left-12 z-30 shadow-pop'
+        {/* Draw takes the row Stage normally occupies — TopBar and the rail
+            stay put, so it reads as a tab, not a separate page. */}
+        {drawStudioId ? (
+          <DrawStudio elementId={drawStudioId} onClose={() => setDrawStudioId(null)} />
+        ) : (
+          <>
+            {leftPanel && (
+              <div
+                className={cx(
+                  'flex w-[268px] shrink-0 animate-slide-in-left flex-col border-r border-line bg-surface',
+                  !wide && 'absolute inset-y-0 left-12 z-30 shadow-pop'
+                )}
+              >
+                {leftPanel === 'templates' && <TemplatesPanel onClose={() => setLeftPanel(null)} />}
+                {leftPanel === 'library' && (
+                  <LibraryPanel
+                    projectId={id}
+                    tab={libraryTab}
+                    onTab={setLibraryTab}
+                    onClose={() => setLeftPanel(null)}
+                  />
+                )}
+                {leftPanel === 'crop' && <CropPanel onClose={() => setLeftPanel(null)} />}
+                {leftPanel === 'filters' && <FiltersPanel onClose={() => setLeftPanel(null)} />}
+                {leftPanel === 'texts' && <TextsPanel onClose={() => setLeftPanel(null)} />}
+                {leftPanel === 'properties' && (
+                  <PropertiesPanel
+                    onClose={() => setLeftPanel(null)}
+                    onEditImage={openAdjust}
+                    onPickImage={pickImageFor}
+                    onDraw={openDraw}
+                  />
+                )}
+              </div>
             )}
-          >
-            {leftPanel === 'templates' && <TemplatesPanel onClose={() => setLeftPanel(null)} />}
-            {leftPanel === 'library' && (
-              <LibraryPanel
-                projectId={id}
-                tab={libraryTab}
-                onTab={setLibraryTab}
-                onClose={() => setLeftPanel(null)}
-              />
-            )}
-            {leftPanel === 'crop' && <CropPanel onClose={() => setLeftPanel(null)} />}
-            {leftPanel === 'filters' && <FiltersPanel onClose={() => setLeftPanel(null)} />}
-            {leftPanel === 'texts' && <TextsPanel onClose={() => setLeftPanel(null)} />}
-          </div>
-        )}
 
-        <Stage ref={stageRef} onEditImage={openAdjust} onPickImage={pickImageFor} />
+            <Stage ref={stageRef} onEditImage={openAdjust} onPickImage={pickImageFor} />
 
-        {showRight && (
-          <div className={cx('animate-slide-in-right', !wide && 'absolute inset-y-0 right-0 z-30 shadow-pop')}>
-            {rightPanel === 'ai' ? (
-              <AIPanel
-                onClose={() => (wide ? setRightPanel('inspector') : setInspectorOpen(false))}
-                onShowLayers={() => openDock('layers')}
-              />
-            ) : (
-              <RightDock
-                show={dock}
-                onToggle={toggleDock}
-                renamingId={renamingId}
-                onRenaming={setRenamingId}
-                onEditImage={openAdjust}
-                onPickImage={pickImageFor}
-                onDraw={openDraw}
-                onClose={wide ? undefined : () => setInspectorOpen(false)}
-              />
+            {showRight && (
+              <div className={cx('animate-slide-in-right', !wide && 'absolute inset-y-0 right-0 z-30 shadow-pop')}>
+                {rightPanel === 'ai' ? (
+                  <AIPanel
+                    onClose={() => (wide ? setRightPanel('layers') : setInspectorOpen(false))}
+                    onShowLayers={revealLayers}
+                  />
+                ) : (
+                  <RightDock
+                    renamingId={renamingId}
+                    onRenaming={setRenamingId}
+                    onClose={wide ? undefined : () => setInspectorOpen(false)}
+                  />
+                )}
+              </div>
             )}
-          </div>
+          </>
         )}
       </div>
 
@@ -794,7 +799,6 @@ function EditorShell() {
           }}
         />
       )}
-      {drawStudioId && <DrawStudio elementId={drawStudioId} onClose={() => setDrawStudioId(null)} />}
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />
       <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
