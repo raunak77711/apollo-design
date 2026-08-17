@@ -169,7 +169,9 @@ function EditorShell() {
             if (res.operations?.length) {
               actions.apply(res.operations);
               setRightPanel('ai');
-              if (res.imageNotice) toast.show(res.imageNotice, { tone: 'error', duration: 8000 });
+              // A stock-photo fallback is a quality note, not something the user
+              // can act on — console only, so it never interrupts the reveal.
+              if (res.imageNotice) console.warn(`[apollo] ${res.imageNotice}`);
             }
             // The design lands under the scene, which holds on "ready" for a
             // beat and then clears to reveal it — a handover, not a cut.

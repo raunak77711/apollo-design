@@ -79,9 +79,10 @@ async function aiGenerateStream(payload, { onStage, signal } = {}) {
   }
 
   if (!res.ok) {
-    // A 4xx is a real error with a real message; anything else means the
-    // stream route is not there and the plain one still might be.
-    if (res.status >= 400 && res.status < 500) {
+    // A 4xx is a real error with a real message — except 404, which is exactly
+    // how a server without this route answers (an older deploy, a stale
+    // container). That one falls through to the plain route with the 5xx cases.
+    if (res.status !== 404 && res.status >= 400 && res.status < 500) {
       const data = await res.json().catch(() => ({}));
       throw new Error(data.error || `Request failed (${res.status})`);
     }
