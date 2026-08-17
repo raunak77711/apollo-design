@@ -3,6 +3,7 @@ import { curateImages } from './images/curator.js';
 import { compose } from '../design/layout.js';
 import { critique, needsRework, summarize } from '../design/critique.js';
 import { detectFormat, findLayout, normalizeBrief, VARIATIONS } from '../design/artDirection.js';
+import { applyPreferences, describePreferences } from '../design/preferences.js';
 
 /**
  * The generation pipeline.
@@ -16,6 +17,11 @@ import { detectFormat, findLayout, normalizeBrief, VARIATIONS } from '../design/
  *
  * Each stage does the thing it is actually good at. The model is never asked
  * for coordinates and the code is never asked for taste.
+ *
+ * `onStage` is called as each of those boundaries is crossed, which is what the
+ * generation screen narrates. It reports what the pipeline is *actually* doing
+ * — there is deliberately no progress fraction, because the two slow stages
+ * (the model call and image sourcing) have no measurable progress to report.
  */
 
 const MAX_ATTEMPTS = 2;
@@ -62,28 +68,62 @@ export function resolveCanvas(message, document) {
  * Build one complete design. Returns the operations, the brief that produced
  * them and the critique — the caller decides what to do with each.
  */
-export async function buildDesign({ message, document, variation = null, provider = getAIProvider(), referenceImages = [] }) {
+export async function buildDesign({
+  message,
+  document,
+  variation = null,
+  provider = getAIProvider(),
+  referenceImages = [],
+  preferences = null,
+  onStage = null,
+}) {
   const canvas = resolveCanvas(message, document);
+  const stage = (name, detail) => {
+    try {
+      onStage?.(name, detail);
+    } catch {
+      /* narration must never be able to fail a generation */
+    }
+  };
+
   let best = null;
   let plan = null;
   let notes = [];
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    stage(attempt === 0 ? 'directing' : 'reconsidering');
     const raw = await safePlan(provider, {
       message,
       canvas,
       variation,
       critique: attempt > 0 ? notes : null,
       previous: attempt > 0 ? plan : null,
+      preferenceNote: describePreferences(preferences),
     });
     plan = raw;
 
-    const brief = normalizeBrief(raw, { canvas, prompt: message });
-    const { images, fallbacks } = brief.images.length
-      ? await curateImages(brief.images, { slots: slotsFor(brief), palette: brief.palette, referenceImages })
-      : { images: [], fallbacks: [] };
+    // The model was told about the preferences, but never trusted to have
+    // followed them — this is where they are actually enforced.
+    const { plan: directed, forceLayout } = applyPreferences(raw, preferences, { canvas });
+    const brief = normalizeBrief(directed, { canvas, prompt: message, forceLayout });
 
+    let images = [];
+    let fallbacks = [];
+    if (brief.images.length) {
+      // The stage is announced by the curator's own first callback, which
+      // fires as it starts on slot one — announcing it here as well would
+      // just send the same event twice.
+      ({ images, fallbacks } = await curateImages(brief.images, {
+        slots: slotsFor(brief),
+        palette: brief.palette,
+        referenceImages,
+        onProgress: (index, total) => stage('curating', { index, count: total }),
+      }));
+    }
+
+    stage('composing');
     const composed = compose(adaptToImagery(brief, images), images, { seed: `${message}:${variation?.id || ''}:${attempt}` });
+    stage('refining');
     const review = critique(composed.elements, { canvas: brief.canvas, brief, grid: composed.grid });
 
     const candidate = { brief, images, imageFallbacks: fallbacks, composed, review };

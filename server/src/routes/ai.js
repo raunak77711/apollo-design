@@ -1,10 +1,41 @@
 import { Router } from 'express';
 import { runAIEdit, runVariations } from '../services/aiService.js';
 import { buildDesign } from '../services/designService.js';
+import { normalizePreferences } from '../design/preferences.js';
 import { validateDocument } from '../design/schema.js';
 import { validateOperation, applyOperations } from '../design/operations.js';
 
 export const aiRouter = Router();
+
+/** The shared body handling for both generate routes. */
+function readGenerateRequest(body = {}) {
+  const { message, document, referenceImages, preferences } = body;
+  if (!validateDocument(document)) return { error: 'valid document is required' };
+  return {
+    message: message || 'Create a design',
+    document,
+    referenceImages: Array.isArray(referenceImages)
+      ? referenceImages.filter((s) => typeof s === 'string').slice(0, 3)
+      : [],
+    preferences: normalizePreferences(preferences),
+  };
+}
+
+/**
+ * Turn a finished build into the response body both routes return.
+ *
+ * The image generator was configured and attempted but had to fall back to
+ * stock photography for at least one image — worth telling the user, since it
+ * silently means no bespoke artwork (or logo) was produced.
+ */
+function generateResult(result, document) {
+  const operations = result.operations.filter((op) => validateOperation(op).ok);
+  const { document: preview, skipped } = applyOperations(document, operations);
+  const imageNotice = result.imageFallbacks?.length
+    ? "Couldn't generate bespoke artwork right now (Hugging Face is rate-limited or out of credits) — used stock photography instead."
+    : null;
+  return { operations, message: result.message, preview, skipped, imageNotice };
+}
 
 /**
  * POST /api/ai/chat
@@ -30,30 +61,64 @@ aiRouter.post('/chat', async (req, res, next) => {
 /** POST /api/ai/generate — always takes the full art-direction pipeline. */
 aiRouter.post('/generate', async (req, res, next) => {
   try {
-    const { message, document, referenceImages } = req.body || {};
-    if (!validateDocument(document)) return res.status(400).json({ error: 'valid document is required' });
-
-    const cleanReferenceImages = Array.isArray(referenceImages)
-      ? referenceImages.filter((s) => typeof s === 'string').slice(0, 3)
-      : [];
-    const result = await buildDesign({
-      message: message || 'Create a design',
-      document,
-      referenceImages: cleanReferenceImages,
-    });
-    const operations = result.operations.filter((op) => validateOperation(op).ok);
-    const { document: preview, skipped } = applyOperations(document, operations);
-
-    // The image generator was configured and attempted but had to fall back
-    // to stock photography for at least one image — worth telling the user,
-    // since it silently means no bespoke artwork (or logo) was produced.
-    const imageNotice = result.imageFallbacks?.length
-      ? "Couldn't generate bespoke artwork right now (Hugging Face is rate-limited or out of credits) — used stock photography instead."
-      : null;
-
-    res.json({ operations, message: result.message, preview, skipped, imageNotice });
+    const request = readGenerateRequest(req.body);
+    if (request.error) return res.status(400).json({ error: request.error });
+    res.json(generateResult(await buildDesign(request), request.document));
   } catch (err) {
     next(err);
+  }
+});
+
+/**
+ * POST /api/ai/generate/stream — the same build, narrated.
+ *
+ * Identical result to `/generate`, but each pipeline boundary is pushed to the
+ * client as it is crossed so the generation screen can say what Apollo is
+ * actually doing. Server-sent events over POST, because the request carries the
+ * whole document (and possibly reference images) and EventSource can only GET.
+ *
+ * The client falls back to `/generate` if this stream fails for any reason, so
+ * nothing here is load-bearing for a design actually getting made.
+ */
+aiRouter.post('/generate/stream', async (req, res) => {
+  const request = readGenerateRequest(req.body);
+  if (request.error) return res.status(400).json({ error: request.error });
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    // `no-transform` is what stops the compression middleware buffering the
+    // stream into uselessness; `no-cache` and the nginx hint do the same for
+    // every proxy in between.
+    'Cache-Control': 'no-cache, no-transform',
+    'X-Accel-Buffering': 'no',
+    Connection: 'keep-alive',
+  });
+
+  let open = true;
+  const send = (event, data) => {
+    if (!open || res.writableEnded) return;
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  // Watch the *response*, not the request. `req` emits 'close' as soon as
+  // express.json() has drained the body — seconds before the design is built —
+  // so listening there would silence every stage after the first.
+  res.on('close', () => {
+    open = false;
+  });
+
+  send('stage', { stage: 'understanding' });
+
+  try {
+    const result = await buildDesign({
+      ...request,
+      onStage: (stage, detail) => send('stage', { stage, ...detail }),
+    });
+    send('result', generateResult(result, request.document));
+  } catch (err) {
+    send('failed', { error: err.message });
+  } finally {
+    if (!res.writableEnded) res.end();
   }
 });
 

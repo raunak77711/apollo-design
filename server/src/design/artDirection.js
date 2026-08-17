@@ -301,8 +301,12 @@ export function normalizePalette(input = {}, fallback) {
 /**
  * Fill in everything the composer needs from whatever the planner produced.
  * Nothing downstream has to defend against a missing field.
+ *
+ * `forceLayout` bypasses the aspect-ratio filter for the one case where the
+ * user has explicitly asked for a structure this canvas would normally rule
+ * out — a typographic banner, say. It is never set from model output.
  */
-export function normalizeBrief(input = {}, { canvas, prompt = '' } = {}) {
+export function normalizeBrief(input = {}, { canvas, prompt = '', forceLayout = null } = {}) {
   const style = findStyle(input.style) || pickStyleFor(prompt) || STYLES[2];
   const width = canvas?.width || 1080;
   const height = canvas?.height || 1080;
@@ -310,7 +314,9 @@ export function normalizeBrief(input = {}, { canvas, prompt = '' } = {}) {
 
   const allowed = layoutsForAspect(ratio);
   const requested = findLayout(input.layout)?.id;
-  const layout = allowed.includes(requested) ? requested : allowed.find((id) => style.layouts.includes(id)) || allowed[0];
+  const layout =
+    findLayout(forceLayout)?.id ||
+    (allowed.includes(requested) ? requested : allowed.find((id) => style.layouts.includes(id)) || allowed[0]);
 
   const pairing = findPairing(input.fontPairing) || FONT_PAIRINGS[style.pairing];
   const palette = normalizePalette(input.palette, style.palette);

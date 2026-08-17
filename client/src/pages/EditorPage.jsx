@@ -52,7 +52,8 @@ import FiltersPanel from '../components/editor/FiltersPanel.jsx';
 import TextsPanel from '../components/editor/TextsPanel.jsx';
 import CommandPalette from '../components/editor/CommandPalette.jsx';
 import ShortcutsDialog from '../components/editor/ShortcutsDialog.jsx';
-import OnboardingOverlay from '../ui/onboarding.jsx';
+import GenerationScene from '../components/generation/GenerationScene.jsx';
+import { useGenerationStages } from '../components/generation/useGenerationStages.js';
 
 export default function EditorPage() {
   return (
@@ -86,8 +87,11 @@ function EditorShell() {
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
   const [saveState, setSaveState] = useState('saved');
-  const [generating, setGenerating] = useState(false);
+  // 'idle' → 'running' (the moon is up) → 'settling' (the design is on the
+  // canvas and the scene is clearing) → 'idle'.
+  const [generating, setGenerating] = useState('idle');
   const [exporting, setExporting] = useState(false);
+  const stages = useGenerationStages();
 
   // Left flyout: 'texts' | 'library' | 'templates' | 'crop' | 'filters' | 'properties'
   const [leftPanel, setLeftPanel] = useState(null);
@@ -106,6 +110,7 @@ function EditorShell() {
   const stageRef = useRef(null);
   const latest = useRef({ name, document: state.document });
   const didGenerate = useRef(false);
+  const settle = useRef(null); // the beat between "ready" and the reveal
   const skipSave = useRef(true);
   const clipboard = useRef(null); // { rootIds, elements } — in-memory, per tab
 
@@ -131,8 +136,10 @@ function EditorShell() {
 
   useEffect(() => {
     let active = true;
+    const abort = new AbortController();
     const initialPrompt = location.state?.prompt || '';
     const initialReferenceImages = location.state?.referenceImages || [];
+    const initialPreferences = location.state?.preferences || null;
 
     (async () => {
       try {
@@ -145,18 +152,33 @@ function EditorShell() {
 
         if (initialPrompt && !didGenerate.current && (project.document.elements || []).length === 0) {
           didGenerate.current = true;
-          setGenerating(true);
+          setGenerating('running');
           try {
-            const res = await api.aiGenerate({ message: initialPrompt, document: project.document, referenceImages: initialReferenceImages });
-            if (active && res.operations?.length) {
+            // Streamed so the moon scene can narrate the real pipeline; falls
+            // back to the plain endpoint by itself if the stream is unavailable.
+            const res = await api.aiGenerateStream(
+              {
+                message: initialPrompt,
+                document: project.document,
+                referenceImages: initialReferenceImages,
+                preferences: initialPreferences,
+              },
+              { onStage: stages.push, signal: abort.signal }
+            );
+            if (!active) return;
+            if (res.operations?.length) {
               actions.apply(res.operations);
               setRightPanel('ai');
               if (res.imageNotice) toast.show(res.imageNotice, { tone: 'error', duration: 8000 });
             }
+            // The design lands under the scene, which holds on "ready" for a
+            // beat and then clears to reveal it — a handover, not a cut.
+            stages.finish();
+            settle.current = setTimeout(() => setGenerating('settling'), 700);
           } catch (err) {
-            if (active) toast.error('Apollo could not draw that', err.message);
-          } finally {
-            if (active) setGenerating(false);
+            if (!active || err.name === 'AbortError') return;
+            toast.error('Apollo could not draw that', err.message);
+            setGenerating('idle');
           }
         }
       } catch (err) {
@@ -168,6 +190,8 @@ function EditorShell() {
 
     return () => {
       active = false;
+      abort.abort();
+      clearTimeout(settle.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -803,7 +827,13 @@ function EditorShell() {
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />
       <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
-      {generating && <OnboardingOverlay />}
+      {generating !== 'idle' && (
+        <GenerationScene
+          stage={stages.stage}
+          open={generating === 'running'}
+          onExited={() => setGenerating('idle')}
+        />
+      )}
     </div>
   );
 }

@@ -360,13 +360,14 @@ export async function curateImage(plan, { slot, palette, exclude = new Set(), an
  * the user a bespoke image wasn't actually produced, instead of the result
  * just silently not matching what they asked for.
  */
-export async function curateImages(plans, { slots, palette, referenceImages = [] }) {
+export async function curateImages(plans, { slots, palette, referenceImages = [], onProgress = null }) {
   const used = new Set();
   const out = [];
   const fallbacks = [];
   const generator = getHuggingFaceProvider();
 
   for (let i = 0; i < plans.length; i += 1) {
+    onProgress?.(i, plans.length);
     const slot = slots[i] || slots[slots.length - 1] || { width: 1080, height: 1080 };
     // A configured generator means bespoke imagery beats stock for every
     // slot; stock curation is the fallback, not a second choice made per-slot.

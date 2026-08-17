@@ -14,6 +14,7 @@ import AppHeader from '../components/AppHeader.jsx';
 import AskApolloLauncher from '../components/AskApolloLauncher.jsx';
 import DesignPreview from '../components/DesignPreview.jsx';
 import FormatPicker from '../components/FormatPicker.jsx';
+import PreferenceSheet from '../components/generation/PreferenceSheet.jsx';
 
 const IDEAS = [
   'Instagram post for a 50% weekend sale',
@@ -226,6 +227,9 @@ function Composer({ onCreate, creating }) {
   const [format, setFormat] = useState(() => findPreset('banner'));
   const [custom, setCustom] = useState(null);
   const [references, setReferences] = useState([]); // [{ id, name, dataUrl }]
+  // The brief Apollo is asking preferences about — held separately from the
+  // live input so editing behind the sheet cannot change what was submitted.
+  const [asking, setAsking] = useState(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -254,14 +258,22 @@ function Composer({ onCreate, creating }) {
     setReferences((r) => [...r, ...loaded]);
   };
 
+  /* Submitting no longer starts a generation — it starts a conversation.
+     Apollo asks what it cannot infer from the brief, and only then draws. */
   const submit = () => {
     const text = prompt.trim();
     if (!text || creating) return;
+    setAsking(text);
+  };
+
+  const start = (preferences) => {
+    setAsking(null);
     onCreate({
-      name: shorten(text, 60),
+      name: shorten(asking, 60),
       canvas: { width: canvas.width, height: canvas.height, background: '#0A0A0B' },
-      prompt: text,
+      prompt: asking,
       referenceImages: references.map((r) => r.dataUrl),
+      preferences,
     });
   };
 
@@ -366,6 +378,16 @@ function Composer({ onCreate, creating }) {
           </button>
         ))}
       </div>
+
+      <PreferenceSheet
+        open={Boolean(asking)}
+        prompt={asking || ''}
+        onCancel={() => {
+          setAsking(null);
+          inputRef.current?.focus();
+        }}
+        onConfirm={start}
+      />
     </div>
   );
 }
