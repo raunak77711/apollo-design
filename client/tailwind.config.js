@@ -54,6 +54,11 @@ export default {
         'slide-in-right': { from: { opacity: '0', transform: 'translateX(12px)' }, to: { opacity: '1', transform: 'none' } },
         'slide-in-left': { from: { opacity: '0', transform: 'translateX(-8px)' }, to: { opacity: '1', transform: 'none' } },
         'section-in': { from: { opacity: '0', transform: 'translateY(-2px)' }, to: { opacity: '1', transform: 'none' } },
+        // The assistant arrives from its own corner rather than dropping in.
+        'assistant-in': {
+          from: { opacity: '0', transform: 'translateY(10px) scale(0.96)' },
+          to: { opacity: '1', transform: 'none' },
+        },
         shimmer: { '100%': { transform: 'translateX(100%)' } },
       },
       animation: {
@@ -63,6 +68,7 @@ export default {
         'slide-in-right': 'slide-in-right 200ms cubic-bezier(0.16, 1, 0.3, 1) both',
         'slide-in-left': 'slide-in-left 180ms cubic-bezier(0.16, 1, 0.3, 1) both',
         'section-in': 'section-in 140ms cubic-bezier(0.16, 1, 0.3, 1) both',
+        'assistant-in': 'assistant-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both',
       },
     },
   },

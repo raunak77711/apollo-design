@@ -17,8 +17,10 @@ export function useEscape(handler, active = true) {
 /**
  * Anchored popover. `button` is a render prop so the trigger keeps its own
  * styling; the panel closes on outside click, Escape, or an explicit close().
+ * `side` flips it above the trigger, for controls that sit at the bottom of a
+ * panel with nowhere below them to open into.
  */
-export function Popover({ button, children, align = 'start', panelClassName, className }) {
+export function Popover({ button, children, align = 'start', side = 'bottom', panelClassName, className }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const close = () => setOpen(false);
@@ -39,8 +41,16 @@ export function Popover({ button, children, align = 'start', panelClassName, cla
       {open && (
         <div
           className={cx(
-            'absolute z-[60] mt-2 min-w-[12rem] animate-pop rounded-lg border border-line bg-surface p-1 shadow-pop',
-            align === 'end' ? 'right-0 origin-top-right' : 'left-0 origin-top-left',
+            'absolute z-[60] min-w-[12rem] animate-pop rounded-lg border border-line bg-surface p-1 shadow-pop',
+            side === 'top' ? 'bottom-full mb-2' : 'mt-2',
+            align === 'end' ? 'right-0' : 'left-0',
+            side === 'top'
+              ? align === 'end'
+                ? 'origin-bottom-right'
+                : 'origin-bottom-left'
+              : align === 'end'
+                ? 'origin-top-right'
+                : 'origin-top-left',
             panelClassName
           )}
         >
