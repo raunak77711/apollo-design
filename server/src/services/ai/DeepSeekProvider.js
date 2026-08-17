@@ -121,7 +121,7 @@ Return ONLY a JSON object with this shape:
     "headline": "the line that carries the design",
     "subhead": "one supporting sentence, may be empty",
     "cta": "2-3 word action, may be empty",
-    "details": ["short factual lines: date, place, price — 0 to 3 of them"],
+    "details": ["short lines rendered as a stacked, divided list — 0 to 12 of them"],
     "meta": "brand or url line, may be empty"
   },
   "images": [
@@ -158,6 +158,17 @@ confident — no "Welcome to", no "Your headline here", no exclamation marks, no
 your experience". Prefer a concrete promise or a sharp image. The eyebrow is a category or a date,
 not a sentence. The subhead is one sentence that adds information the headline does not.
 Only include a CTA if the design is genuinely asking for an action.
+
+CONTENT. Read the request for what it actually is before reaching for marketing language. Not
+every brief is an offer with a headline and a CTA — some are informational: a class handout, a
+recipe, a schedule, a price list, a set of instructions, a times table. When the request is
+informational, say so plainly: the headline names the subject ("8 Times Table", "Sourdough —
+Day 1"), and every discrete fact or row (each multiplication line, each step, each price) becomes
+one entry in "details", in order, one fact per line, exactly as it should read — do not summarise,
+sample, or truncate the list down to a few representative lines. "details" renders as a real
+stacked list with dividers, so it is the right place for this, not prose stuffed into the subhead.
+Only fall back to a headline + one-line subhead when the brief genuinely has no list of facts to
+enumerate.
 
 PHOTOGRAPHY. Write the query as a photographer's brief: subject, angle, lighting, environment,
 mood. "low angle of a boxer wrapping their hands, single hard light, dark gym" — not "gym". Say

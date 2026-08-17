@@ -12,7 +12,7 @@
  * coordinates.
  */
 
-import { accentRamp, photoTreatment } from './artDirection.js';
+import { MAX_DETAIL_LINES, accentRamp, photoTreatment } from './artDirection.js';
 import { contrastRatio, darken, ensureContrast, isDark, lighten, mix, withAlpha } from './color.js';
 import { fitText, headlineLines, leadingFor, measureLine, trackingFor, typeScale } from './typography.js';
 
@@ -268,7 +268,7 @@ function copyBlock(ctx, { width, align = 'left', maxHeadlineLines, sizes = {}, i
   if (show.details && copy.details.length) {
     const size = s(sizes.detail || type.detail);
     gap(Math.round(size * 1.5));
-    const rows = copy.details.slice(0, 4).map((value) =>
+    const rows = copy.details.slice(0, MAX_DETAIL_LINES).map((value) =>
       fitText(value, { font: fonts.meta, weight: 500, maxWidth: width, maxSize: size, minSize: 10, lineHeight: 1.4, letterSpacing: 0.04, maxLines: 1 })
     );
     const rowHeight = Math.ceil(size * 1.4);

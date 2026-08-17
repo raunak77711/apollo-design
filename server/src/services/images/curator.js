@@ -442,7 +442,11 @@ async function generateImageForSlot(plan, { slot, palette }) {
   if (!generator.configured) return null;
 
   try {
-    const result = await generator.generateImage({ prompt: buildImagePrompt(plan, { slot, palette }) });
+    const result = await generator.generateImage({
+      prompt: buildImagePrompt(plan, { slot, palette }),
+      width: slot?.width,
+      height: slot?.height,
+    });
     if (!result) return null;
 
     const [analysis, meta] = await Promise.all([

@@ -35,8 +35,9 @@ export const config = {
     unsplashAccessKey: process.env.UNSPLASH_ACCESS_KEY || '',
   },
 
-  // Gemini — kept configurable but unused by the active pipeline right now
-  // (see huggingface below). Optional either way.
+  // Gemini — captions an attached reference image for the DeepSeek brief
+  // prompt (`describeReference`). Its own `generateImage` is not wired into
+  // the pipeline (see huggingface below). Optional either way.
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || '',
     imageModel: process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image',

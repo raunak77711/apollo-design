@@ -38,8 +38,18 @@ export class HuggingFaceProvider {
     return this._route;
   }
 
-  /** Generate one image. Returns { buffer, mimeType }, or null on no result. */
-  async generateImage({ prompt, negativePrompt } = {}) {
+  /**
+   * Generate one image. Returns { buffer, mimeType }, or null on no result.
+   *
+   * `width`/`height` are the actual slot the picture has to fill. Without
+   * them the model only ever sees a vague "wide/tall/square" hint in the
+   * prompt text and defaults to its own (usually square) canvas, so a hero
+   * meant for a 1080×1920 story comes back square and gets brutally cropped.
+   * Sent as both top-level fields and `image_size`, since which one a given
+   * routed provider (fal-ai, replicate, ...) honours varies and an unknown
+   * extra field is harmless.
+   */
+  async generateImage({ prompt, negativePrompt, width, height } = {}) {
     if (!this.configured) return null;
     const { provider, providerId } = await this._resolveRoute();
 
@@ -49,10 +59,15 @@ export class HuggingFaceProvider {
       negativePrompt ? `Avoid: ${negativePrompt}.` : '',
     ].filter(Boolean).join(' ');
 
+    const size = clampSize(width, height);
+
     const res = await fetch(`https://router.huggingface.co/${provider}/${providerId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
-      body: JSON.stringify({ prompt: instruction }),
+      body: JSON.stringify({
+        prompt: instruction,
+        ...(size ? { width: size.width, height: size.height, image_size: size } : {}),
+      }),
     });
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
@@ -75,6 +90,27 @@ export class HuggingFaceProvider {
       mimeType: image.content_type || imgRes.headers.get('content-type') || 'image/jpeg',
     };
   }
+}
+
+/**
+ * Fit the requested slot to a size FLUX-family models actually accept:
+ * both sides multiples of 16, and within a sane cost/quality range, while
+ * keeping the slot's aspect ratio so the picture doesn't get cropped later.
+ */
+function clampSize(width, height) {
+  if (!width || !height) return null;
+  const MIN_SIDE = 512;
+  const MAX_SIDE = 1408;
+  let w = width;
+  let h = height;
+  const down = Math.min(1, MAX_SIDE / Math.max(w, h));
+  w *= down;
+  h *= down;
+  const up = Math.max(1, MIN_SIDE / Math.min(w, h));
+  w *= up;
+  h *= up;
+  const round16 = (n) => Math.max(16, Math.round(n / 16) * 16);
+  return { width: round16(w), height: round16(h) };
 }
 
 let instance = null;

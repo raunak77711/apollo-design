@@ -340,9 +340,18 @@ export function normalizeBrief(input = {}, { canvas, prompt = '', forceLayout = 
 
 const str = (value, fallback) => (typeof value === 'string' && value.trim() ? value.trim() : fallback);
 
+/**
+ * How many rows the details block can carry. Kept generous rather than
+ * poster-sized (4) because this is also the only structure Apollo has for
+ * list-shaped content — schedules, price lists, steps, stats, a multiplication
+ * table — not just a date/place/price triplet. `layout.js` renders exactly
+ * this many rows, so the two stay in lockstep through this export.
+ */
+export const MAX_DETAIL_LINES = 12;
+
 function normalizeCopy(copy = {}) {
   const details = Array.isArray(copy.details)
-    ? copy.details.filter((d) => typeof d === 'string' && d.trim()).slice(0, 4).map((d) => d.trim())
+    ? copy.details.filter((d) => typeof d === 'string' && d.trim()).slice(0, MAX_DETAIL_LINES).map((d) => d.trim())
     : [];
   return {
     eyebrow: str(copy.eyebrow, '').slice(0, 46),

@@ -1,5 +1,6 @@
 import { getAIProvider } from './ai/index.js';
 import { curateImages } from './images/curator.js';
+import { getGeminiProvider } from './images/GeminiProvider.js';
 import { compose } from '../design/layout.js';
 import { critique, needsRework, summarize } from '../design/critique.js';
 import { detectFormat, findLayout, normalizeBrief, VARIATIONS } from '../design/artDirection.js';
@@ -90,6 +91,12 @@ export async function buildDesign({
   let plan = null;
   let notes = [];
 
+  // The user's own words describe what a reference photo is; DeepSeek can't
+  // see the file itself, so Gemini captions it once up front and that caption
+  // rides along in the brief prompt as `referenceNote` — otherwise an attached
+  // reference is silently dropped and has zero effect on the direction.
+  const referenceNote = await describeFirstReference(referenceImages);
+
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
     stage(attempt === 0 ? 'directing' : 'reconsidering');
     const raw = await safePlan(provider, {
@@ -98,6 +105,7 @@ export async function buildDesign({
       variation,
       critique: attempt > 0 ? notes : null,
       previous: attempt > 0 ? plan : null,
+      referenceNote,
       preferenceNote: describePreferences(preferences),
     });
     plan = raw;
@@ -170,6 +178,20 @@ export async function buildVariations({ message, document }) {
 }
 
 /* ------------------------------- internals ------------------------------- */
+
+/** Caption the first reference image for the brief prompt, or '' if there is none/no key/it fails. */
+async function describeFirstReference(referenceImages) {
+  const first = referenceImages?.[0];
+  if (!first) return '';
+  const gemini = getGeminiProvider();
+  if (!gemini.configured) return '';
+  try {
+    return await gemini.describeReference(first);
+  } catch (err) {
+    console.warn(`[design] reference captioning failed (${err.message})`);
+    return '';
+  }
+}
 
 async function safePlan(provider, args) {
   if (typeof provider.planDesign !== 'function') return {};
