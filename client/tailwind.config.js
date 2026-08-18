@@ -60,6 +60,12 @@ export default {
           to: { opacity: '1', transform: 'none' },
         },
         shimmer: { '100%': { transform: 'translateX(100%)' } },
+        // The hero arrives with the moon: further and slower than a panel,
+        // because it is a curtain going up rather than a control appearing.
+        lift: {
+          from: { opacity: '0', transform: 'translateY(16px)' },
+          to: { opacity: '1', transform: 'none' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 160ms cubic-bezier(0.16, 1, 0.3, 1) both',
@@ -69,6 +75,7 @@ export default {
         'slide-in-left': 'slide-in-left 180ms cubic-bezier(0.16, 1, 0.3, 1) both',
         'section-in': 'section-in 140ms cubic-bezier(0.16, 1, 0.3, 1) both',
         'assistant-in': 'assistant-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both',
+        lift: 'lift 700ms cubic-bezier(0.16, 1, 0.3, 1) both',
       },
     },
   },

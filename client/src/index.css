@@ -26,6 +26,20 @@
     --c-accent-ink: 22 16 4;
     --c-danger: 179 38 30;
 
+    /* Sky — the hero's rendered moon scene, and the CSS still that stands in
+       for it where WebGL cannot run. These are the shader's own daytime
+       palette written out in hex, so the page and the GPU describe one sky
+       rather than two that nearly agree. Type over the sky answers to the sky
+       and not to the page theme: at four in the afternoon the moon hangs in
+       pale blue, and graphite is what stays readable on it. */
+    --sky-top: #5791db;
+    --sky-bottom: #edede6;
+    --sky-ink: #141a22;
+    --sky-ink-2: #41505f;
+    --sky-ink-3: #5e6b79;
+    --sky-line: rgb(20 26 34 / 0.16);
+    --sky-line-soft: rgb(20 26 34 / 0.09);
+
     --shadow-pop: 0 1px 2px rgb(17 17 16 / 0.06), 0 16px 40px -14px rgb(17 17 16 / 0.22);
     --shadow-art: 0 1px 2px rgb(17 17 16 / 0.08), 0 28px 60px -28px rgb(17 17 16 / 0.35);
     --shadow-rail: 6px 0 24px -18px rgb(17 17 16 / 0.35);
@@ -55,6 +69,16 @@
     --c-accent-text: 240 197 114;
     --c-accent-ink: 20 15 5;
     --c-danger: 242 104 92;
+
+    /* Sky — night, where the moon is the only light in the room. Plain white
+       type, and hairlines almost withdrawn. */
+    --sky-top: #090c15;
+    --sky-bottom: #030306;
+    --sky-ink: #ffffff;
+    --sky-ink-2: rgb(255 255 255 / 0.62);
+    --sky-ink-3: rgb(255 255 255 / 0.44);
+    --sky-line: rgb(255 255 255 / 0.14);
+    --sky-line-soft: rgb(255 255 255 / 0.07);
 
     --shadow-pop: 0 1px 2px rgb(0 0 0 / 0.5), 0 18px 44px -16px rgb(0 0 0 / 0.8);
     --shadow-art: 0 0 0 1px rgb(255 255 255 / 0.05), 0 32px 72px -28px rgb(0 0 0 / 0.95);
@@ -127,6 +151,15 @@
   .num {
     @apply font-mono tabular-nums;
     letter-spacing: -0.01em;
+  }
+
+  /* --- The sky -------------------------------------------------------
+     The instrument voice, over the moon. The same mono, uppercase, widely
+     tracked label the app uses everywhere else, tracked one step wider
+     because at this size on a photograph it needs the air. */
+  .sky-label {
+    @apply font-mono text-2xs uppercase tracking-[0.16em];
+    color: var(--sky-ink-3);
   }
 
   /* --- Editor chrome --------------------------------------------------
