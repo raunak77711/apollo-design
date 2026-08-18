@@ -639,7 +639,7 @@ export function createMoonScene(
   gl.cullFace(gl.BACK);
 
   /**
-   * Where the moon is at time `t`.
+   * Where the moon is at time `t` when it is free to wander.
    *
    * Two slow sine pairs at incommensurate rates, so the path never visibly
    * repeats, plus a drift in depth that reads as the moon passing nearer and
@@ -647,12 +647,40 @@ export function createMoonScene(
    * orbiting, and anything faster starts to compete with the status line for
    * attention.
    */
-  function place(t) {
+  function placeDrifting(t) {
     const wide = aspect > 1.5;
     centre[0] = Math.sin(t * 0.055) * (wide ? 1.5 : 0.62) + Math.sin(t * 0.021 + 1.3) * 0.4;
     centre[1] = Math.sin(t * 0.037 + 0.7) * 0.42 + Math.sin(t * 0.084) * 0.12;
     centre[2] = -9.5 + Math.sin(t * 0.029 + 2.1) * 0.9;
   }
+
+  /**
+   * Where the moon is when the composition is held.
+   *
+   * An anchor the layout was built around — right of centre and a little high
+   * while there is room beside it, top and nearly centred once the frame is too
+   * narrow for a column to sit alongside. Over that, a bob slow enough to read
+   * as floating rather than as animation, and then the three things the page is
+   * allowed to say: where the pointer is, whether the composer has focus, and
+   * how far it has been scrolled past.
+   */
+  function placeHeld(t) {
+    // Measured at the anchor depth rather than the current one, so leaning in
+    // toward the composer cannot also shift the moon across the frame.
+    const halfHeight = -shot.depth * Math.tan(FOV / 2);
+    const halfWidth = halfHeight * aspect;
+    const beside = aspect > 1.05;
+
+    centre[0] = halfWidth * (beside ? 0.4 : 0.08) + Math.sin(t * 0.031) * 0.09 + pointer[0] * shot.parallax;
+    centre[1] =
+      halfHeight * (beside ? 0.15 : 0.44) +
+      Math.sin(t * 0.047 + 1.1) * 0.06 -
+      pointer[1] * shot.parallax * 0.5 -
+      setting * shot.lag;
+    centre[2] = shot.depth + focus * shot.approach;
+  }
+
+  const place = shot.anchored ? placeHeld : placeDrifting;
 
   function render(now) {
     if (!running) return;
@@ -664,6 +692,13 @@ export function createMoonScene(
     const delta = Math.min((now - (lastTime || now)) / 1000, 1 / 20);
     lastTime = now;
     elapsed += delta;
+
+    // Everything the page said since the last frame, eased in one place.
+    const settle = Math.min(1, delta * 4.5);
+    pointer[0] += (pointerTarget[0] - pointer[0]) * settle;
+    pointer[1] += (pointerTarget[1] - pointer[1]) * settle;
+    focus += (focusTarget - focus) * Math.min(1, delta * 3.4);
+    setting += (settingTarget - setting) * Math.min(1, delta * 7);
 
     const t = reducedMotion ? 6 : elapsed;
     place(t);
@@ -697,14 +732,14 @@ export function createMoonScene(
     attribute.bind(glowQuad, glow.attributes.aCorner, 2, gl.FLOAT, false);
     gl.uniformMatrix4fv(glow.uniforms.uProjection, false, projection);
     gl.uniform3fv(glow.uniforms.uCentre, centre);
-    gl.uniform1f(glow.uniforms.uSize, current.glowSize);
+    gl.uniform1f(glow.uniforms.uSize, current.glowSize * shot.glow);
     gl.uniform3fv(glow.uniforms.uColor, current.glowColor);
-    gl.uniform1f(glow.uniforms.uStrength, current.glowStrength * fade);
+    gl.uniform1f(glow.uniforms.uStrength, current.glowStrength * (1 + focus * shot.focusGlow) * fade);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
     /* moon */
     gl.disable(gl.BLEND);
-    modelView(mv, centre, reducedMotion ? 0.9 : t * 0.048, -0.22, 1);
+    modelView(mv, centre, reducedMotion ? 0.9 : t * shot.spin, -0.22, shot.scale);
     normalMatrix(nm, mv);
 
     attribute.use(moon);
@@ -729,7 +764,7 @@ export function createMoonScene(
 
     gl.uniform3fv(moon.uniforms.uLight, current.light);
     gl.uniform3fv(moon.uniforms.uKeyColor, current.keyColor);
-    gl.uniform1f(moon.uniforms.uKeyStrength, current.keyStrength);
+    gl.uniform1f(moon.uniforms.uKeyStrength, current.keyStrength * (1 + focus * shot.focusKey));
     gl.uniform3fv(moon.uniforms.uAmbient, current.ambient);
     gl.uniform1f(moon.uniforms.uAmbientStrength, current.ambientStrength);
     gl.uniform1f(moon.uniforms.uWrap, current.wrap);
@@ -739,7 +774,7 @@ export function createMoonScene(
     gl.uniform3fv(moon.uniforms.uAtmosphere, current.atmosphere);
     gl.uniform1f(moon.uniforms.uAtmosphereMix, current.atmosphereMix);
     gl.uniform3fv(moon.uniforms.uTint, current.tint);
-    gl.uniform1f(moon.uniforms.uExposure, current.exposure);
+    gl.uniform1f(moon.uniforms.uExposure, current.exposure * (1 + focus * shot.focusExposure));
     gl.uniform1f(moon.uniforms.uRelief, 0.42);
     gl.uniform1f(moon.uniforms.uFade, fade);
 
@@ -788,18 +823,43 @@ export function createMoonScene(
       if (!running) {
         // Reduced motion stopped the loop; a theme change still has to land,
         // and with no frames to ease across it lands immediately.
-        running = true;
         current = clonePalette(target);
-        lastTime = 0;
-        frame = requestAnimationFrame(render);
+        wake();
       }
     },
     setFade(value) {
       fade = Math.max(0, Math.min(1, value));
-      if (!running && fade > 0) {
-        running = true;
-        lastTime = 0;
-        frame = requestAnimationFrame(render);
+      if (fade > 0) wake();
+    },
+    setPointer(x, y) {
+      if (!shot.anchored || reducedMotion) return;
+      pointerTarget[0] = Math.max(-1, Math.min(1, x));
+      pointerTarget[1] = Math.max(-1, Math.min(1, y));
+      wake();
+    },
+    setFocus(value) {
+      if (!shot.anchored) return;
+      focusTarget = Math.max(0, Math.min(1, value));
+      // Reduced motion keeps the moon still but not unlit: with no frames to
+      // ease across, the lighting change lands on the single frame that
+      // follows rather than being dropped.
+      if (reducedMotion) focus = focusTarget;
+      wake();
+    },
+    setSetting(value) {
+      if (!shot.anchored || reducedMotion) return;
+      settingTarget = Math.max(0, Math.min(1, value));
+      wake();
+    },
+    setActive(next) {
+      if (active === next) return;
+      active = next;
+      if (next) {
+        wake();
+      } else {
+        // Scrolled out of the frame. Nothing to draw, so nothing is drawn.
+        running = false;
+        cancelAnimationFrame(frame);
       }
     },
     destroy() {
