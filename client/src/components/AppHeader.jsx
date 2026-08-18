@@ -98,7 +98,11 @@ export default function AppHeader({ overlay = false }) {
               onClick={toggle}
               aria-label="Toggle theme"
               size="lg"
-              className={onSky ? '!text-[var(--sky-ink-2)] hover:!text-[var(--sky-ink)] hover:!bg-white/10' : undefined}
+              className={
+                onSky
+                  ? '!text-[var(--sky-ink-2)] hover:!bg-[var(--sky-wash)] hover:!text-[var(--sky-ink)]'
+                  : undefined
+              }
             >
               {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
             </IconButton>
@@ -113,7 +117,7 @@ export default function AppHeader({ overlay = false }) {
             aria-label="New design"
             className={cx(
               '!px-2 sm:!px-3',
-              onSky && 'border border-[var(--sky-line)] !text-[var(--sky-ink)] hover:!bg-white/10'
+              onSky && 'border border-[var(--sky-line)] !text-[var(--sky-ink)] hover:!bg-[var(--sky-wash)]'
             )}
           >
             <Plus size={14} />

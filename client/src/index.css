@@ -39,6 +39,8 @@
     --sky-ink-3: #5e6b79;
     --sky-line: rgb(20 26 34 / 0.16);
     --sky-line-soft: rgb(20 26 34 / 0.09);
+    /* A hover that works on either sky: the ink's own colour, barely there. */
+    --sky-wash: rgb(20 26 34 / 0.07);
     /* The moon as a still, for anything that cannot run the renderer. Lit from
        the same corner as the shader's key so the fallback is a photograph of
        the same moon rather than a different one. */
@@ -84,6 +86,7 @@
     --sky-ink-3: rgb(255 255 255 / 0.44);
     --sky-line: rgb(255 255 255 / 0.14);
     --sky-line-soft: rgb(255 255 255 / 0.07);
+    --sky-wash: rgb(255 255 255 / 0.1);
     --sky-moon: radial-gradient(circle at 34% 30%, #fbf8f1 0%, #dcd6c9 40%, #8c8878 74%, #35333c 100%);
     --sky-halo: 0 0 120px 40px rgb(150 172 226 / 0.22), 0 0 300px 90px rgb(90 110 180 / 0.14);
 
@@ -166,7 +169,9 @@
      because at this size on a photograph it needs the air. */
   .sky-label {
     @apply font-mono text-2xs uppercase tracking-[0.16em];
-    color: var(--sky-ink-3);
+    /* Not the faintest ink available: at 10px, tracked this wide, over a
+       mid-blue afternoon sky, that stops being readable. */
+    color: var(--sky-ink-2);
   }
 
   /* --- Editor chrome --------------------------------------------------

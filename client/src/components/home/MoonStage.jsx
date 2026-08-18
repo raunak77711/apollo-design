@@ -145,7 +145,7 @@ export default function MoonStage({ focus = 0 }) {
           pasted onto the page. It dissolves into the page's own background
           instead, so the hero ends at a horizon rather than at a border. */}
       <div
-        className="absolute inset-x-0 bottom-0 h-32 sm:h-44"
+        className="absolute inset-x-0 bottom-0 h-40 sm:h-56"
         style={{ background: 'linear-gradient(to bottom, transparent, rgb(var(--c-void)))' }}
       />
     </div>
