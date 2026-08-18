@@ -116,7 +116,7 @@ export default function GenerationScene({ stage, open = true, onExited }) {
     >
       {/* The rendered sky, or a designed still if the GPU cannot oblige. */}
       {fallback ? (
-        <StaticSky theme={theme} />
+        <StaticSky light={theme === 'light'} />
       ) : (
         <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
       )}
@@ -206,9 +206,7 @@ function Status({ stage, done, theme }) {
  * Not a spinner and not an apology — a still of the same sky, so the moment
  * still reads as Apollo working rather than as something having gone wrong.
  */
-function StaticSky({ theme }) {
-  const light = theme === 'light';
-
+function StaticSky({ light }) {
   return (
     <div
       className="absolute inset-0"
@@ -219,16 +217,11 @@ function StaticSky({ theme }) {
           : 'radial-gradient(120% 90% at 50% 18%, #141B2E 0%, #080B16 48%, #030409 100%)',
       }}
     >
+      {/* The still moon itself is a theme token now — the homepage falls back
+          to the same one, and one moon described twice would drift apart. */}
       <div
         className="absolute left-1/2 top-[38%] h-[min(38vh,17rem)] w-[min(38vh,17rem)] -translate-x-1/2 -translate-y-1/2 rounded-full"
-        style={{
-          background: light
-            ? 'radial-gradient(circle at 38% 32%, #FFFFFF 0%, #F2EFE8 52%, #D8D2C6 82%, #C4BCAE 100%)'
-            : 'radial-gradient(circle at 34% 30%, #FBF8F1 0%, #DCD6C9 40%, #8C8878 74%, #35333c 100%)',
-          boxShadow: light
-            ? '0 0 90px 30px rgb(255 255 255 / 0.45)'
-            : '0 0 120px 40px rgb(150 172 226 / 0.22), 0 0 300px 90px rgb(90 110 180 / 0.14)',
-        }}
+        style={{ background: 'var(--sky-moon)', boxShadow: 'var(--sky-halo)' }}
       />
     </div>
   );
