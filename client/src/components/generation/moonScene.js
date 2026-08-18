@@ -583,6 +583,8 @@ export function createMoonScene(
   let setting = 0;
   let settingTarget = 0;
   let active = true;
+  // Held framings shrink the moon to fit a narrow frame; see placeHeld.
+  let drawScale = shot.scale;
 
   /** Restart the loop after anything that stopped it. */
   function wake() {
@@ -671,6 +673,11 @@ export function createMoonScene(
     const halfWidth = halfHeight * aspect;
     const beside = aspect > 1.05;
 
+    // At full size the moon is wider than a phone held upright, so it is
+    // capped at a share of the frame's width. Expressed as one continuous
+    // limit rather than a breakpoint, so there is no size it jumps at.
+    drawScale = Math.min(shot.scale, halfWidth * 0.74);
+
     centre[0] = halfWidth * (beside ? 0.4 : 0.08) + Math.sin(t * 0.031) * 0.09 + pointer[0] * shot.parallax;
     centre[1] =
       halfHeight * (beside ? 0.15 : 0.44) +
@@ -732,14 +739,16 @@ export function createMoonScene(
     attribute.bind(glowQuad, glow.attributes.aCorner, 2, gl.FLOAT, false);
     gl.uniformMatrix4fv(glow.uniforms.uProjection, false, projection);
     gl.uniform3fv(glow.uniforms.uCentre, centre);
-    gl.uniform1f(glow.uniforms.uSize, current.glowSize * shot.glow);
+    // The halo is sized in world units, so it has to shrink with the moon or
+    // it detaches from the limb on a narrow screen.
+    gl.uniform1f(glow.uniforms.uSize, current.glowSize * shot.glow * (drawScale / shot.scale));
     gl.uniform3fv(glow.uniforms.uColor, current.glowColor);
     gl.uniform1f(glow.uniforms.uStrength, current.glowStrength * (1 + focus * shot.focusGlow) * fade);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
     /* moon */
     gl.disable(gl.BLEND);
-    modelView(mv, centre, reducedMotion ? 0.9 : t * shot.spin, -0.22, shot.scale);
+    modelView(mv, centre, reducedMotion ? 0.9 : t * shot.spin, -0.22, drawScale);
     normalMatrix(nm, mv);
 
     attribute.use(moon);
