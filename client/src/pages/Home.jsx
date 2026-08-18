@@ -13,7 +13,7 @@ import { FormatFrame } from '../ui/frame.jsx';
 import AppHeader from '../components/AppHeader.jsx';
 import AskApolloLauncher from '../components/AskApolloLauncher.jsx';
 import DesignPreview from '../components/DesignPreview.jsx';
-import Composer from '../components/home/Composer.jsx';
+import Hero from '../components/home/Hero.jsx';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -61,25 +61,18 @@ export default function Home() {
 
   return (
     <div className="min-h-screen">
-      <AppHeader />
+      {/* The header floats on the sky rather than sitting above it, so the hero
+          starts at the top of the document and the moon is not cropped by a
+          bar. Everything below the hero is the ordinary page again. */}
+      <AppHeader overlay />
+
+      <div className="-mt-14">
+        <Hero onCreate={create} creating={creating} />
+      </div>
 
       <main className="mx-auto w-full max-w-[1180px] px-5 pb-28 sm:px-8">
-        {/* Hero + prompt composer */}
-        <section className="pt-14 text-center sm:pt-20">
-          <h1 className="mx-auto max-w-[16ch] font-display text-[38px] font-semibold leading-[1.02] tracking-[-0.04em] sm:text-[54px]">
-            Describe it.
-            <br />
-            Apollo draws it.
-          </h1>
-          <p className="mx-auto mt-4 max-w-[52ch] text-[15px] leading-relaxed text-ink-2">
-            Every layer stays editable — type, images, shapes, colour. Nothing is baked into a picture.
-          </p>
-
-          <Composer creating={creating} onCreate={create} />
-        </section>
-
         {/* Formats */}
-        <section className="mt-16">
+        <section>
           <SectionRule
             action={
               <Link
