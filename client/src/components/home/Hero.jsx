@@ -71,7 +71,7 @@ export default function Hero({ onCreate, creating }) {
 function Horizon() {
   return (
     <div
-      className="animate-lift mt-16 border-t pt-4"
+      className="animate-lift mt-12 border-t pt-4"
       style={{ borderColor: 'var(--sky-line-soft)', animationDelay: '380ms' }}
     >
       <div className="flex flex-col gap-2.5 sm:flex-row sm:items-baseline sm:gap-6">

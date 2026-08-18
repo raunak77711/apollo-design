@@ -70,7 +70,9 @@ export default function Home() {
         <Hero onCreate={create} creating={creating} />
       </div>
 
-      <main className="mx-auto w-full max-w-[1180px] px-5 pb-28 sm:px-8">
+      {/* The horizon is the hero's last line; the page needs air under it
+          before it starts speaking again. */}
+      <main className="mx-auto w-full max-w-[1180px] px-5 pb-28 pt-16 sm:px-8 sm:pt-20">
         {/* Formats */}
         <section>
           <SectionRule

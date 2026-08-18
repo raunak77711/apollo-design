@@ -188,6 +188,7 @@ uniform vec3 uSkyBottom;
 uniform vec3 uSkyGlow;
 uniform vec3 uHaze;
 uniform float uHazeStrength;
+uniform float uVignette;
 uniform float uFade;
 
 float blob(vec2 p, vec2 centre, vec2 radius) {
@@ -225,7 +226,10 @@ void main() {
   sky = mix(sky, uHaze, clamp(cloud, 0.0, 1.0) * uHazeStrength);
 
   // A gentle vignette keeps the eye on the moon and hides the canvas edges.
-  float vignette = 1.0 - 0.34 * pow(length((vUv - 0.5) * vec2(1.1, 1.0)) * 1.35, 2.2);
+  // Held framings ask for much less of it: the page fades the sky out at the
+  // foot itself, and darkening a pale daytime sky on the way there turns it
+  // grey rather than atmospheric.
+  float vignette = 1.0 - uVignette * pow(length((vUv - 0.5) * vec2(1.1, 1.0)) * 1.35, 2.2);
   gl_FragColor = vec4(sky * vignette * uFade, 1.0);
 }`;
 
@@ -462,6 +466,7 @@ const FRAMINGS = {
     glow: 1,
     relief: 0.42,
     exposure: 1,
+    vignette: 0.34,
     parallax: 0,
     approach: 0,
     lag: 0,
@@ -483,6 +488,7 @@ const FRAMINGS = {
     // into a white shape instead of a lit sphere.
     relief: 0.55,
     exposure: 0.93,
+    vignette: 0.16,
     // How far the pointer may carry it, how much closer it comes when the
     // composer takes focus, and how far it sinks as the hero scrolls away.
     parallax: 0.34,
@@ -734,6 +740,7 @@ export function createMoonScene(
     gl.uniform3fv(sky.uniforms.uSkyGlow, current.skyGlow);
     gl.uniform3fv(sky.uniforms.uHaze, current.haze);
     gl.uniform1f(sky.uniforms.uHazeStrength, current.hazeStrength);
+    gl.uniform1f(sky.uniforms.uVignette, shot.vignette);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     /* stars and motes — additive, so light only ever adds to the sky */

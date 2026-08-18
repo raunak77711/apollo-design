@@ -21,11 +21,16 @@ import PreferenceSheet from '../generation/PreferenceSheet.jsx';
  * leans in and lifts its key light while there is a brief in progress.
  */
 
+/**
+ * Openers. The label names the idea and the brief is what lands in the box —
+ * a chip wide enough to hold a whole sentence pushes the row onto two lines,
+ * and a one-word brief teaches the wrong thing about how to ask.
+ */
 const IDEAS = [
-  'Instagram post for a 50% weekend sale',
-  'Dark, premium banner for a gym',
-  'Dinner menu for an Italian restaurant',
-  'YouTube thumbnail about focus habits',
+  { label: 'Weekend sale', brief: 'Instagram post for a 50% off weekend sale' },
+  { label: 'Gym banner', brief: 'Dark, premium banner for a gym' },
+  { label: 'Restaurant menu', brief: 'Dinner menu for an Italian restaurant' },
+  { label: 'Thumbnail', brief: 'YouTube thumbnail about focus habits' },
 ];
 
 const MAX_REFERENCES = 3;
@@ -97,11 +102,13 @@ export default function Composer({ onCreate, creating, onFocusChange }) {
   };
 
   return (
-    <div className="mt-9 w-full max-w-[38rem] text-left">
+    <div className="mt-9 w-full max-w-[41rem] text-left">
+      {/* Wide enough to run into the moon's lower limb, which is what makes it
+          read as standing in front of the moon rather than beside it. */}
       <div
         className={cx(
           'rounded-xl border bg-surface shadow-art transition-colors duration-200 ease-out',
-          working ? 'border-accent/40' : 'border-line'
+          working ? 'border-accent/45' : 'border-[var(--sky-line)]'
         )}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
@@ -145,11 +152,11 @@ export default function Composer({ onCreate, creating, onFocusChange }) {
           }}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder="A dark, premium banner for Aryans Gym with the headline “Transform your body”…"
-          className="thin-scroll w-full resize-none bg-transparent px-4 pt-4 text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-3 sm:text-base"
+          placeholder="A dark, premium banner for a gym, headline “Transform your body”…"
+          className="thin-scroll w-full resize-none bg-transparent px-4 pb-1 pt-4 text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-3 sm:text-base"
         />
 
-        <div className="flex items-center gap-2 px-2.5 pb-2.5">
+        <div className="flex items-center gap-2 px-2.5 pb-3">
           <FormatPicker
             value={canvas}
             onSelect={(preset) => {
@@ -195,15 +202,15 @@ export default function Composer({ onCreate, creating, onFocusChange }) {
         <span className="sky-label">Try</span>
         {IDEAS.map((idea) => (
           <button
-            key={idea}
+            key={idea.label}
             onClick={() => {
-              setPrompt(idea);
+              setPrompt(idea.brief);
               inputRef.current?.focus();
               grow(inputRef.current);
             }}
             className="rounded text-[13px] text-[var(--sky-ink-2)] underline-offset-4 transition-colors duration-150 hover:text-[var(--sky-ink)] hover:underline"
           >
-            {idea}
+            {idea.label}
           </button>
         ))}
       </div>
