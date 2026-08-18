@@ -460,6 +460,8 @@ const FRAMINGS = {
     depth: -9.5,
     spin: 0.048,
     glow: 1,
+    relief: 0.42,
+    exposure: 1,
     parallax: 0,
     approach: 0,
     lag: 0,
@@ -475,6 +477,12 @@ const FRAMINGS = {
     depth: -8.4,
     spin: 0.062,
     glow: 1.3,
+    // Held, the moon is four times the size it is while drifting, and the same
+    // numbers no longer read the same: the relief map has the resolution to
+    // carry more at this scale, and a full-brightness disc this large flattens
+    // into a white shape instead of a lit sphere.
+    relief: 0.55,
+    exposure: 0.93,
     // How far the pointer may carry it, how much closer it comes when the
     // composer takes focus, and how far it sinks as the hero scrolls away.
     parallax: 0.34,
@@ -783,8 +791,8 @@ export function createMoonScene(
     gl.uniform3fv(moon.uniforms.uAtmosphere, current.atmosphere);
     gl.uniform1f(moon.uniforms.uAtmosphereMix, current.atmosphereMix);
     gl.uniform3fv(moon.uniforms.uTint, current.tint);
-    gl.uniform1f(moon.uniforms.uExposure, current.exposure * (1 + focus * shot.focusExposure));
-    gl.uniform1f(moon.uniforms.uRelief, 0.42);
+    gl.uniform1f(moon.uniforms.uExposure, current.exposure * shot.exposure * (1 + focus * shot.focusExposure));
+    gl.uniform1f(moon.uniforms.uRelief, shot.relief);
     gl.uniform1f(moon.uniforms.uFade, fade);
 
     gl.drawElements(gl.TRIANGLES, mesh.indexCount, gl.UNSIGNED_SHORT, 0);
