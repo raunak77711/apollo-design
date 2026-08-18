@@ -52,6 +52,37 @@ DeepSeek with the specific failures attached and is reconsidered.
 
 ---
 
+## The moon
+
+The homepage opens on a real 3D moon — the project's own `Moon_3D_Model`, its
+displaced mesh and crater map baked to 235 KB by `scripts/bake-moon.mjs` and
+drawn in raw WebGL. Not a picture of a moon and not a sphere with a gradient on
+it.
+
+It is the same moon that turns while Apollo draws, and that is the point: you
+brief Apollo under the sky it works under. One scene, two **framings**
+(`components/generation/moonScene.js`):
+
+- **drifting** — the generation screen. The moon wanders the frame, unanchored,
+  because nothing else is on screen.
+- **held** — the homepage. Anchored where the layout leaves room, large enough
+  to be the subject, and cropped by the frame like a photograph. Beside the type
+  where there is width for a column; stacked above it where there is not.
+
+The held framing answers the page. The pointer moves it against itself, the way
+a far object behaves when you pan across it. Focusing the composer brings it
+closer *and* lifts its key light, so starting to write reads as Apollo waking
+rather than as a zoom. Scrolling lets it lag behind the page and set.
+
+None of it is load-bearing. The moon is fetched at idle, never against first
+paint; it stops drawing when scrolled past or covered; and no WebGL, a lost
+context, a failed fetch, reduced motion or a data-saving preference each fall
+back a step, down to a CSS still. The hero's headline and prompt box never
+depend on any of it.
+
+A side effect worth having: a homepage visit decodes the moon once, so the
+generation screen already has it.
+
 ## Stack
 
 | Layer     | Tech |
@@ -206,7 +237,9 @@ apollo-design/
 │       ├── ui/             # design system: primitives, fields, overlays, brand,
 │       │                   # onboarding (the AI-generating overlay + hints)
 │       ├── components/     # editor/ (stage, rail, inspector, panels, PhotoEditor,
-│       │                   # LiquifyTab, RetouchTab, DrawStudio) + elements/
+│       │                   # LiquifyTab, RetouchTab, DrawStudio) + elements/,
+│       │                   # home/ (hero, moon stage, composer),
+│       │                   # generation/ (moonScene.js — the WebGL moon)
 │       ├── raster/         # pixel tools: liquify.js, retouch.js, draw.js,
 │       │                   # rasterShapes.js, imageIO.js, useBrushStroke.js
 │       └── pages/          # Home, Templates, Assets, EditorPage
