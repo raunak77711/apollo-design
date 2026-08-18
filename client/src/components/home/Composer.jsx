@@ -85,8 +85,16 @@ export default function Composer({ onCreate, creating, onFocusChange }) {
   };
 
   const submit = () => {
+    if (creating) return;
     const text = prompt.trim();
-    if (!text || creating) return;
+    // Pressing Generate with nothing written is not an error and should not be
+    // a dead button: it is someone asking where to start, so it puts the cursor
+    // where they can. Which also means the page's one primary action is never
+    // greyed out on arrival.
+    if (!text) {
+      inputRef.current?.focus();
+      return;
+    }
     setAsking(text);
   };
 
@@ -191,7 +199,7 @@ export default function Composer({ onCreate, creating, onFocusChange }) {
           {/* The one warm thing in a cold sky. Apollo's solar accent is
               reserved for focus, selection and Apollo AI — and pressing this
               is Apollo AI. */}
-          <Button variant="accent" onClick={submit} disabled={!prompt.trim() || creating}>
+          <Button variant="accent" onClick={submit} disabled={creating}>
             {creating ? <Spinner /> : <ArrowUp size={15} />}
             Generate
           </Button>
