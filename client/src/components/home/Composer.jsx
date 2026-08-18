@@ -1,8 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, ImagePlus, X } from 'lucide-react';
+import { cx } from '../../lib/cx.js';
 import { shorten } from '../../lib/format.js';
 import { findPreset } from '../../design/presets.js';
 import { Button, IconButton, Spinner, Tooltip } from '../../ui/primitives.jsx';
+
 import FormatPicker from '../FormatPicker.jsx';
 import PreferenceSheet from '../generation/PreferenceSheet.jsx';
 
@@ -11,6 +13,12 @@ import PreferenceSheet from '../generation/PreferenceSheet.jsx';
  *
  * Submitting does not begin a generation; it begins a conversation. Apollo asks
  * the two or three things it cannot infer from the brief, and only then draws.
+ *
+ * It sits on the rendered sky, so it is an opaque plane with a hairline and a
+ * real shadow rather than a tinted panel: at this size a translucent card lets
+ * stars ghost through the type, which reads as a bug rather than as glass. The
+ * one thing it reports outward is whether it is being used — the moon behind it
+ * leans in and lifts its key light while there is a brief in progress.
  */
 
 const IDEAS = [
@@ -22,8 +30,9 @@ const IDEAS = [
 
 const MAX_REFERENCES = 3;
 
-export default function Composer({ onCreate, creating }) {
+export default function Composer({ onCreate, creating, onFocusChange }) {
   const [prompt, setPrompt] = useState('');
+  const [focused, setFocused] = useState(false);
   const [format, setFormat] = useState(() => findPreset('banner'));
   const [custom, setCustom] = useState(null);
   const [references, setReferences] = useState([]); // [{ id, name, dataUrl }]
@@ -34,6 +43,13 @@ export default function Composer({ onCreate, creating }) {
   const fileInputRef = useRef(null);
 
   const canvas = custom || format;
+
+  // A brief already typed keeps Apollo awake after the cursor leaves, so the
+  // moon does not settle back down between writing and pressing Generate.
+  const working = focused || prompt.trim().length > 0;
+  useEffect(() => {
+    onFocusChange?.(working);
+  }, [working, onFocusChange]);
 
   const grow = (el) => {
     if (!el) return;
@@ -81,9 +97,12 @@ export default function Composer({ onCreate, creating }) {
   };
 
   return (
-    <div className="mx-auto mt-8 w-full max-w-[46rem] text-left">
+    <div className="mt-9 w-full max-w-[38rem] text-left">
       <div
-        className="rounded-xl border border-line bg-surface transition-colors duration-150 focus-within:border-line-strong"
+        className={cx(
+          'rounded-xl border bg-surface shadow-art transition-colors duration-200 ease-out',
+          working ? 'border-accent/40' : 'border-line'
+        )}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           e.preventDefault();
@@ -124,8 +143,10 @@ export default function Composer({ onCreate, creating }) {
               submit();
             }
           }}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           placeholder="A dark, premium banner for Aryans Gym with the headline “Transform your body”…"
-          className="thin-scroll w-full resize-none bg-transparent px-4 pt-3.5 text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-3"
+          className="thin-scroll w-full resize-none bg-transparent px-4 pt-4 text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-3 sm:text-base"
         />
 
         <div className="flex items-center gap-2 px-2.5 pb-2.5">
@@ -160,21 +181,18 @@ export default function Composer({ onCreate, creating }) {
             </IconButton>
           </Tooltip>
           <div className="flex-1" />
-          <Tooltip label="Generate" hint="⏎" side="top">
-            <Button
-              variant="primary"
-              onClick={submit}
-              disabled={!prompt.trim() || creating}
-              aria-label="Generate design"
-            >
-              {creating ? <Spinner /> : <ArrowUp size={15} />}
-            </Button>
-          </Tooltip>
+          {/* The one warm thing in a cold sky. Apollo's solar accent is
+              reserved for focus, selection and Apollo AI — and pressing this
+              is Apollo AI. */}
+          <Button variant="accent" onClick={submit} disabled={!prompt.trim() || creating}>
+            {creating ? <Spinner /> : <ArrowUp size={15} />}
+            Generate
+          </Button>
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5">
-        <span className="label">Try</span>
+      <div className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        <span className="sky-label">Try</span>
         {IDEAS.map((idea) => (
           <button
             key={idea}
@@ -183,7 +201,7 @@ export default function Composer({ onCreate, creating }) {
               inputRef.current?.focus();
               grow(inputRef.current);
             }}
-            className="rounded text-[13px] text-ink-3 underline-offset-4 transition-colors duration-150 hover:text-ink hover:underline"
+            className="rounded text-[13px] text-[var(--sky-ink-2)] underline-offset-4 transition-colors duration-150 hover:text-[var(--sky-ink)] hover:underline"
           >
             {idea}
           </button>
