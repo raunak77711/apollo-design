@@ -444,16 +444,74 @@ const STAR_COUNT = 340;
 const MOTE_COUNT = 70;
 
 /**
+ * How the moon is framed.
+ *
+ * The same scene serves two very different jobs. While a design is generated
+ * the moon is the only thing on screen and is free to wander it; on the
+ * homepage it is the subject of a composition that also has to hold a headline
+ * and a prompt box, so it is anchored where the layout left room for it and
+ * given something to respond to.
+ */
+const FRAMINGS = {
+  // Drifting: unanchored, and nothing on the page can address it.
+  drift: {
+    anchored: false,
+    scale: 1,
+    depth: -9.5,
+    spin: 0.048,
+    glow: 1,
+    parallax: 0,
+    approach: 0,
+    lag: 0,
+    focusKey: 0,
+    focusGlow: 0,
+    focusExposure: 0,
+  },
+  // Held: large enough to be the subject, cropped by the frame like a
+  // photograph, and answering the pointer, the composer and the scroll.
+  hero: {
+    anchored: true,
+    scale: 1.34,
+    depth: -8.4,
+    spin: 0.062,
+    glow: 1.3,
+    // How far the pointer may carry it, how much closer it comes when the
+    // composer takes focus, and how far it sinks as the hero scrolls away.
+    parallax: 0.34,
+    approach: 0.66,
+    lag: 1.15,
+    // Focus is a lighting change, not only a move: the key lifts and the halo
+    // opens, so Apollo reads as having woken up rather than as having zoomed.
+    focusKey: 0.15,
+    focusGlow: 0.6,
+    focusExposure: 0.045,
+  },
+};
+
+/**
  * Build the scene. Returns a handle the caller drives:
  *
  *   setTheme('dark' | 'light')   cross-fades the whole environment
  *   setFade(0..1)                master opacity, for entering and leaving
+ *   setPointer(x, y)             -1..1 — parallax, eased over the next frames
+ *   setFocus(0..1)               the page is being worked in; the moon leans in
+ *   setSetting(0..1)             how far the hero has been scrolled past
+ *   setActive(boolean)           stop drawing entirely when off screen
  *   destroy()                    releases every GL object and stops the loop
+ *
+ * The interaction setters do nothing under the drifting framing, and the ones
+ * that move the moon do nothing under reduced motion — a still composition
+ * stays still even while the pointer crosses it.
  *
  * `onLost` fires if the GL context is lost, so the caller can drop to the
  * static fallback instead of showing a dead canvas.
  */
-export function createMoonScene(canvas, assets, { theme = 'dark', reducedMotion = false, onLost } = {}) {
+export function createMoonScene(
+  canvas,
+  assets,
+  { theme = 'dark', reducedMotion = false, onLost, framing = 'drift' } = {}
+) {
+  const shot = FRAMINGS[framing] || FRAMINGS.drift;
   const gl = canvas.getContext('webgl', {
     alpha: false,
     antialias: true,
@@ -513,7 +571,26 @@ export function createMoonScene(canvas, assets, { theme = 'dark', reducedMotion 
   let elapsed = 0;
   let lastTime = 0;
 
-  const centre = [0, 0, -9.5];
+  const centre = [0, 0, shot.depth];
+
+  /* What the page is telling the moon. Each is a target the render loop eases
+     toward, because pointer moves and scroll events both arrive far more often
+     than frames — easing at the call site would only stutter. */
+  const pointer = [0, 0];
+  const pointerTarget = [0, 0];
+  let focus = 0;
+  let focusTarget = 0;
+  let setting = 0;
+  let settingTarget = 0;
+  let active = true;
+
+  /** Restart the loop after anything that stopped it. */
+  function wake() {
+    if (running || !active) return;
+    running = true;
+    lastTime = 0;
+    frame = requestAnimationFrame(render);
+  }
 
   /* -------------------------------- sizing ------------------------------- */
 
