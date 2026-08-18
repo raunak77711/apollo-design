@@ -19,7 +19,7 @@ import { useMediaQuery } from '../../lib/useMediaQuery.js';
 
 const RISE_MS = 1400;
 
-export default function MoonStage({ focus = 0 }) {
+export default function MoonStage({ focus = 0, paused = false }) {
   const { theme } = useTheme();
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   // The same breakpoint the hero lays itself out on, so the moon and the type
@@ -30,6 +30,8 @@ export default function MoonStage({ focus = 0 }) {
   const sceneRef = useRef(null);
   const focusRef = useRef(focus);
   const besideRef = useRef(beside);
+  const activeRef = useRef(true);
+  const [onScreen, setOnScreen] = useState(true);
   const [fallback, setFallback] = useState(() => !worthRendering());
 
   /* -------------------------------- the moon ------------------------------ */
@@ -63,6 +65,7 @@ export default function MoonStage({ focus = 0 }) {
           // Whatever the page already knew before the moon arrived.
           scene.setLayout(besideRef.current ? 'beside' : 'stacked');
           scene.setFocus(focusRef.current);
+          scene.setActive(activeRef.current);
           if (rootRef.current) scene.setSetting(scrolledPast(rootRef.current));
 
           // The moon rises into the page rather than appearing in it.
@@ -105,6 +108,14 @@ export default function MoonStage({ focus = 0 }) {
     sceneRef.current?.setLayout(beside ? 'beside' : 'stacked');
   }, [beside]);
 
+  // One decision out of two facts: the moon draws while it is on screen and
+  // nothing is covering it. A sheet over the hero is opaque, so a moon behind
+  // one is a GPU drawing something nobody can see.
+  useEffect(() => {
+    activeRef.current = onScreen && !paused;
+    sceneRef.current?.setActive(activeRef.current);
+  }, [onScreen, paused]);
+
   /* ------------------------------ the page ------------------------------- */
 
   useEffect(() => {
@@ -113,10 +124,7 @@ export default function MoonStage({ focus = 0 }) {
     // the pointer or the scroll to move.
     if (fallback || reducedMotion || !root) return undefined;
 
-    let onScreen = true;
-
     const onPointerMove = (event) => {
-      if (!onScreen) return;
       const x = (event.clientX / window.innerWidth) * 2 - 1;
       const y = (event.clientY / window.innerHeight) * 2 - 1;
       // Against the pointer, not with it. The moon is the far object in the
@@ -127,25 +135,28 @@ export default function MoonStage({ focus = 0 }) {
 
     const onScroll = () => sceneRef.current?.setSetting(scrolledPast(root));
 
-    // Nothing to draw once the hero is gone, so nothing is drawn.
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        onScreen = entry.isIntersecting;
-        sceneRef.current?.setActive(onScreen);
-      },
-      { threshold: 0 }
-    );
-    observer.observe(root);
-
     window.addEventListener('pointermove', onPointerMove, { passive: true });
     window.addEventListener('scroll', onScroll, { passive: true });
 
     return () => {
-      observer.disconnect();
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('scroll', onScroll);
     };
+    // Both setters ignore anything said to a scene that is not drawing, so
+    // neither needs to know whether the hero is on screen.
   }, [fallback, reducedMotion]);
+
+  // Watched separately from the pointer, because a still moon still has no
+  // business holding a context open once the hero is scrolled away.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (fallback || !root || typeof IntersectionObserver === 'undefined') return undefined;
+    const observer = new IntersectionObserver(([entry]) => setOnScreen(entry.isIntersecting), {
+      threshold: 0,
+    });
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, [fallback]);
 
   return (
     <div ref={rootRef} className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">

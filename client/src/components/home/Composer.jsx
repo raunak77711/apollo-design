@@ -17,8 +17,10 @@ import PreferenceSheet from '../generation/PreferenceSheet.jsx';
  * It sits on the rendered sky, so it is an opaque plane with a hairline and a
  * real shadow rather than a tinted panel: at this size a translucent card lets
  * stars ghost through the type, which reads as a bug rather than as glass. The
- * one thing it reports outward is whether it is being used — the moon behind it
- * leans in and lifts its key light while there is a brief in progress.
+ * What it reports outward is what the moon behind it needs to know: whether it
+ * is being used — the moon leans in and lifts its key light while there is a
+ * brief in progress — and whether Apollo's preference sheet is covering the
+ * hero, in which case there is no point drawing a moon at all.
  */
 
 /**
@@ -35,7 +37,7 @@ const IDEAS = [
 
 const MAX_REFERENCES = 3;
 
-export default function Composer({ onCreate, creating, onFocusChange }) {
+export default function Composer({ onCreate, creating, onFocusChange, onCoveredChange }) {
   const [prompt, setPrompt] = useState('');
   const [focused, setFocused] = useState(false);
   const [format, setFormat] = useState(() => findPreset('banner'));
@@ -55,6 +57,11 @@ export default function Composer({ onCreate, creating, onFocusChange }) {
   useEffect(() => {
     onFocusChange?.(working);
   }, [working, onFocusChange]);
+
+  const covered = Boolean(asking);
+  useEffect(() => {
+    onCoveredChange?.(covered);
+  }, [covered, onCoveredChange]);
 
   const grow = (el) => {
     if (!el) return;

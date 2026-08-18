@@ -33,10 +33,14 @@ export default function Hero({ onCreate, creating }) {
   // light while there is — the page's one piece of feedback that Apollo is
   // paying attention before it has been asked for anything.
   const [working, setWorking] = useState(false);
+  // Apollo's preference sheet covers the hero completely while it asks its
+  // questions. The moon holds its position behind it rather than being drawn
+  // for nobody.
+  const [covered, setCovered] = useState(false);
 
   return (
     <section className="relative isolate">
-      <MoonStage focus={working ? 1 : 0} />
+      <MoonStage focus={working ? 1 : 0} paused={covered} />
 
       <div className="relative mx-auto flex min-h-[92svh] w-full max-w-[1180px] flex-col px-5 pb-10 pt-[44svh] sm:px-8 lg:pt-28">
         <div className="flex flex-1 flex-col justify-end lg:justify-center">
@@ -59,7 +63,12 @@ export default function Hero({ onCreate, creating }) {
           </p>
 
           <div className="animate-lift" style={{ animationDelay: '270ms' }}>
-            <Composer onCreate={onCreate} creating={creating} onFocusChange={setWorking} />
+            <Composer
+              onCreate={onCreate}
+              creating={creating}
+              onFocusChange={setWorking}
+              onCoveredChange={setCovered}
+            />
           </div>
         </div>
 
