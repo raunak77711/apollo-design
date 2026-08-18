@@ -134,10 +134,10 @@ export default function GenerationScene({ stage, open = true, onExited }) {
       />
 
       <div className="absolute left-1/2 top-7 -translate-x-1/2 animate-fade-in opacity-70">
-        <Wordmark markSize={18} className={theme === 'light' ? '!text-[#1B2430]' : '!text-white'} />
+        <Wordmark markSize={18} className="!text-[var(--sky-ink)]" />
       </div>
 
-      <Status stage={stage} done={done} theme={theme} />
+      <Status stage={stage} done={done} />
     </div>
   );
 }
@@ -152,25 +152,19 @@ export default function GenerationScene({ stage, open = true, onExited }) {
  * animation replays — and the ticks beneath it show how far through the
  * pipeline Apollo is without pretending to know a percentage.
  */
-function Status({ stage, done, theme }) {
-  const light = theme === 'light';
+function Status({ stage, done }) {
   const index = STAGE_ORDER.indexOf(stage);
 
   return (
     <div className="absolute inset-x-0 bottom-[13%] flex flex-col items-center px-6 text-center">
       <div key={stage} className="animate-rise">
-        <p
-          className={cx(
-            'font-display text-[19px] font-medium tracking-[-0.02em] sm:text-[22px]',
-            light ? 'text-[#141A22]' : 'text-white'
-          )}
-        >
+        {/* Ink on the sky, not ink on the page: the same tokens the homepage
+            sets its hero in, so one definition covers both skies. */}
+        <p className="font-display text-[19px] font-medium tracking-[-0.02em] text-[var(--sky-ink)] sm:text-[22px]">
           {stageLabel(stage)}
           {!done && <span className="inline-block animate-pulse">…</span>}
         </p>
-        <p className={cx('mt-1.5 text-[13px] leading-relaxed', light ? 'text-[#41505F]' : 'text-white/55')}>
-          {stageDetail(stage)}
-        </p>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--sky-ink-2)]">{stageDetail(stage)}</p>
       </div>
 
       <div className="mt-6 flex items-center gap-1.5" aria-hidden="true">
@@ -181,14 +175,7 @@ function Status({ stage, done, theme }) {
               key={s}
               className={cx(
                 'h-[3px] rounded-full transition-all duration-500 ease-out',
-                reached ? 'w-7' : 'w-3',
-                reached
-                  ? light
-                    ? 'bg-[#141A22]/60'
-                    : 'bg-white/70'
-                  : light
-                    ? 'bg-[#141A22]/15'
-                    : 'bg-white/15'
+                reached ? 'w-7 bg-[var(--sky-ink-2)]' : 'w-3 bg-[var(--sky-line)]'
               )}
               style={{ transitionDelay: `${i * 40}ms` }}
             />
