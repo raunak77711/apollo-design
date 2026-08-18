@@ -6,12 +6,19 @@ import MoonStage from './MoonStage.jsx';
 /**
  * The homepage's opening: the moon, and the one thing to do here.
  *
- * The composition is asymmetric on purpose. The moon holds the right of the
- * frame and the type holds a column on the left, so the headline never crosses
- * the lit face and the moon never has to be dimmed to keep the words readable.
- * The composer runs into the moon's lower limb and, being an opaque plane with
- * its own shadow, reads as sitting in front of it — which is the difference
- * between a render the interface is standing in and a picture behind it.
+ * The composition is asymmetric wherever there is room to be: the moon holds
+ * the right of the frame and the type holds a column on the left, so the
+ * headline never crosses the lit face and the moon never has to be dimmed to
+ * keep the words readable. The composer runs into the moon's lower limb and,
+ * being an opaque plane with its own shadow, reads as sitting in front of it —
+ * which is the difference between a render the interface is standing in and a
+ * picture behind it.
+ *
+ * Below that width the two cannot share a line, so they stack: the moon takes
+ * the top of the frame as the sky the page begins under, and the type is
+ * anchored beneath it. The reserve above the type is what keeps the headline
+ * off the moon, and it is deliberately larger than the moon needs — the hero
+ * grows taller than the viewport on a small phone, and the moon grows with it.
  */
 
 /**
@@ -31,8 +38,8 @@ export default function Hero({ onCreate, creating }) {
     <section className="relative isolate">
       <MoonStage focus={working ? 1 : 0} />
 
-      <div className="relative mx-auto flex min-h-[min(94svh,56rem)] w-full max-w-[1180px] flex-col px-5 pb-10 pt-24 sm:px-8 sm:pt-28">
-        <div className="flex flex-1 flex-col justify-center">
+      <div className="relative mx-auto flex min-h-[92svh] w-full max-w-[1180px] flex-col px-5 pb-10 pt-[44svh] sm:px-8 lg:pt-28">
+        <div className="flex flex-1 flex-col justify-end lg:justify-center">
           <p className="sky-label animate-lift">AI creates — you control</p>
 
           <h1

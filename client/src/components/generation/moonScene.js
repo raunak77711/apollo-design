@@ -509,6 +509,7 @@ const FRAMINGS = {
  *   setFade(0..1)                master opacity, for entering and leaving
  *   setPointer(x, y)             -1..1 — parallax, eased over the next frames
  *   setFocus(0..1)               the page is being worked in; the moon leans in
+ *   setLayout('beside'|'stacked') which composition the page is currently in
  *   setSetting(0..1)             how far the hero has been scrolled past
  *   setActive(boolean)           stop drawing entirely when off screen
  *   destroy()                    releases every GL object and stops the loop
@@ -597,7 +598,13 @@ export function createMoonScene(
   let setting = 0;
   let settingTarget = 0;
   let active = true;
-  // Held framings shrink the moon to fit a narrow frame; see placeHeld.
+  // Which composition the page is laid out in. Told rather than guessed: the
+  // canvas aspect and the page's breakpoint disagree on a tall wide window and
+  // on a tablet held upright, and when they disagree the moon lands on the
+  // type. Stacked until the page says otherwise, because that is the framing
+  // that leaves room for everything.
+  let layout = 'stacked';
+  // Held framings shrink the moon to fit; see placeHeld.
   let drawScale = shot.scale;
 
   /** Restart the loop after anything that stopped it. */
@@ -673,28 +680,35 @@ export function createMoonScene(
   /**
    * Where the moon is when the composition is held.
    *
-   * An anchor the layout was built around — right of centre and a little high
-   * while there is room beside it, top and nearly centred once the frame is too
-   * narrow for a column to sit alongside. Over that, a bob slow enough to read
-   * as floating rather than as animation, and then the three things the page is
-   * allowed to say: where the pointer is, whether the composer has focus, and
-   * how far it has been scrolled past.
+   * Two compositions, not one with a scale factor. Beside the type it is the
+   * subject: right of centre, a little high, full size, cropped by the frame
+   * like a photograph. Stacked above the type it is the sky the page begins
+   * under, so it gives up more than half its size and sits high enough to leave
+   * the headline a clear field.
+   *
+   * Over either, a bob slow enough to read as floating rather than as
+   * animation, and then the three things the page is allowed to say: where the
+   * pointer is, whether the composer has focus, and how far it has been
+   * scrolled past.
    */
   function placeHeld(t) {
     // Measured at the anchor depth rather than the current one, so leaning in
     // toward the composer cannot also shift the moon across the frame.
     const halfHeight = -shot.depth * Math.tan(FOV / 2);
     const halfWidth = halfHeight * aspect;
-    const beside = aspect > 1.05;
+    const beside = layout === 'beside';
 
-    // At full size the moon is wider than a phone held upright, so it is
-    // capped at a share of the frame's width. Expressed as one continuous
-    // limit rather than a breakpoint, so there is no size it jumps at.
-    drawScale = Math.min(shot.scale, halfWidth * 0.74);
+    // Stacked, the moon is capped against the frame's height as well as its
+    // width — the width alone would let a tall narrow frame grow a moon that
+    // reaches the headline, and the height alone would let a wide short one.
+    // The share is sized so the moon clears the header above it and the
+    // headline below: a composition where the subject collides with the
+    // navigation is a bad crop, not an immersive one.
+    drawScale = beside ? shot.scale : Math.min(shot.scale, halfWidth * 0.74, halfHeight * 0.3);
 
     centre[0] = halfWidth * (beside ? 0.4 : 0.08) + Math.sin(t * 0.031) * 0.09 + pointer[0] * shot.parallax;
     centre[1] =
-      halfHeight * (beside ? 0.15 : 0.44) +
+      halfHeight * (beside ? 0.15 : 0.55) +
       Math.sin(t * 0.047 + 1.1) * 0.06 -
       pointer[1] * shot.parallax * 0.5 -
       setting * shot.lag;
@@ -868,6 +882,11 @@ export function createMoonScene(
       // ease across, the lighting change lands on the single frame that
       // follows rather than being dropped.
       if (reducedMotion) focus = focusTarget;
+      wake();
+    },
+    setLayout(next) {
+      if (!shot.anchored || layout === next) return;
+      layout = next;
       wake();
     },
     setSetting(value) {

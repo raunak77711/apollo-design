@@ -22,10 +22,14 @@ const RISE_MS = 1400;
 export default function MoonStage({ focus = 0 }) {
   const { theme } = useTheme();
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
+  // The same breakpoint the hero lays itself out on, so the moon and the type
+  // can never end up composed for different pages.
+  const beside = useMediaQuery('(min-width: 1024px)');
   const rootRef = useRef(null);
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
   const focusRef = useRef(focus);
+  const besideRef = useRef(beside);
   const [fallback, setFallback] = useState(() => !worthRendering());
 
   /* -------------------------------- the moon ------------------------------ */
@@ -57,6 +61,7 @@ export default function MoonStage({ focus = 0 }) {
           sceneRef.current = scene;
 
           // Whatever the page already knew before the moon arrived.
+          scene.setLayout(besideRef.current ? 'beside' : 'stacked');
           scene.setFocus(focusRef.current);
           if (rootRef.current) scene.setSetting(scrolledPast(rootRef.current));
 
@@ -94,6 +99,11 @@ export default function MoonStage({ focus = 0 }) {
     focusRef.current = focus;
     sceneRef.current?.setFocus(focus);
   }, [focus]);
+
+  useEffect(() => {
+    besideRef.current = beside;
+    sceneRef.current?.setLayout(beside ? 'beside' : 'stacked');
+  }, [beside]);
 
   /* ------------------------------ the page ------------------------------- */
 
@@ -165,7 +175,7 @@ function StillSky() {
       style={{ background: 'linear-gradient(to bottom, var(--sky-top), var(--sky-bottom))' }}
     >
       <div
-        className="absolute left-[54%] top-[28%] aspect-square w-[min(74vw,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-full lg:left-[70%] lg:top-[42%] lg:w-[min(58vh,34rem)]"
+        className="absolute left-[54%] top-[19%] aspect-square w-[min(58vw,17rem)] -translate-x-1/2 -translate-y-1/2 rounded-full lg:left-[70%] lg:top-[42%] lg:w-[min(58vh,34rem)]"
         style={{ background: 'var(--sky-moon)', boxShadow: 'var(--sky-halo)' }}
       />
     </div>
