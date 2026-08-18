@@ -7,7 +7,7 @@ import { relativeTime, shorten } from '../lib/format.js';
 import { useToast } from '../lib/toast.jsx';
 import { useCreateDesign } from '../lib/useCreateDesign.js';
 import { QUICK_PRESETS, presetLabel } from '../design/presets.js';
-import { Button, EmptyState, IconButton, SectionRule } from '../ui/primitives.jsx';
+import { Button, EmptyState, IconButton } from '../ui/primitives.jsx';
 import { MenuItem, Modal, Popover } from '../ui/overlay.jsx';
 import { FormatFrame } from '../ui/frame.jsx';
 import AppHeader from '../components/AppHeader.jsx';
@@ -75,7 +75,7 @@ export default function Home() {
       <main className="mx-auto w-full max-w-[1180px] px-5 pb-28 pt-16 sm:px-8 sm:pt-20">
         {/* Formats */}
         <section>
-          <SectionRule
+          <Section
             action={
               <Link
                 to="/templates"
@@ -86,7 +86,7 @@ export default function Home() {
             }
           >
             Or start blank
-          </SectionRule>
+          </Section>
 
           <div className="mt-4 flex flex-wrap gap-2">
             {QUICK_PRESETS.map((preset) => (
@@ -114,14 +114,14 @@ export default function Home() {
         </section>
 
         {/* Recent work */}
-        <section className="mt-14">
-          <SectionRule
+        <section className="mt-16">
+          <Section
             action={
               projects.length > 0 && <span className="num text-2xs text-ink-3">{projects.length}</span>
             }
           >
             Your designs
-          </SectionRule>
+          </Section>
 
           {status === 'loading' && (
             <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
@@ -201,6 +201,29 @@ export default function Home() {
       {/* Ask Apollo — the editor's assistant, offered from the homepage as a
           greeting rather than a banner. */}
       <AskApolloLauncher />
+    </div>
+  );
+}
+
+/* -------------------------------- Section -------------------------------- */
+
+/**
+ * A section heading, for a landing page rather than a workspace one.
+ *
+ * The editor and the other pages label their sections in the instrument voice —
+ * 10px mono, which is right above dense controls. Following an 80px headline it
+ * is a cliff with nothing in between, and it left the page with no heading
+ * level under the hero's h1 at all. So here the sections are set as what they
+ * are: real headings, in the display face, on the same type scale the hero
+ * uses. The hairline rule and the trailing action stay, so the family
+ * resemblance with the rest of the app holds.
+ */
+function Section({ children, action, className }) {
+  return (
+    <div className={cx('flex items-center gap-4', className)}>
+      <h2 className="font-display text-[17px] font-medium leading-none tracking-[-0.02em] text-ink">{children}</h2>
+      <span className="h-px flex-1 bg-line" />
+      {action}
     </div>
   );
 }
