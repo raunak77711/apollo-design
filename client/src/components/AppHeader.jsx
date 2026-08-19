@@ -9,6 +9,7 @@ import NewDesignDialog from './NewDesignDialog.jsx';
 
 const LINKS = [
   { to: '/', label: 'Home' },
+  { to: '/scribble', label: 'Scribble' },
   { to: '/templates', label: 'Templates' },
   { to: '/assets', label: 'Assets' },
 ];

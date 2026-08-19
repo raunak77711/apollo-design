@@ -33,6 +33,15 @@ export const api = {
   updateProject: (id, data) => request(`/projects/${id}`, { method: 'PUT', body: data }),
   deleteProject: (id) => request(`/projects/${id}`, { method: 'DELETE' }),
 
+  // Versions — snapshots that are only ever appended to, so generating again
+  // or restoring an earlier design can never lose work.
+  listVersions: (id) => request(`/projects/${id}/versions`),
+  getVersion: (id, versionId) => request(`/projects/${id}/versions/${versionId}`),
+  saveVersion: (id, data) => request(`/projects/${id}/versions`, { method: 'POST', body: data }),
+  restoreVersion: (id, versionId) =>
+    request(`/projects/${id}/versions/${versionId}/restore`, { method: 'POST' }),
+  deleteVersion: (id, versionId) => request(`/projects/${id}/versions/${versionId}`, { method: 'DELETE' }),
+
   // AI
   aiChat: (payload) => request('/ai/chat', { method: 'POST', body: payload }),
   // Always takes the full art-direction pipeline, whatever the document holds.

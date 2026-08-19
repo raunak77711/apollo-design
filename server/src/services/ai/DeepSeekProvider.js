@@ -71,10 +71,10 @@ export class DeepSeekProvider extends AIProvider {
    * `critique` is fed back on a second attempt, which is how a weak first pass
    * gets genuinely reconsidered rather than nudged.
    */
-  async planDesign({ message, canvas, variation, critique, previous, referenceNote, preferenceNote }) {
+  async planDesign({ message, canvas, variation, critique, previous, referenceNote, preferenceNote, scribbleNote }) {
     const parsed = await this.chat({
       system: buildDirectorPrompt(),
-      user: buildBriefPrompt({ message, canvas, variation, critique, previous, referenceNote, preferenceNote }),
+      user: buildBriefPrompt({ message, canvas, variation, critique, previous, referenceNote, preferenceNote, scribbleNote }),
       // Art direction benefits from real temperature; the schema keeps it safe.
       temperature: critique ? 0.85 : 1.0,
       maxTokens: 1800,
@@ -198,7 +198,7 @@ it cannot be crowded and be good. Never add decoration for its own sake.
 Respond with valid JSON only.`;
 }
 
-function buildBriefPrompt({ message, canvas, variation, critique, previous, referenceNote, preferenceNote }) {
+function buildBriefPrompt({ message, canvas, variation, critique, previous, referenceNote, preferenceNote, scribbleNote }) {
   const ratio = canvas ? (canvas.width / canvas.height).toFixed(2) : '1.00';
   const shape = Number(ratio) > 1.25 ? 'landscape' : Number(ratio) < 0.85 ? 'portrait' : 'square';
 
@@ -206,6 +206,8 @@ function buildBriefPrompt({ message, canvas, variation, critique, previous, refe
     `Request: ${message}`,
     `Canvas: ${canvas?.width}×${canvas?.height}px (${shape}, ratio ${ratio}).`,
   ];
+
+  if (scribbleNote) parts.push(scribbleNote);
 
   if (preferenceNote) parts.push(preferenceNote);
 

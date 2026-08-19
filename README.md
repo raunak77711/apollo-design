@@ -20,7 +20,9 @@ Generation is not one prompt to one model. It is a pipeline where each stage
 does the thing it is actually good at:
 
 ```
-prompt
+prompt (+ an optional scribble)
+  → reading         The drawing, if there is one: ink measured with Sharp, then
+                    read for meaning. Fixes structure, subject and hierarchy.
   → art direction   DeepSeek returns a design brief: style, palette, type
                     pairing, layout, copy, photographic direction. No coordinates.
   → photography     Pexels + Unsplash searched together; candidates are downloaded
@@ -82,6 +84,66 @@ depend on any of it.
 
 A side effect worth having: a homepage visit decodes the moon once, so the
 generation screen already has it.
+
+## Scribble → Design
+
+Draw the idea; Apollo builds the design it describes. `/scribble`.
+
+The temptation with a feature like this is to feed the drawing to an image model
+and hand back a picture. Apollo does the opposite, because a picture is not what
+this app makes: the output here is an ordinary **Apollo document** — real
+photography, a real grid, measured type, every layer editable in the editor
+afterwards. The sketch is not traced. It is read as a **composition brief**.
+
+```
+sketch → reading → the same brief the composer already builds from → design
+```
+
+A drawing enters the pipeline exactly the way creative preferences do
+(`design/scribble.js` alongside `design/preferences.js`): as a constraint on the
+*raw plan*, applied before `normalizeBrief`, so the user's structure and the
+model's taste go through one validator, one aspect-ratio filter and one palette
+repair. The art director is told what was drawn and is never trusted to have
+obeyed — that module is the enforcement.
+
+What the sketch decides: which layout archetype (a big shape with words beside
+it is a split composition; a shape filling the sheet with type over it is a
+full-bleed hero; a moon above mountains is one *scene* and gets one photograph),
+whether the design is type-led or image-led, what the subject of the photography
+is, and **where the frame has to be quiet** — the curator already scores
+candidates on usable negative space, so pointing it at the region someone
+reserved for their headline is what makes the finished poster hold the shape of
+the drawing.
+
+What it never decides is coordinates. `layout.js` still composes, which is the
+whole reason the result looks art-directed instead of traced.
+
+**Reading a scribble is two passes, and the free one always runs.** Geometry
+first (`services/scribbleReader.js`): ink measured by alpha on a 96px raster,
+connected marks extracted with their own bounding boxes, then — the part that
+matters — marks merged into *runs*, because someone printing "EXPLORE" draws
+eight shapes and reading those as eight objects would be a catastrophic
+misreading of a composition containing one word. Detail drawn *inside* a shape
+(craters on a moon) is absorbed into it. Roles then come from shape alone: a
+long low run of small marks is lettering, a big mark is the subject, a scatter
+of specks is decoration. Then Gemini reads it for *meaning* — which shape is the
+moon, what the handwriting says — and its regions are checked against the
+measured ink before anything acts on them, so a hallucinated region in an empty
+corner is overruled by the pixels. No key, a busy model, or a slow one each fall
+back to the geometry, which is a genuinely usable brief on its own.
+
+**Nothing is ever overwritten.** The sketch is saved as a version before a
+design is generated from it, every design is saved as another, and restoring
+snapshots the current work first — so "try again" is an invitation rather than a
+gamble. Versions keep both the picture *and* the strokes, normalised to 0..1, so
+reopening one puts a live, editable drawing back on the canvas at whatever size
+the window happens to be (`services/versionService.js`).
+
+The canvas keeps strokes as points rather than pixels — unlike `raster/`, where
+the pixels are the document — which is what makes undo, redo, resize, save,
+restore and export-at-any-resolution all cheap. Coalesced pointer events,
+midpoint quadratic curves and incremental painting are what make it feel smooth;
+pressure is honoured where a stylus reports it.
 
 ## Stack
 
@@ -218,6 +280,16 @@ Vite proxies `/api` and `/storage` to the backend, so no CORS setup is needed in
    **Line** (Lucide, what the AI uses) and **Fun** (Game Icons — animals,
    food, party, nature) — each searchable.
 
+10. **Scribble** (`/scribble`) is the other way in: draw the idea instead of
+    describing it — a circle for the moon, a ridge for mountains, a bar where
+    the headline goes — optionally add a line of direction, and press
+    **Generate**. Apollo reads the arrangement and builds a finished design to
+    it. Hold **Your sketch** on the result to ghost the drawing back over the
+    design and see what it kept. Every sketch and every design is a version;
+    **Try again** adds one rather than replacing one, and any version can be
+    reopened or restored. **Edit design** hands the result to the ordinary
+    editor as ordinary layers.
+
 **Templates** opens ten finished layouts as live layers, and **Assets** holds your
 uploads plus the stock photo library.
 
@@ -239,10 +311,11 @@ apollo-design/
 │       ├── components/     # editor/ (stage, rail, inspector, panels, PhotoEditor,
 │       │                   # LiquifyTab, RetouchTab, DrawStudio) + elements/,
 │       │                   # home/ (hero, moon stage, composer),
+│       │                   # scribble/ (sketch canvas, tools, versions),
 │       │                   # generation/ (moonScene.js — the WebGL moon)
 │       ├── raster/         # pixel tools: liquify.js, retouch.js, draw.js,
 │       │                   # rasterShapes.js, imageIO.js, useBrushStroke.js
-│       └── pages/          # Home, Templates, Assets, EditorPage
+│       └── pages/          # Home, Templates, Assets, EditorPage, ScribblePage
 ├── docker-compose.yml      # production build (nginx)
 ├── docker-compose.dev.yml  # hot-reload dev stack (vite + nodemon, bind mounts)
 └── server/                 # Express API
@@ -252,12 +325,15 @@ apollo-design/
         │                   # pairings, formats), layout.js (grid + 10 layout
         │                   # archetypes), typography.js (metrics, fitting,
         │                   # scale), critique.js (review + repair), color.js
-        │                   # (contrast, scrims, harmony), industries.js
+        │                   # (contrast, scrims, harmony), industries.js,
+        │                   # scribble.js (a drawing as a composition brief)
         ├── services/
         │   ├── ai/         # AIProvider → DeepSeekProvider | MockProvider
         │   ├── images/     # Pexels + Unsplash together, + curator.js (scores
         │   │               # candidates on composition, tone, negative space)
         │   ├── designService.js  # plan → source → compose → critique → revise
+        │   ├── scribbleReader.js # ink geometry (Sharp) + vision (Gemini)
+        │   ├── versionService.js # append-only snapshots per project
         │   ├── aiService.js, exportService.js, storageService.js
         ├── models/         # Project, Asset, ImageSearchCache (Mongoose) — no user/auth
         ├── store/          # repository w/ in-memory fallback
@@ -271,10 +347,16 @@ GET    /api/health
 GET    /api/projects            # list + a capped `preview` document for live cards
 POST   /api/projects            # { name, canvas } or { name, document } (templates)
 GET    /api/projects/:id        PUT  /api/projects/:id     DELETE /api/projects/:id
+GET    /api/projects/:id/versions              POST /api/projects/:id/versions
+GET    /api/projects/:id/versions/:vid         DELETE /api/projects/:id/versions/:vid
+POST   /api/projects/:id/versions/:vid/restore # append-only history; restoring
+                                # snapshots the current work first
 POST   /api/ai/chat             # { message, document, selectedElementId } → { operations, message }
                                 # routes itself: a design request takes the full
                                 # pipeline, an edit goes straight to operations
 POST   /api/ai/generate         # always takes the art-direction pipeline
+                                # optional `scribble` (a PNG data URL) is read as
+                                # a composition brief — see Scribble → Design
 POST   /api/ai/variations       # → three complete directions (bold / minimal / editorial),
                                 # each a different composition, not a recolour
 GET    /api/images/search?q=    # searches every configured library, interleaved
@@ -369,5 +451,18 @@ POST   /api/export/flatten      # { document } → { dataUrl }  — layer merge/
   not yet user-creatable.
 - **Design** documents are embedded in the `Project` record for the MVP rather than
   a separate `Design` collection; the model boundary can be split out later.
+- **A scribble is read, not understood.** With a Gemini key the vision pass
+  names what was drawn and transcribes legible handwriting; without one — or
+  when the model is busy or slow, both of which happen — the geometry pass
+  still gives structure (how many marks, how big, where, which are lettering)
+  but cannot know that the circle is a moon. The design is then art-directed
+  from the prompt and the *shape* of the drawing, which is a real composition
+  match and not a semantic one. Handwriting is deliberately never guessed at:
+  an unreadable scrawl becomes "space reserved for a headline" and the
+  copywriter fills it, rather than the model inventing words the user did not
+  write.
+- **Scribble versions are capped** at 40 per project, and a stored sketch is
+  downscaled to 1024px on its long edge. Both are generous for a sketchpad and
+  neither is configurable.
 - The **web-app builder** (`type: "webapp"`) is intentionally not built yet; the
   document/operation architecture leaves room for it.

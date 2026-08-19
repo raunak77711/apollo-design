@@ -19,6 +19,10 @@ export const STAGES = {
     label: 'Understanding your idea',
     detail: 'Reading the brief and the format.',
   },
+  reading: {
+    label: 'Reading your sketch',
+    detail: 'Working out the composition you drew — subject, hierarchy, where the words go.',
+  },
   directing: {
     label: 'Planning the composition',
     detail: 'Choosing a direction, a palette and a type voice.',
@@ -46,7 +50,7 @@ export const STAGES = {
 };
 
 /** The order stages are allowed to appear in, so the queue never goes backwards. */
-export const STAGE_ORDER = ['understanding', 'directing', 'reconsidering', 'curating', 'composing', 'refining', 'done'];
+export const STAGE_ORDER = ['understanding', 'reading', 'directing', 'reconsidering', 'curating', 'composing', 'refining', 'done'];
 
 export const stageLabel = (stage) => STAGES[stage]?.label || STAGES.understanding.label;
 export const stageDetail = (stage) => STAGES[stage]?.detail || STAGES.understanding.detail;

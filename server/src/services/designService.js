@@ -5,16 +5,24 @@ import { compose } from '../design/layout.js';
 import { critique, needsRework, summarize } from '../design/critique.js';
 import { detectFormat, findLayout, normalizeBrief, VARIATIONS } from '../design/artDirection.js';
 import { applyPreferences, describePreferences } from '../design/preferences.js';
+import { applyScribble, describeScribble } from '../design/scribble.js';
+import { readScribble } from './scribbleReader.js';
 
 /**
  * The generation pipeline.
  *
- *   prompt
+ *   prompt (+ an optional scribble)
+ *     → reading              (the drawing, if there is one: ink, then meaning)
  *     → art direction        (DeepSeek, or the heuristic planner)
  *     → photography          (Pexels + Unsplash, judged on composition)
  *     → composition          (grid, type scale, layout archetype)
  *     → critique             (measured, then repaired)
  *     → operations
+ *
+ * A scribble does not add a stage so much as constrain every later one: it
+ * fixes the structure, the subject and where the type lives, and the rest of
+ * the pipeline then does its ordinary job to that specification. See
+ * `design/scribble.js`.
  *
  * Each stage does the thing it is actually good at. The model is never asked
  * for coordinates and the code is never asked for taste.
@@ -85,6 +93,7 @@ export async function buildDesign({
   provider = getAIProvider(),
   referenceImages = [],
   preferences = null,
+  scribble = null,
   onStage = null,
 }) {
   const canvas = resolveCanvas(message, document);
@@ -107,6 +116,17 @@ export async function buildDesign({
   // reference is silently dropped and has zero effect on the direction.
   const referenceNote = await describeFirstReference(referenceImages);
 
+  // The drawing is read once, before the first attempt — it is the same
+  // drawing on a rework, and re-reading it would cost a second vision call to
+  // learn nothing. A blank canvas, an unreadable image or no drawing at all
+  // all come back null, and the pipeline simply designs from the words.
+  let reading = null;
+  if (scribble) {
+    stage('reading');
+    reading = await safeRead(scribble, message);
+  }
+  const scribbleNote = describeScribble(reading);
+
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
     stage(attempt === 0 ? 'directing' : 'reconsidering');
     const raw = await safePlan(provider, {
@@ -117,13 +137,22 @@ export async function buildDesign({
       previous: attempt > 0 ? plan : null,
       referenceNote,
       preferenceNote: describePreferences(preferences),
+      scribbleNote,
     });
     plan = raw;
 
-    // The model was told about the preferences, but never trusted to have
-    // followed them — this is where they are actually enforced.
-    const { plan: directed, forceLayout } = applyPreferences(raw, preferences, { canvas });
-    const brief = normalizeBrief(directed, { canvas, prompt: message, forceLayout });
+    // The model was told about the preferences and the drawing, but never
+    // trusted to have followed either — this is where they are enforced.
+    // Order matters: preferences are what the user asked for in words, the
+    // scribble is what they drew, and a drawing is the more specific
+    // instruction, so it gets the last word on structure.
+    const { plan: preferred, forceLayout: preferenceLayout } = applyPreferences(raw, preferences, { canvas });
+    const { plan: directed, forceLayout: scribbleLayout } = applyScribble(preferred, reading, { canvas });
+    const brief = normalizeBrief(directed, {
+      canvas,
+      prompt: message,
+      forceLayout: scribbleLayout || preferenceLayout,
+    });
 
     let images = [];
     if (brief.images.length) {
@@ -163,7 +192,7 @@ export async function buildDesign({
     ...review.elements.map((element) => ({ type: 'CREATE_ELEMENT', element })),
   ];
 
-  return { operations, brief, images, review, message: describe(brief, images, review) };
+  return { operations, brief, images, review, scribble: reading, message: describe(brief, images, review, reading) };
 }
 
 /** Generate the three directions side by side. */
@@ -203,6 +232,16 @@ async function describeFirstReference(referenceImages) {
   } catch (err) {
     console.warn(`[design] reference captioning failed (${err.message})`);
     return '';
+  }
+}
+
+/** Read the drawing, or null — a failed read must never fail a generation. */
+async function safeRead(scribble, message) {
+  try {
+    return await readScribble(scribble, { prompt: message });
+  } catch (err) {
+    console.warn(`[design] scribble read failed (${err.message}) — designing from the prompt alone`);
+    return null;
   }
 }
 
@@ -254,9 +293,20 @@ function clearOperations(document) {
 }
 
 /** What Apollo says about the design it just made. */
-function describe(brief, images, review) {
+function describe(brief, images, review, reading) {
   const layout = findLayout(brief.layout);
   const parts = [`${brief.styleRef.label} direction — ${(layout?.label || brief.layout).toLowerCase()}.`];
+
+  // When there was a drawing, say what was taken from it. The user spent
+  // effort on that composition and deserves to see it was actually read.
+  if (reading) {
+    const drawn = reading.subject || reading.regions.find((r) => r.label)?.label;
+    parts.push(
+      drawn
+        ? `Built on your sketch — ${drawn}, kept where you placed it.`
+        : 'Built on your sketch, keeping your composition.'
+    );
+  }
 
   if (brief.rationale) parts.push(brief.rationale);
 

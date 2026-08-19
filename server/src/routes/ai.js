@@ -7,9 +7,22 @@ import { validateOperation, applyOperations } from '../design/operations.js';
 
 export const aiRouter = Router();
 
+/**
+ * A scribble is a PNG data URL of the user's drawing. Capped well under the
+ * body limit: the client already downscales, and anything larger is a sign
+ * something other than a sketch is being posted.
+ */
+const MAX_SCRIBBLE_BYTES = 8 * 1024 * 1024;
+
+function readScribbleField(value) {
+  if (typeof value !== 'string' || !value.startsWith('data:image/')) return null;
+  if (value.length > MAX_SCRIBBLE_BYTES) return null;
+  return value;
+}
+
 /** The shared body handling for both generate routes. */
 function readGenerateRequest(body = {}) {
-  const { message, document, referenceImages, preferences } = body;
+  const { message, document, referenceImages, preferences, scribble } = body;
   if (!validateDocument(document)) return { error: 'valid document is required' };
   return {
     message: message || 'Create a design',
@@ -18,6 +31,7 @@ function readGenerateRequest(body = {}) {
       ? referenceImages.filter((s) => typeof s === 'string').slice(0, 3)
       : [],
     preferences: normalizePreferences(preferences),
+    scribble: readScribbleField(scribble),
   };
 }
 
@@ -25,7 +39,9 @@ function readGenerateRequest(body = {}) {
 function generateResult(result, document) {
   const operations = result.operations.filter((op) => validateOperation(op).ok);
   const { document: preview, skipped } = applyOperations(document, operations);
-  return { operations, message: result.message, preview, skipped };
+  // `scribble` is what Apollo read in the drawing — the client shows it back
+  // so a user can see their sketch was understood, not just consumed.
+  return { operations, message: result.message, preview, skipped, scribble: result.scribble || null };
 }
 
 /**
