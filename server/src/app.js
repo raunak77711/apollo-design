@@ -4,6 +4,7 @@ import compression from 'compression';
 import { config } from './config/env.js';
 import { projectsRouter } from './routes/projects.js';
 import { aiRouter } from './routes/ai.js';
+import { assistantRouter } from './routes/assistant.js';
 import { imagesRouter } from './routes/images.js';
 import { assetsRouter } from './routes/assets.js';
 import { exportRouter } from './routes/export.js';
@@ -34,6 +35,9 @@ export function createApp() {
 
   app.use('/api/projects', projectsRouter);
   app.use('/api/ai', aiRouter);
+  // Apollo AI — the general-purpose assistant. Separate from /api/ai on purpose:
+  // that one compiles language into design operations, this one just talks.
+  app.use('/api/assistant', assistantRouter);
   app.use('/api/images', imagesRouter);
   app.use('/api/assets', assetsRouter);
   app.use('/api/export', exportRouter);

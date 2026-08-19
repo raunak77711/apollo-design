@@ -10,6 +10,7 @@ import Home from './pages/Home.jsx';
 // only downloads once it's actually visited.
 const Templates = lazy(() => import('./pages/Templates.jsx'));
 const Scribble = lazy(() => import('./pages/ScribblePage.jsx'));
+const ApolloAI = lazy(() => import('./pages/ApolloAI.jsx'));
 const Assets = lazy(() => import('./pages/Assets.jsx'));
 const EditorPage = lazy(() => import('./pages/EditorPage.jsx'));
 
@@ -23,6 +24,7 @@ export default function App() {
               <Route path="/" element={<Home />} />
               <Route path="/templates" element={<Templates />} />
               <Route path="/scribble" element={<Scribble />} />
+              <Route path="/ai" element={<ApolloAI />} />
               <Route path="/assets" element={<Assets />} />
               <Route path="/editor/:id" element={<EditorPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />

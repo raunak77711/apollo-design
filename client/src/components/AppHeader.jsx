@@ -1,17 +1,22 @@
-import { useEffect, useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Moon, Plus, Sun } from 'lucide-react';
 import { cx } from '../lib/cx.js';
 import { useTheme } from '../lib/theme.jsx';
 import { Button, IconButton, Tooltip } from '../ui/primitives.jsx';
-import { ApolloMark, Wordmark } from '../ui/brand.jsx';
+import { ApolloMark, Spark, Wordmark } from '../ui/brand.jsx';
 import NewDesignDialog from './NewDesignDialog.jsx';
 
+// Apollo AI carries a mark and the others do not. That is the whole signal:
+// the four design destinations are places in one workspace, and Apollo AI is a
+// second experience next to it — enough to read as different, not enough to
+// need a bigger bar.
 const LINKS = [
   { to: '/', label: 'Home' },
   { to: '/scribble', label: 'Scribble' },
   { to: '/templates', label: 'Templates' },
   { to: '/assets', label: 'Assets' },
+  { to: '/ai', label: 'Apollo AI', mark: true },
 ];
 
 /**
@@ -25,6 +30,8 @@ const LINKS = [
  */
 export default function AppHeader({ overlay = false }) {
   const { theme, toggle } = useTheme();
+  const { pathname } = useLocation();
+  const navRef = useRef(null);
   const [newDesign, setNewDesign] = useState(false);
   const [onSky, setOnSky] = useState(overlay);
 
@@ -37,6 +44,15 @@ export default function AppHeader({ overlay = false }) {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, [overlay]);
+
+  // On a phone the nav scrolls, so the destination you are actually on can sit
+  // past the right edge. Bring it back into view whenever the route changes.
+  useEffect(() => {
+    navRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({
+      block: 'nearest',
+      inline: 'nearest',
+    });
+  }, [pathname]);
 
   return (
     <>
@@ -63,7 +79,7 @@ export default function AppHeader({ overlay = false }) {
             </span>
           </Link>
 
-          <nav className="flex items-center gap-0.5 sm:gap-1">
+          <nav ref={navRef} className="no-scrollbar flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto sm:gap-1">
             {LINKS.map((link) => (
               <NavLink
                 key={link.to}
@@ -71,7 +87,7 @@ export default function AppHeader({ overlay = false }) {
                 end={link.to === '/'}
                 className={({ isActive }) =>
                   cx(
-                    'relative flex h-14 items-center px-1.5 text-[13px] transition-colors duration-150 sm:px-2.5',
+                    'relative flex h-14 items-center whitespace-nowrap px-1.5 text-[13px] transition-colors duration-150 sm:px-2.5',
                     onSky
                       ? isActive
                         ? 'text-[var(--sky-ink)]'
@@ -84,15 +100,28 @@ export default function AppHeader({ overlay = false }) {
               >
                 {({ isActive }) => (
                   <>
+                    {link.mark && (
+                      <Spark
+                        size={10}
+                        className={cx(
+                          'mr-1.5 transition-colors duration-150',
+                          onSky
+                            ? isActive
+                              ? 'text-[var(--sky-ink)]'
+                              : 'text-[var(--sky-ink-3)]'
+                            : isActive
+                              ? 'text-accent'
+                              : 'text-accent/55'
+                        )}
+                      />
+                    )}
                     {link.label}
-                    {isActive && <span className="absolute inset-x-1.5 -bottom-px h-px bg-accent sm:inset-x-2" />}
+                    {isActive && <span className="absolute inset-x-1.5 bottom-0 h-px bg-accent sm:inset-x-2" />}
                   </>
                 )}
               </NavLink>
             ))}
           </nav>
-
-          <div className="flex-1" />
 
           <Tooltip label={theme === 'dark' ? 'Light theme' : 'Dark theme'} side="bottom">
             <IconButton

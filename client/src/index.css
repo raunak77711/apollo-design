@@ -349,6 +349,21 @@ input[type='number'] {
   -moz-appearance: textfield;
 }
 
+/* --- Apollo AI ---------------------------------------------------------
+   The pause before the first token. Three marks breathing out of phase — the
+   quietest way to say "still here" without pretending to know how long. */
+@keyframes apollo-think {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

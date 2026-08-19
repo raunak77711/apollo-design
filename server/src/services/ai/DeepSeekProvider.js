@@ -8,6 +8,15 @@ import { FONT_PAIRINGS, LAYOUTS, STYLES } from '../../design/artDirection.js';
 const CHAT_TIMEOUT_MS = 45_000;
 
 /**
+ * A conversation answer can legitimately run long — a walk-through of async/await
+ * with examples is a lot of tokens. The deadline is on the *whole* turn rather
+ * than on silence, which is safe here because the client sees text arriving and
+ * can stop generation itself the moment it has enough.
+ */
+const CONVERSE_TIMEOUT_MS = 120_000;
+const CONVERSE_MAX_TOKENS = 4000;
+
+/**
  * DeepSeek-backed provider, used for two very different jobs.
  *
  * 1. `planDesign` — the creative-director pass. It returns a *design brief*:
@@ -80,6 +89,85 @@ export class DeepSeekProvider extends AIProvider {
       maxTokens: 1800,
     });
     return parsed && typeof parsed === 'object' ? parsed : {};
+  }
+
+  /**
+   * The Apollo AI assistant's turn — general-purpose prose, streamed.
+   *
+   * Deliberately not routed through `chat()` above: that one pins
+   * `response_format: json_object`, which is exactly right for a design brief
+   * and exactly wrong for an answer a person is going to read. This asks for
+   * text, and asks for it token by token.
+   *
+   * DeepSeek speaks the OpenAI streaming dialect — `data:` frames carrying a
+   * delta, terminated by `[DONE]` — so this parser is the piece that would be
+   * reused unchanged if the provider behind Apollo AI ever changed.
+   */
+  async converse({ system, messages, onToken, signal }) {
+    const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.apiKey}`,
+        Accept: 'text/event-stream',
+      },
+      body: JSON.stringify({
+        model: this.model,
+        messages: [{ role: 'system', content: system }, ...messages],
+        stream: true,
+        temperature: 0.7,
+        max_tokens: CONVERSE_MAX_TOKENS,
+      }),
+      timeoutMs: CONVERSE_TIMEOUT_MS,
+      signal,
+    });
+
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw statusError(`DeepSeek API error ${res.status}: ${detail.slice(0, 300)}`, res.status);
+    }
+    if (!res.body) throw new Error('DeepSeek returned an empty stream');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let text = '';
+
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // Frames are separated by a blank line; whatever trails the last one is
+        // a partial frame and waits in the buffer for the next read.
+        const frames = buffer.split('\n\n');
+        buffer = frames.pop() || '';
+
+        for (const frame of frames) {
+          for (const line of frame.split('\n')) {
+            if (!line.startsWith('data:')) continue;
+            const payload = line.slice(5).trim();
+            if (!payload || payload === '[DONE]') continue;
+            let parsed;
+            try {
+              parsed = JSON.parse(payload);
+            } catch {
+              continue; // a keep-alive or a frame we do not understand
+            }
+            const chunk = parsed?.choices?.[0]?.delta?.content;
+            if (typeof chunk === 'string' && chunk) {
+              text += chunk;
+              onToken?.(chunk);
+            }
+          }
+        }
+      }
+    } finally {
+      reader.cancel().catch(() => {});
+    }
+
+    return { text };
   }
 
   async generateOperations({ message, document, selectedElementId }) {

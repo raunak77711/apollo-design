@@ -26,4 +26,23 @@ export class AIProvider {
   async generateOperations(/* { message, document, selectedElementId } */) {
     throw new Error('generateOperations() not implemented');
   }
+
+  /**
+   * Hold a general-purpose conversation — the Apollo AI assistant.
+   *
+   * Unlike the two methods above, this one is not about designs at all: it is
+   * plain prose in, plain prose out, streamed. Providers emit each fragment
+   * through `onToken` as it arrives and resolve with the complete text once the
+   * turn is finished, so a caller that cannot stream can simply ignore the
+   * callback and await the result.
+   *
+   * `signal` aborts the upstream call when the user stops generation.
+   *
+   * @param {{ system: string, messages: {role: 'user'|'assistant', content: string}[],
+   *           onToken?: (chunk: string) => void, signal?: AbortSignal }} request
+   * @returns {Promise<{ text: string }>}
+   */
+  async converse(/* { system, messages, onToken, signal } */) {
+    throw new Error('converse() not implemented');
+  }
 }

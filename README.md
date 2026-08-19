@@ -14,6 +14,11 @@ Prompt → AI → Operations → (validate) → Apollo Document → React Render
 DeepSeek is replaceable. The document format, operation system, renderer, and
 component registry are the core of the product.
 
+Alongside the design studio, **Apollo AI** (`/ai`) is a general-purpose
+assistant — coding, learning, writing, research, ordinary questions — built on
+the same provider abstraction but deliberately kept a separate experience. See
+[Apollo AI](#apollo-ai).
+
 ## How a design gets made
 
 Generation is not one prompt to one model. It is a pipeline where each stage
@@ -145,13 +150,59 @@ restore and export-at-any-resolution all cheap. Coalesced pointer events,
 midpoint quadratic curves and incremental painting are what make it feel smooth;
 pressure is honoured where a stylus reports it.
 
+## Apollo AI
+
+A second, separate experience in the same product: a general-purpose assistant
+at `/ai`. Not another way to make a design — a place to ask anything.
+
+```
+Apollo AI UI  →  /api/assistant  →  assistantService  →  AIProvider.converse()  →  model
+```
+
+The distinction is deliberate and load-bearing:
+
+| | Design AI (`/api/ai`) | Apollo AI (`/api/assistant`) |
+|---|---|---|
+| Job | language → validated operations | conversation |
+| Returns | JSON the operation validator checks | prose the reader reads |
+| Lives in | home composer, editor panel | `/ai` |
+
+They share one thing — `services/ai`, the provider abstraction — and nothing
+else. Swapping the model behind the assistant cannot change how a poster gets
+built, and the assistant is never tempted into deciding it is a design tool:
+it answers "what is Nepal?" as readily as "explain async/await".
+
+**Streaming.** `POST /api/assistant/chat/stream` is server-sent events over
+POST (the transcript is the body, and `EventSource` can only GET). Tokens arrive
+as `delta` frames; Stop aborts the request, which the server passes on to the
+provider, so stopping actually stops paying. If the stream is unavailable for
+any reason the client falls back to `POST /api/assistant/chat` and the user
+loses the live typing, never the answer.
+
+**Markdown** is rendered by `client/src/lib/markdown.jsx` — headings, lists,
+tables, emphasis, links and fenced code with copy — built as React elements
+rather than an HTML string, so there is no markup to sanitise and a model that
+emits `<script>` gets it back as text. It parses correctly mid-stream: an
+unterminated fence renders as a live code block, an incomplete table as the rows
+that exist so far.
+
+**Conversations** live in `localStorage` (`components/ai/conversations.js`).
+A chat is not created until it is spoken to, so the history never fills with
+empty threads. Server-side persistence is a change to that one file.
+
+**Extending it.** `services/assistantService.js` holds the three seams the next
+capability needs: `buildSystemPrompt()` takes injected context (retrieval, a
+design document sent from the editor), `prepareTurn()` is where a request would
+be classified and enriched, and `streamReply()` is where a tool loop would wrap
+the provider call. None are built yet, and none need to be for this to work.
+
 ## Stack
 
 | Layer     | Tech |
 |-----------|------|
 | Frontend  | React, Vite, Tailwind, React Context + `useReducer`, Lucide React + react-icons |
 | Backend   | Node, Express, Mongoose (MongoDB), `compression` (gzip) |
-| AI        | DeepSeek (behind an `AIProvider` abstraction) |
+| AI        | DeepSeek (behind an `AIProvider` abstraction) — design briefs, edits, and Apollo AI's streamed conversation |
 | Images    | Pexels / Unsplash (behind an `ImageProvider` abstraction), Mongo-cached searches |
 | Media     | Sharp (uploads, export, image adjustments, layer merge/flatten) |
 | Storage   | Local filesystem (`server/storage/`) |
@@ -167,6 +218,9 @@ To make the MVP demonstrable out of the box, three graceful fallbacks exist:
   and critic all still run — a keyless install gets real layouts and palettes,
   not a placeholder. Add a key to switch to real DeepSeek; nothing else changes.
 - **No image API key?** A keyless `PlaceholderProvider` returns stock-style photos.
+- **Apollo AI without a key?** It says so, plainly, instead of inventing an
+  answer — streamed, so the whole interface still works. There is no honest
+  offline stand-in for general knowledge.
 
 Add real keys to a root `.env` or `server/.env` — copy `.env.example`. Both are
 loaded, so it does not matter which you use.
@@ -312,10 +366,13 @@ apollo-design/
 │       │                   # LiquifyTab, RetouchTab, DrawStudio) + elements/,
 │       │                   # home/ (hero, moon stage, composer),
 │       │                   # scribble/ (sketch canvas, tools, versions),
-│       │                   # generation/ (moonScene.js — the WebGL moon)
+│       │                   # generation/ (moonScene.js — the WebGL moon),
+│       │                   # ai/ (Apollo AI: composer, messages, code blocks,
+│       │                   # conversation rail, useApolloAI)
 │       ├── raster/         # pixel tools: liquify.js, retouch.js, draw.js,
 │       │                   # rasterShapes.js, imageIO.js, useBrushStroke.js
-│       └── pages/          # Home, Templates, Assets, EditorPage, ScribblePage
+│       └── pages/          # Home, Templates, Assets, EditorPage, ScribblePage,
+│                           # ApolloAI (the assistant workspace)
 ├── docker-compose.yml      # production build (nginx)
 ├── docker-compose.dev.yml  # hot-reload dev stack (vite + nodemon, bind mounts)
 └── server/                 # Express API
@@ -329,15 +386,18 @@ apollo-design/
         │                   # scribble.js (a drawing as a composition brief)
         ├── services/
         │   ├── ai/         # AIProvider → DeepSeekProvider | MockProvider
+        │   │               # (planDesign · generateOperations · converse)
         │   ├── images/     # Pexels + Unsplash together, + curator.js (scores
         │   │               # candidates on composition, tone, negative space)
         │   ├── designService.js  # plan → source → compose → critique → revise
         │   ├── scribbleReader.js # ink geometry (Sharp) + vision (Gemini)
         │   ├── versionService.js # append-only snapshots per project
+        │   ├── assistantService.js # Apollo AI: system prompt, history budget,
+        │   │               # and the seams for context/tools
         │   ├── aiService.js, exportService.js, storageService.js
         ├── models/         # Project, Asset, ImageSearchCache (Mongoose) — no user/auth
         ├── store/          # repository w/ in-memory fallback
-        └── routes/         # projects, ai, images, assets, export (+ /export/flatten)
+        └── routes/         # projects, ai, assistant, images, assets, export
 ```
 
 ## API
@@ -359,6 +419,10 @@ POST   /api/ai/generate         # always takes the art-direction pipeline
                                 # a composition brief — see Scribble → Design
 POST   /api/ai/variations       # → three complete directions (bold / minimal / editorial),
                                 # each a different composition, not a recolour
+GET    /api/assistant/status    # → { ready, model } — is a live model configured?
+POST   /api/assistant/chat/stream  # { messages:[{role,content}], context? }
+                                # SSE: `delta` (text) · `done` · `failed` (human-readable)
+POST   /api/assistant/chat      # the same turn delivered whole — the stream's fallback
 GET    /api/images/search?q=    # searches every configured library, interleaved
 GET    /api/assets              POST /api/assets/upload    # multipart (file, projectId)
 POST   /api/export              # { projectId, document, format }
@@ -370,7 +434,10 @@ POST   /api/export/flatten      # { document } → { dataUrl }  — layer merge/
 - The DeepSeek key never leaves the backend; all AI calls are server-side.
 - AI output is untrusted: every operation is re-validated by the operation system
   before it touches a document, icon names are whitelisted, and no raw HTML/SVG/JS
-  is ever executed.
+  is ever executed. Apollo AI's markdown is built as React elements, never as an
+  HTML string, and only `http(s)`, `mailto:` and same-origin links are followed.
+- Upstream failures are translated before they reach the browser: a user sees
+  "Apollo AI couldn't complete that response", never a provider name or status.
 - Uploads are re-encoded by Sharp with generated filenames; storage paths are
   confined under `server/storage/` (traversal is blocked).
 
@@ -378,6 +445,11 @@ POST   /api/export/flatten      # { document } → { dataUrl }  — layer merge/
 
 - **No auth by design** — this is a local single-user app; all projects are shared
   on the one machine it runs on.
+- **Apollo AI has no web access and no tools yet.** It answers from the model's
+  own knowledge and says so when a question needs current information. The
+  service layer is shaped for retrieval and tool calls (`assistantService.js`),
+  but nothing is wired. Conversations are stored per-browser in `localStorage`,
+  so they do not follow you to another machine.
 - **Server-side export** rasterizes shapes, text, and images via SVG→Sharp.
   brightness/contrast/saturation/hue/grayscale/blur/sharpen and vignette are
   applied for real (Sharp `modulate`/`linear`/`sharpen`/a composited gradient).

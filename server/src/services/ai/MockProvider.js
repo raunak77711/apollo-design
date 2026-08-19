@@ -58,6 +58,40 @@ export class MockProvider extends AIProvider {
     };
   }
 
+  /* --------------------------- Apollo AI ---------------------------- */
+
+  /**
+   * There is no offline stand-in for general knowledge, and pretending
+   * otherwise would be worse than saying nothing: a made-up answer about Nepal
+   * is not a fallback, it is a bug. So this says plainly that no model is
+   * configured and how to fix it — streamed word by word, so the assistant's
+   * whole interface (streaming, stopping, markdown, copy) is still exercised
+   * on a machine with no API key.
+   */
+  async converse({ onToken, signal }) {
+    const text = [
+      "Apollo AI isn't connected to a language model yet, so I can't answer that one properly.",
+      '',
+      '**To switch me on**, set a provider key on the server and restart it:',
+      '',
+      '```bash',
+      'DEEPSEEK_API_KEY=sk-...   # in .env at the repo root',
+      '```',
+      '',
+      'Everything else here is real — streaming, markdown, code blocks, conversation history. Only the thinking is missing.',
+    ].join('\n');
+
+    // Word by word rather than character by character: fast enough to feel
+    // live, slow enough to read.
+    const parts = text.match(/\S+\s*/g) || [text];
+    for (const part of parts) {
+      if (signal?.aborted) break;
+      onToken?.(part);
+      await new Promise((resolve) => setTimeout(resolve, 12));
+    }
+    return { text };
+  }
+
   /* ----------------------------- Editing ---------------------------- */
 
   async generateOperations({ message = '', document, selectedElementId }) {
