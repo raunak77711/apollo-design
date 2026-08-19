@@ -1,4 +1,5 @@
 import { ImageProvider } from './ImageProvider.js';
+import { statusError } from '../upstream.js';
 
 /**
  * Unsplash search. `likes` is kept as a weak quality prior and the indexed
@@ -17,7 +18,7 @@ export class UnsplashProvider extends ImageProvider {
       headers: { Authorization: `Client-ID ${this.accessKey}` },
       signal,
     });
-    if (!res.ok) throw new Error(`Unsplash API error ${res.status}`);
+    if (!res.ok) throw statusError(`Unsplash API error ${res.status}`, res.status);
     const data = await res.json();
     return (data.results || []).map((p, rank) => ({
       id: `unsplash_${p.id}`,

@@ -28,6 +28,15 @@ import { applyPreferences, describePreferences } from '../design/preferences.js'
 const MAX_ATTEMPTS = 2;
 
 /**
+ * How slow the first pass is allowed to have been before the rework is
+ * abandoned. A rework repeats every upstream call the pipeline makes, so when
+ * the first pass was already dragging — a degraded photo library, a sluggish
+ * model — a second one doubles the wait for a design that is only *maybe*
+ * better. Past this point, the best of what we already have wins.
+ */
+const REWORK_BUDGET_MS = 45_000;
+
+/**
  * Image slot proportions per layout, so a photograph can be judged against the
  * box it will fill *before* the composition is built. Fractions of the canvas.
  */
@@ -87,6 +96,7 @@ export async function buildDesign({
     }
   };
 
+  const startedAt = Date.now();
   let best = null;
   let plan = null;
   let notes = [];
@@ -116,17 +126,15 @@ export async function buildDesign({
     const brief = normalizeBrief(directed, { canvas, prompt: message, forceLayout });
 
     let images = [];
-    let fallbacks = [];
     if (brief.images.length) {
       // The stage is announced by the curator's own first callback, which
       // fires as it starts on slot one — announcing it here as well would
       // just send the same event twice.
-      ({ images, fallbacks } = await curateImages(brief.images, {
+      images = await curateImages(brief.images, {
         slots: slotsFor(brief),
         palette: brief.palette,
-        referenceImages,
         onProgress: (index, total) => stage('curating', { index, count: total }),
-      }));
+      });
     }
 
     stage('composing');
@@ -134,23 +142,28 @@ export async function buildDesign({
     stage('refining');
     const review = critique(composed.elements, { canvas: brief.canvas, brief, grid: composed.grid });
 
-    const candidate = { brief, images, imageFallbacks: fallbacks, composed, review };
+    const candidate = { brief, images, composed, review };
     if (!best || review.score > best.review.score) best = candidate;
 
     // A second pass is only worth the latency when the first one genuinely
     // failed — and only when there is a model that can reconsider.
     if (!needsRework(review) || typeof provider.planDesign !== 'function') break;
+    const elapsed = Date.now() - startedAt;
+    if (elapsed > REWORK_BUDGET_MS) {
+      console.warn(`[design] first pass took ${Math.round(elapsed / 1000)}s — shipping it rather than reworking`);
+      break;
+    }
     notes = review.outstanding.map((issue) => issue.message);
   }
 
-  const { brief, images, imageFallbacks, review } = best;
+  const { brief, images, review } = best;
   const operations = [
     ...clearOperations(document),
     { type: 'SET_CANVAS', changes: { width: brief.canvas.width, height: brief.canvas.height, background: brief.palette.background } },
     ...review.elements.map((element) => ({ type: 'CREATE_ELEMENT', element })),
   ];
 
-  return { operations, brief, images, imageFallbacks, review, message: describe(brief, images, review) };
+  return { operations, brief, images, review, message: describe(brief, images, review) };
 }
 
 /** Generate the three directions side by side. */

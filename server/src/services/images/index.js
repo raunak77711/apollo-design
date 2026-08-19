@@ -3,6 +3,7 @@ import { imageCache } from '../../store/index.js';
 import { PexelsProvider } from './PexelsProvider.js';
 import { UnsplashProvider } from './UnsplashProvider.js';
 import { PlaceholderProvider } from './PlaceholderProvider.js';
+import { deadline, isDown, markFailure, markSuccess, TimeoutError } from '../upstream.js';
 
 /**
  * Image sourcing.
@@ -41,27 +42,63 @@ export function getImageProvider() {
   return getImageProviders()[0].provider;
 }
 
-const cacheKey = (query, perPage, orientation) =>
-  `${getImageProviders().map((p) => p.name).join('+')}:${query.trim().toLowerCase()}:${perPage}:${orientation || 'any'}`;
+/**
+ * How long one library gets to answer a search.
+ *
+ * Both normally reply well inside a second. The number that matters is not the
+ * happy path but the sick one: when Pexels sits behind a Cloudflare 522 it
+ * holds the connection for ~40s before failing, and a single design makes a
+ * dozen of these calls. Six seconds is generous for a search API and cheap to
+ * pay when something is wrong.
+ */
+const SEARCH_TIMEOUT_MS = 6000;
 
 /**
- * Search every configured library in parallel, interleaved so neither one
+ * The cache is keyed on who actually answered, not on who is configured —
+ * otherwise a degraded, one-library result gets stored under the both-libraries
+ * key and served for a fortnight after the outage is over.
+ */
+const cacheKey = (names, query, perPage, orientation) =>
+  `${names.join('+')}:${query.trim().toLowerCase()}:${perPage}:${orientation || 'any'}`;
+
+/**
+ * Search every healthy library in parallel, interleaved so neither one
  * dominates the top of the list. Cached — manual browsing and AI generation
  * share the same cache, so repeat queries cost no quota.
+ *
+ * A library that has just failed hard is skipped rather than retried: the
+ * point of `Promise.allSettled` is that a broken provider doesn't lose us the
+ * working one's results, but without a deadline it still makes us *wait* for
+ * the broken one, every single time.
  */
-export async function searchImages(query, { perPage = 12, orientation } = {}) {
-  const key = cacheKey(query, perPage, orientation);
+export async function searchImages(query, { perPage = 12, orientation, signal } = {}) {
+  // Both libraries down is not a dead end: the curator returns nothing, and
+  // `adaptToImagery` swaps in a typographic layout rather than an empty frame.
+  const active = getImageProviders().filter(({ name }) => !isDown(name));
+  if (!active.length) return [];
+
+  const key = cacheKey(active.map((p) => p.name), query, perPage, orientation);
   const cached = await imageCache.get(key);
   if (cached?.length) return cached;
 
-  const active = getImageProviders();
-  const settled = await Promise.allSettled(
-    active.map(({ provider }) => provider.search(query, { perPage, orientation }))
-  );
+  const attempts = active.map(({ name, provider }) => {
+    const { signal: composed, timeout } = deadline(SEARCH_TIMEOUT_MS, signal);
+    return { name, timeout, promise: provider.search(query, { perPage, orientation, signal: composed }) };
+  });
+  const settled = await Promise.allSettled(attempts.map((a) => a.promise));
 
   const lists = settled.map((result, i) => {
-    if (result.status === 'fulfilled') return result.value;
-    console.warn(`[images] ${active[i].name} search failed for "${query}": ${result.reason?.message}`);
+    const { name, timeout } = attempts[i];
+    if (result.status === 'fulfilled') {
+      markSuccess(name);
+      return result.value;
+    }
+    const failure = timeout.aborted ? new TimeoutError(SEARCH_TIMEOUT_MS) : result.reason;
+    // Only announce the transition, so one outage is one line rather than one
+    // line per query per slot per attempt.
+    if (markFailure(name, failure)) {
+      console.warn(`[images] ${name} is unavailable, skipping it for now (${failure.message})`);
+    }
     return [];
   });
 

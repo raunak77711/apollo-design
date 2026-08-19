@@ -1,7 +1,11 @@
 import { AIProvider } from './AIProvider.js';
+import { fetchWithTimeout, statusError } from '../upstream.js';
 import { OPERATION_TYPES } from '../../design/operations.js';
 import { ELEMENT_TYPES, ALLOWED_ICONS, BLEND_MODES, STROKE_STYLES, SIGNED_ADJUST_KEYS, UNSIGNED_ADJUST_KEYS } from '../../design/schema.js';
 import { FONT_PAIRINGS, LAYOUTS, STYLES } from '../../design/artDirection.js';
+
+/** Generous for a reasoning call, finite so a silent model can't stall a design. */
+const CHAT_TIMEOUT_MS = 45_000;
 
 /**
  * DeepSeek-backed provider, used for two very different jobs.
@@ -28,7 +32,7 @@ export class DeepSeekProvider extends AIProvider {
   }
 
   async chat({ system, user, temperature = 0.6, maxTokens = 2400 }) {
-    const res = await fetch(`${this.baseUrl}/chat/completions`, {
+    const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
       body: JSON.stringify({
@@ -41,11 +45,15 @@ export class DeepSeekProvider extends AIProvider {
         temperature,
         max_tokens: maxTokens,
       }),
+      // The art-direction call is legitimately slow, but a model that has
+      // stopped answering must still surface as an error — `safePlan` can only
+      // fall back to the heuristic planner if this actually throws.
+      timeoutMs: CHAT_TIMEOUT_MS,
     });
 
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
-      throw new Error(`DeepSeek API error ${res.status}: ${detail.slice(0, 300)}`);
+      throw statusError(`DeepSeek API error ${res.status}: ${detail.slice(0, 300)}`, res.status);
     }
 
     const data = await res.json();

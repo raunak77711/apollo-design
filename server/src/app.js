@@ -29,7 +29,6 @@ export function createApp() {
       mongo: isMongoConnected(),
       aiProvider: config.ai.provider,
       imageProvider: config.images.provider,
-      huggingFaceConfigured: Boolean(config.huggingface.apiKey),
     });
   });
 

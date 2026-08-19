@@ -1,4 +1,5 @@
 import { ImageProvider } from './ImageProvider.js';
+import { statusError } from '../upstream.js';
 
 /**
  * Pexels search. Beyond the URL, the curator needs the fields that let it
@@ -19,7 +20,7 @@ export class PexelsProvider extends ImageProvider {
       headers: { Authorization: this.apiKey },
       signal,
     });
-    if (!res.ok) throw new Error(`Pexels API error ${res.status}`);
+    if (!res.ok) throw statusError(`Pexels API error ${res.status}`, res.status);
     const data = await res.json();
     return (data.photos || []).map((p, rank) => ({
       id: `pexels_${p.id}`,

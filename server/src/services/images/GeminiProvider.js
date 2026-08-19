@@ -1,4 +1,8 @@
 import { config } from '../../config/env.js';
+import { fetchWithTimeout, statusError } from '../upstream.js';
+
+/** Captioning happens before the first stage is even announced — keep it short. */
+const CALL_TIMEOUT_MS = 20_000;
 
 /**
  * Gemini ("nano banana") — bespoke image generation and reference-image
@@ -30,14 +34,15 @@ export class GeminiProvider {
   }
 
   async _call(model, contents, { generationConfig } = {}) {
-    const res = await fetch(`${this.baseUrl}/models/${model}:generateContent?key=${this.apiKey}`, {
+    const res = await fetchWithTimeout(`${this.baseUrl}/models/${model}:generateContent?key=${this.apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents, ...(generationConfig ? { generationConfig } : {}) }),
+      timeoutMs: CALL_TIMEOUT_MS,
     });
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
-      throw new Error(`Gemini API error ${res.status}: ${detail.slice(0, 300)}`);
+      throw statusError(`Gemini API error ${res.status}: ${detail.slice(0, 300)}`, res.status);
     }
     return res.json();
   }

@@ -21,20 +21,11 @@ function readGenerateRequest(body = {}) {
   };
 }
 
-/**
- * Turn a finished build into the response body both routes return.
- *
- * The image generator was configured and attempted but had to fall back to
- * stock photography for at least one image — worth telling the user, since it
- * silently means no bespoke artwork (or logo) was produced.
- */
+/** Turn a finished build into the response body both routes return. */
 function generateResult(result, document) {
   const operations = result.operations.filter((op) => validateOperation(op).ok);
   const { document: preview, skipped } = applyOperations(document, operations);
-  const imageNotice = result.imageFallbacks?.length
-    ? "Couldn't generate bespoke artwork right now (Hugging Face is rate-limited or out of credits) — used stock photography instead."
-    : null;
-  return { operations, message: result.message, preview, skipped, imageNotice };
+  return { operations, message: result.message, preview, skipped };
 }
 
 /**

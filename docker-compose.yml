@@ -37,8 +37,6 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_IMAGE_MODEL: ${GEMINI_IMAGE_MODEL:-gemini-2.5-flash-image}
       GEMINI_VISION_MODEL: ${GEMINI_VISION_MODEL:-gemini-2.5-flash}
-      HUGGINGFACE_API_KEY: ${HUGGINGFACE_API_KEY:-}
-      HUGGINGFACE_IMAGE_MODEL: ${HUGGINGFACE_IMAGE_MODEL:-black-forest-labs/FLUX.1-Krea-dev}
     ports:
       - "5010:5010"
     volumes:
