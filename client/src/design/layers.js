@@ -5,6 +5,7 @@
  */
 
 import {
+  BarChart3,
   Circle,
   Folder,
   Hexagon,
@@ -27,6 +28,7 @@ export const TYPE_META = {
   star: { icon: Star, label: 'Star' },
   line: { icon: Minus, label: 'Line' },
   button: { icon: RectangleHorizontal, label: 'Button' },
+  chart: { icon: BarChart3, label: 'Chart' },
   group: { icon: Folder, label: 'Group' },
 };
 

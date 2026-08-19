@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Eraser, PaintBucket, Pencil, Shapes as ShapesIcon, X, Brush as BrushIcon } from 'lucide-react';
 import { useEditor } from '../../state/EditorContext.jsx';
 import { isCanvasReadable, loadImage } from '../../raster/imageIO.js';
@@ -6,8 +6,16 @@ import { drawSegment, floodFill, PEN_MODE_IDS } from '../../raster/draw.js';
 import { drawRasterShape, SHAPE_TYPES } from '../../raster/rasterShapes.js';
 import { useBrushStroke } from '../../raster/useBrushStroke.js';
 import { Button, IconButton } from '../../ui/primitives.jsx';
-import { SliderField, ColorField, Toggle } from '../../ui/fields.jsx';
+import { SliderField, ColorField, TextField, Toggle } from '../../ui/fields.jsx';
 import { useEscape } from '../../ui/overlay.jsx';
+import { flattenPaint } from '../../design/tree.js';
+import { api } from '../../api/client.js';
+import { useToast } from '../../lib/toast.jsx';
+import { Spark } from '../../ui/brand.jsx';
+import DesignPreview from '../DesignPreview.jsx';
+
+/** Room around the scaled document inside the viewport, in CSS px. */
+const STAGE_PADDING = 40;
 
 const TOOLS = [
   { id: 'brush', label: 'Brush', icon: BrushIcon },
@@ -29,13 +37,36 @@ const SHAPE_LABELS = { rectangle: 'Square', circle: 'Circle', triangle: 'Triangl
  * of. Every tool paints straight onto a working canvas; nothing touches the
  * document until Apply, matching the Adjust/Liquify/Retouch tabs.
  *
+ * The rest of the document renders behind it (via `DesignPreview`, the same
+ * read-only whole-document renderer project cards use) at the same scale, so
+ * the target element's own box lines up exactly with where it actually sits —
+ * painting happens with the surrounding text and layers in view, not blind on
+ * an isolated crop.
+ *
  * Renders inline in the editor's main row (TopBar and the tool rail stay put
  * around it) rather than as a full-screen takeover, so it reads as a tab —
  * Home and every other tool button stay one click away while drawing.
  */
-export default function DrawStudio({ elementId, onClose }) {
+export default function DrawStudio({ elementId, onClose, scribbleMode = false }) {
   const { state, actions } = useEditor();
+  const toast = useToast();
   const element = state.document.elements.find((el) => el.id === elementId);
+  const canvas = state.document.canvas;
+
+  // Split the rest of the document around the target's own paint position —
+  // a headline that's meant to sit ON TOP of this photo (a full-bleed hero,
+  // say) has to stay on top of the editable box too, not get buried under it.
+  const { belowDoc, aboveDoc } = useMemo(() => {
+    const elements = state.document.elements;
+    const painted = flattenPaint(elements);
+    const at = painted.findIndex((p) => p.element.id === elementId);
+    const below = new Set(painted.slice(0, Math.max(0, at)).map((p) => p.element.id));
+    const above = new Set(painted.slice(at + 1).map((p) => p.element.id));
+    return {
+      belowDoc: { ...state.document, elements: elements.filter((el) => below.has(el.id)) },
+      aboveDoc: { ...state.document, elements: elements.filter((el) => above.has(el.id)) },
+    };
+  }, [state.document, elementId]);
 
   const [tool, setTool] = useState('brush');
   const [color, setColor] = useState('#E11D48');
@@ -55,6 +86,9 @@ export default function DrawStudio({ elementId, onClose }) {
   const [loading, setLoading] = useState(true);
   const [displayScale, setDisplayScale] = useState(1);
   const [blocked, setBlocked] = useState(false);
+  const [stageScale, setStageScale] = useState(0);
+  const [genPrompt, setGenPrompt] = useState('');
+  const [generating, setGenerating] = useState(false);
   const [, forceRepaint] = useState(0);
 
   const canvasRef = useRef(null);
@@ -62,8 +96,27 @@ export default function DrawStudio({ elementId, onClose }) {
   const shapeStartRef = useRef(null);
   const touchedRef = useRef(false);
   const seedRef = useRef(0);
+  const viewportRef = useRef(null);
 
   useEscape(onClose, true);
+
+  // Fit the *whole document* into the viewport (never upscale past 100%),
+  // so the backdrop and the editable box below are both keyed off one scale.
+  useLayoutEffect(() => {
+    const node = viewportRef.current;
+    if (!node) return undefined;
+    const update = () => {
+      const raw = Math.min(
+        (node.clientWidth - STAGE_PADDING * 2) / canvas.width,
+        (node.clientHeight - STAGE_PADDING * 2) / canvas.height
+      );
+      setStageScale(Math.max(0.02, Math.min(1, raw)));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [canvas.width, canvas.height]);
 
   useEffect(() => {
     if (!element) return;
@@ -106,7 +159,10 @@ export default function DrawStudio({ elementId, onClose }) {
     update();
     window.addEventListener('resize', update);
     return () => window.removeEventListener('resize', update);
-  }, [loading]);
+    // The canvas's CSS box now tracks `stageScale` (document-fit) rather than
+    // its own intrinsic size, so a stage-scale or element-box change resizes
+    // it just as much as a window resize does.
+  }, [loading, stageScale, element?.width, element?.height]);
 
   if (!element) return null;
 
@@ -191,21 +247,70 @@ export default function DrawStudio({ elementId, onClose }) {
     onClose();
   };
 
+  /**
+   * The same pipeline `/scribble` uses, called from right inside the editor:
+   * this raster layer's own strokes go up as the scribble, Apollo reads and
+   * composes from them, and the result replaces the whole document — the
+   * sketch layer included, since a fresh design supersedes it rather than
+   * sitting underneath it.
+   */
+  const runGenerate = async () => {
+    if (!touchedRef.current) {
+      toast.error('Draw something first', 'Apollo needs a sketch to work from.');
+      return;
+    }
+    setGenerating(true);
+    try {
+      const scribble = canvasRef.current.toDataURL('image/png');
+      const res = await api.aiGenerate({
+        message: genPrompt.trim() || 'Design this',
+        document: state.document,
+        scribble,
+      });
+      if (!res.operations?.length) throw new Error('Apollo could not compose a design from that.');
+      actions.apply(res.operations);
+      onClose();
+    } catch (err) {
+      toast.error('Apollo could not draw that', err.message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const cursorSize = tool === 'brush' || tool === 'eraser' || tool === 'pen' ? size : 0;
 
   return (
     <div className="flex min-w-0 flex-1 flex-col bg-void">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-surface px-3">
-        <h2 className="text-[13px] font-medium text-ink">Draw</h2>
+        <h2 className="text-[13px] font-medium text-ink">{scribbleMode ? 'Scribble' : 'Draw'}</h2>
         {blocked && (
           <span className="text-2xs text-ink-3">
             This image blocks pixel editing (hosted externally) — Apply is disabled. Upload it first to draw on it.
           </span>
         )}
+        {scribbleMode && (
+          <TextField
+            className="w-80"
+            placeholder="Say what you want, or leave it and let Apollo read the sketch…"
+            value={genPrompt}
+            onChange={(e) => setGenPrompt(e.target.value)}
+            disabled={generating}
+          />
+        )}
         <div className="flex-1" />
-        <Button variant="secondary" onClick={onClose}>Cancel</Button>
-        <Button variant="primary" onClick={apply} disabled={blocked}>Apply</Button>
-        <IconButton size="lg" onClick={onClose} aria-label="Close"><X size={15} /></IconButton>
+        <Button variant="secondary" onClick={onClose} disabled={generating}>Cancel</Button>
+        {scribbleMode ? (
+          <>
+            <Button variant="secondary" onClick={apply} disabled={generating}>Save sketch</Button>
+            <Button variant="primary" onClick={runGenerate} disabled={generating} className="gap-1.5">
+              <Spark size={13} />
+              {generating ? 'Generating…' : 'Generate'}
+            </Button>
+          </>
+        ) : (
+          <Button variant="primary" onClick={apply} disabled={blocked}>Apply</Button>
+        )}
+        <IconButton size="lg" onClick={onClose} aria-label="Close" disabled={generating}><X size={15} /></IconButton>
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -308,25 +413,49 @@ export default function DrawStudio({ elementId, onClose }) {
           )}
         </aside>
 
-        <div className="checkerboard relative flex min-w-0 flex-1 items-center justify-center overflow-auto p-10">
-          {/* The canvases stay mounted throughout — the setup effect needs a
-              real ref to size on the very first run, before there is
-              anything to show, so "loading" is an overlay, not a swap. */}
-          <div className="relative" style={{ visibility: loading ? 'hidden' : 'visible' }}>
-            <canvas ref={canvasRef} className="block max-h-[70vh] max-w-full shadow-art" style={{ cursor: cursorSize ? 'none' : tool === 'fill' ? 'crosshair' : 'crosshair' }} {...handlers} />
-            <canvas ref={previewCanvasRef} className="pointer-events-none absolute inset-0 block max-h-[70vh] max-w-full" />
-            {hover && cursorSize > 0 && (
-              <span
-                className="pointer-events-none absolute rounded-full border-2 border-accent"
-                style={{
-                  left: hover.x * displayScale - (cursorSize / 2) * displayScale,
-                  top: hover.y * displayScale - (cursorSize / 2) * displayScale,
-                  width: cursorSize * displayScale,
-                  height: cursorSize * displayScale,
-                  boxShadow: '0 0 0 1px rgba(0,0,0,0.4)',
-                }}
-              />
-            )}
+        <div ref={viewportRef} className="relative flex min-w-0 flex-1 items-center justify-center overflow-auto bg-void p-10">
+          {/* Always mounted, sized at 0 until the first `stageScale` measurement
+              lands — the setup effect needs `canvasRef` attached on its very
+              first run, so the canvas itself can never be conditional on it. */}
+          <div className="relative shrink-0 shadow-art" style={{ width: canvas.width * stageScale, height: canvas.height * stageScale }}>
+            {/* Read-only, split around the target's own paint position: what
+                sits behind it in the real document renders behind the
+                editable box, and — the part that actually matters for a
+                full-bleed photo — what sits IN FRONT of it (a headline over
+                a hero image, say) stays in front here too. */}
+            <DesignPreview document={belowDoc} className="absolute inset-0" />
+
+            <div
+              className="checkerboard absolute outline outline-2 outline-accent/70"
+              style={{
+                left: element.x * stageScale,
+                top: element.y * stageScale,
+                width: element.width * stageScale,
+                height: element.height * stageScale,
+                visibility: loading ? 'hidden' : 'visible',
+              }}
+            >
+              <canvas ref={canvasRef} className="block h-full w-full" style={{ cursor: cursorSize ? 'none' : 'crosshair' }} {...handlers} />
+              <canvas ref={previewCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full" />
+              {hover && cursorSize > 0 && (
+                <span
+                  className="pointer-events-none absolute rounded-full border-2 border-accent"
+                  style={{
+                    left: hover.x * displayScale - (cursorSize / 2) * displayScale,
+                    top: hover.y * displayScale - (cursorSize / 2) * displayScale,
+                    width: cursorSize * displayScale,
+                    height: cursorSize * displayScale,
+                    boxShadow: '0 0 0 1px rgba(0,0,0,0.4)',
+                  }}
+                />
+              )}
+            </div>
+
+            <DesignPreview
+              document={aboveDoc}
+              className="pointer-events-none absolute inset-0"
+              style={{ background: 'transparent' }}
+            />
           </div>
           {loading && <p className="absolute text-sm text-ink-3">Preparing canvas…</p>}
         </div>

@@ -873,7 +873,69 @@ const ARCHETYPES = {
     lockup.draw(scene, grid.left, Math.round((canvas.height - lockup.height) / 2));
     block(scene, { x: 0, y: 0, width: Math.max(3, style.geometry.rule + 2), height: canvas.height, fill: palette.accent, name: 'Edge rule' });
   },
+
+  /**
+   * Data, not a photograph: a headline, then either a real chart (when the
+   * brief proposed one) or the detail rows laid out as a grid of fact cards
+   * instead of one stacked list. This is the times-table / quick-comparison /
+   * step-by-step shape — nothing here is photographic.
+   */
+  'stat-grid'(ctx) {
+    const { scene, canvas, grid, palette, style, type, fonts, brief } = ctx;
+    block(scene, { x: 0, y: 0, width: canvas.width, height: canvas.height, fill: palette.background, name: 'Ground' });
+
+    const headroom = Math.round(canvas.height * 0.34);
+    const lockup = fitCopyBlock(ctx, { width: grid.inner, align: 'left', include: { details: false, cta: false } }, headroom);
+    lockup.draw(scene, grid.left, grid.top);
+
+    const bodyTop = grid.top + lockup.height + grid.gutter * 2;
+    const bodyHeight = Math.max(80, grid.bottom - bodyTop);
+
+    if (brief.chart) {
+      scene.add({
+        type: 'chart',
+        x: grid.left, y: bodyTop, width: grid.inner, height: bodyHeight,
+        name: 'Chart',
+        properties: {
+          chartType: brief.chart.chartType,
+          data: brief.chart.data,
+          color: palette.accent,
+          labelColor: palette.primary,
+          showValues: true,
+        },
+      });
+      return;
+    }
+
+    const items = brief.copy.details;
+    if (!items.length) return;
+    const cols = items.length > 6 ? 3 : items.length > 1 ? 2 : 1;
+    const rows = Math.ceil(items.length / cols);
+    const gap = grid.gutter;
+    const cellWidth = (grid.inner - gap * (cols - 1)) / cols;
+    const cellHeight = Math.min((bodyHeight - gap * (rows - 1)) / rows, cellWidth * 0.68);
+    const pad = Math.round(cellWidth * 0.08);
+
+    items.forEach((text, i) => {
+      const r = Math.floor(i / cols);
+      const c = i % cols;
+      const x = grid.left + c * (cellWidth + gap);
+      const y = bodyTop + r * (cellHeight + gap);
+      block(scene, { x, y, width: cellWidth, height: cellHeight, fill: palette.surface, radius: style.geometry.radius, name: `Fact ${i + 1}` });
+      typeset(scene, {
+        text, x: x + pad, y: y + pad, width: cellWidth - pad * 2, maxHeight: cellHeight - pad * 2,
+        font: fonts.body, weight: 600, size: Math.min(type.subhead, cellHeight * 0.3), minSize: 12,
+        color: ctx.onSurface.text, align: 'left', lineHeight: 1.25, maxLines: 3, name: `Fact ${i + 1}`,
+      });
+    });
+  },
 };
+
+// A labeled diagram is a split-vertical composition: illustration on one
+// side, its copy block (headline + the numbered legend in "details") on the
+// other. No new geometry is needed — only the art direction differs, which
+// is guided in the DeepSeek prompt, not here.
+ARCHETYPES['labeled-diagram'] = ARCHETYPES['split-vertical'];
 
 export const LAYOUT_IDS = Object.keys(ARCHETYPES);
 

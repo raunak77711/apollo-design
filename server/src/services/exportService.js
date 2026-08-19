@@ -149,9 +149,116 @@ async function elementToSvg(el, opacity) {
           `<image href="${image.href}" x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" preserveAspectRatio="${box.fit}" clip-path="url(#clip-${el.id})"/>`
       );
     }
+    case 'chart':
+      // Positioned in element space (not centred at cx/cy), same as rectangle —
+      // `chartToSvg` reproduces client/src/components/elements/ChartElement.jsx's
+      // geometry exactly so an exported chart matches what was on screen.
+      return wrap(chartToSvg(el, p));
     default:
       return '';
   }
+}
+
+/** Same bar/line/donut geometry as the client's ChartElement, in SVG-string form. */
+function chartToSvg(el, p) {
+  const { x, y, width, height } = el;
+  const data = Array.isArray(p.data) && p.data.length >= 2 ? p.data : [{ label: 'A', value: 1 }, { label: 'B', value: 1 }];
+  const color = esc(p.color || '#D9A441');
+  const labelColor = esc(p.labelColor || '#FFFFFF');
+  const showValues = Boolean(p.showValues);
+
+  const fontSize = (fraction, min = 8, max = 22) => Math.max(min, Math.min(max, height * fraction));
+  const truncate = (label, chars) => (String(label).length > chars ? `${String(label).slice(0, chars - 1)}…` : String(label));
+
+  if (p.chartType === 'donut') {
+    const legendRows = Math.min(data.length, 6);
+    const legendH = height * 0.13 * legendRows;
+    const plotH = height - legendH;
+    const cx = x + width / 2;
+    const cy = y + plotH / 2;
+    const r = Math.min(width, plotH) * 0.42;
+    const inner = r * 0.58;
+    const total = Math.max(1, data.reduce((sum, d) => sum + d.value, 0));
+    let angle = -Math.PI / 2;
+    const slices = data.map((d, i) => {
+      const sweep = (d.value / total) * Math.PI * 2;
+      const start = angle;
+      angle += sweep;
+      return { ...d, start, end: angle, opacity: 0.5 + 0.5 * (1 - (i % 5) / 5) };
+    });
+    const arc = (startAngle, endAngle) => {
+      const large = endAngle - startAngle > Math.PI ? 1 : 0;
+      const pt = (radius, a) => [cx + radius * Math.cos(a), cy + radius * Math.sin(a)];
+      const [x0, y0] = pt(r, startAngle);
+      const [x1, y1] = pt(r, endAngle);
+      const [x2, y2] = pt(inner, endAngle);
+      const [x3, y3] = pt(inner, startAngle);
+      return `M ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} L ${x2} ${y2} A ${inner} ${inner} 0 ${large} 0 ${x3} ${y3} Z`;
+    };
+    const legendSize = fontSize(0.05);
+    const swatch = legendSize * 0.85;
+    const paths = slices.map((s) => `<path d="${arc(s.start, s.end)}" fill="${color}" fill-opacity="${s.opacity}"/>`).join('');
+    const legend = data.slice(0, legendRows).map((d, i) => {
+      const rowY = y + plotH + i * (legendH / legendRows) + legendH / legendRows / 2;
+      const lx = x + width * 0.06;
+      return (
+        `<rect x="${lx}" y="${rowY - swatch / 2}" width="${swatch}" height="${swatch}" rx="2" fill="${color}" fill-opacity="${slices[i].opacity}"/>` +
+        `<text x="${lx + swatch * 1.6}" y="${rowY + legendSize * 0.35}" font-size="${legendSize}" fill="${labelColor}" font-family="Inter, sans-serif">${esc(truncate(d.label, 22))}</text>`
+      );
+    }).join('');
+    return paths + legend;
+  }
+
+  if (p.chartType === 'line') {
+    const labelH = height * 0.16;
+    const valueH = showValues ? height * 0.14 : height * 0.06;
+    const top = y + valueH;
+    const bottom = y + height - labelH;
+    const plotH = Math.max(1, bottom - top);
+    const max = Math.max(...data.map((d) => d.value), 1);
+    const min = Math.min(...data.map((d) => d.value), 0);
+    const range = Math.max(1, max - min);
+    const size = fontSize(0.055);
+    const step = data.length > 1 ? width / (data.length - 1) : width;
+    const points = data.map((d, i) => ({ x: x + i * step, y: bottom - ((d.value - min) / range) * plotH, ...d }));
+    const path = points.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`).join(' ');
+    const marks = points.map((pt) => {
+      const value = showValues
+        ? `<text x="${pt.x}" y="${pt.y - height * 0.03}" text-anchor="middle" font-size="${size}" fill="${labelColor}" font-family="Inter, sans-serif" font-weight="600">${Math.round(pt.value)}</text>`
+        : '';
+      return (
+        `<circle cx="${pt.x}" cy="${pt.y}" r="${Math.max(2.5, height * 0.014)}" fill="${color}"/>` +
+        value +
+        `<text x="${pt.x}" y="${y + height - labelH * 0.3}" text-anchor="middle" font-size="${size}" fill="${labelColor}" font-family="Inter, sans-serif" opacity="0.8">${esc(truncate(pt.label, 8))}</text>`
+      );
+    }).join('');
+    return `<path d="${path}" fill="none" stroke="${color}" stroke-width="${Math.max(2, height * 0.012)}" stroke-linejoin="round" stroke-linecap="round"/>` + marks;
+  }
+
+  // Bar (default).
+  const labelH = height * 0.16;
+  const valueH = showValues ? height * 0.14 : height * 0.04;
+  const top = y + valueH;
+  const bottom = y + height - labelH;
+  const plotH = Math.max(1, bottom - top);
+  const max = Math.max(...data.map((d) => d.value), 1);
+  const slot = width / data.length;
+  const barW = slot * 0.56;
+  const size = fontSize(0.055);
+  const charW = size * 0.58;
+  return data.map((d, i) => {
+    const barH = (d.value / max) * plotH;
+    const bx = x + i * slot + (slot - barW) / 2;
+    const by = bottom - barH;
+    const value = showValues
+      ? `<text x="${bx + barW / 2}" y="${top - size * 0.4}" text-anchor="middle" font-size="${size}" fill="${labelColor}" font-family="Inter, sans-serif" font-weight="600">${Math.round(d.value)}</text>`
+      : '';
+    return (
+      `<rect x="${bx}" y="${by}" width="${barW}" height="${Math.max(1, barH)}" rx="${Math.min(6, barW * 0.12)}" fill="${color}" fill-opacity="${0.55 + 0.45 * ((i % 4) / 4)}"/>` +
+      value +
+      `<text x="${bx + barW / 2}" y="${y + height - labelH * 0.3}" text-anchor="middle" font-size="${size}" fill="${labelColor}" font-family="Inter, sans-serif" opacity="0.8">${esc(truncate(d.label, Math.max(3, Math.round(slot / charW))))}</text>`
+    );
+  }).join('');
 }
 
 /**

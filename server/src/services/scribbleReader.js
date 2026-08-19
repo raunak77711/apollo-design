@@ -1,5 +1,6 @@
 import sharp from 'sharp';
 import { getGeminiProvider } from './images/GeminiProvider.js';
+import { getOpenRouterProvider } from './images/OpenRouterProvider.js';
 import { normalizeScribble } from '../design/scribble.js';
 
 /**
@@ -13,9 +14,9 @@ import { normalizeScribble } from '../design/scribble.js';
  *    composition from a stacked one from a lone mark in a lot of space, which
  *    is most of what a layout decision needs.
  *
- * 2. **Vision** (Gemini, optional) — what the ink *means*. Which cluster is the
- *    moon and which is the headline; what words were written; what the whole
- *    thing is for.
+ * 2. **Vision** (Gemini, then OpenRouter as a fallback reader, both optional)
+ *    — what the ink *means*. Which cluster is the moon and which is the
+ *    headline; what words were written; what the whole thing is for.
  *
  * The two are merged rather than chosen between: the vision pass supplies
  * labels, the geometry pass supplies (and sanity-checks) the shape. A model
@@ -349,30 +350,36 @@ function dilate(mask) {
 /**
  * What the marks mean, or null with no key / on any failure.
  *
- * Retried once on a busy upstream, which is the one failure genuinely worth
- * waiting for: reading the drawing is the whole feature, and "high demand,
- * try again" is a temporary condition the geometry fallback would otherwise
- * turn into a permanently worse design.
+ * Tried against every configured reader in turn — Gemini first, then
+ * OpenRouter — not because one is better, but because Gemini's free tier is
+ * 20 requests/day and exhausts almost immediately in practice; without a
+ * second reader every scribble past the first handful silently degrades to
+ * geometry-only (a real layout, but no idea *what* was drawn). Each reader
+ * gets one retry on a failure that was cheap — "high demand, try again"
+ * comes back in milliseconds and is worth another go, but a model that took
+ * the whole deadline to not answer will take it again.
  */
 async function readMeaning(dataUrl, { prompt }) {
-  const gemini = getGeminiProvider();
-  if (!gemini.configured) return null;
+  for (const provider of [getGeminiProvider(), getOpenRouterProvider()]) {
+    if (!provider.configured) continue;
+    const result = await attemptRead(provider, dataUrl, prompt);
+    if (result) return result;
+  }
+  return null;
+}
 
+async function attemptRead(provider, dataUrl, prompt) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const startedAt = Date.now();
     try {
-      return await gemini.readScribble(dataUrl, { prompt, timeoutMs: READ_TIMEOUT_MS });
+      return await provider.readScribble(dataUrl, { prompt, timeoutMs: READ_TIMEOUT_MS });
     } catch (err) {
-      // Retry only a failure that was *cheap*. "High demand, try again" comes
-      // back in milliseconds and is worth another go; a model that took the
-      // whole deadline to not answer will take it again, and the user would
-      // pay twice over for a design the shapes can already brief.
       const cheap = Date.now() - startedAt < CHEAP_FAILURE_MS;
       if (cheap && attempt === 0) {
         await new Promise((resolve) => setTimeout(resolve, 900));
         continue;
       }
-      console.warn(`[scribble] vision read failed (${err.message}) — reading the shapes instead`);
+      console.warn(`[scribble] vision read failed (${err.message})`);
       return null;
     }
   }

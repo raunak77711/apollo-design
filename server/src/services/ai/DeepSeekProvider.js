@@ -141,6 +141,10 @@ Return ONLY a JSON object with this shape:
       "negativeSpace": "left" | "right" | "top" | "bottom" | "center" | "any"
     }
   ],
+  "chart": null | {
+    "chartType": "bar" | "donut" | "line",
+    "data": [{ "label": "short label", "value": number }, "... 3 to 8 real points"]
+  },
   "rationale": "one sentence on why this direction suits the brief"
 }
 
@@ -190,7 +194,21 @@ one per design.
 
 LAYOUT. Match structure to message. A short punchy offer wants type-poster or full-bleed-hero. A
 premium brand wants minimal-frame or editorial-asymmetric. A multi-item story wants grid-editorial.
+A genuinely data-driven ask (statistics, a times table, a step-by-step process, a quick comparison)
+wants stat-grid — set "chart" for it when there is real data to plot, and leave images empty; it is
+the only layout with no photography. A request to show a labeled subject (a diagram of a cell, a
+machine, an anatomy chart, "explain the parts of X") wants labeled-diagram: describe the illustration
+with role "hero" as clean and completely unlabeled (see PHOTOGRAPHY), and put every part name in
+"details" as one numbered entry each — "① Nucleus — controls the cell", "② Mitochondria — makes
+energy" — in the same order a reader would scan them. Never ask for labels pinned to a point on the
+picture; no image model can place them accurately, so the numbered list next to it is the label.
 Do not put everything in the middle of the canvas.
+
+DATA. Only set "chart" when the brief actually has numbers to compare, a trend over time, or shares
+of a total — 3 to 8 real points with real labels and real values taken from the brief. Never invent
+statistics for a brief that has none, and never set it just because stat-grid was chosen — a times
+table or a list of steps belongs in "details" instead, not a chart. Pick bar for a comparison, line
+for a trend, donut for parts of a whole.
 
 RESTRAINT. Every element must earn its place. A design can be almost empty and still be powerful;
 it cannot be crowded and be good. Never add decoration for its own sake.
@@ -267,10 +285,17 @@ Type-specific "properties":
   overrides fill. polygon has "sides" (3-24). star has "points" (3-24) and "depth" (0.05-0.95).
 - line: stroke, strokeWidth, strokeStyle.
 - icon: name (from the list), library "lucide", size, color, strokeWidth.
-- image: never invent a URL — set "query":"a described photograph" and Apollo sources it. Other
-  properties: fit (cover|contain|fill), borderRadius, focalX/focalY (0-100), zoom (1-4),
-  brightness/contrast/saturation (0-200, 100 = neutral), hue (-180..180), grayscale (0-100),
-  blur (0-20). Signed adjustments (-100..100): ${SIGNED_ADJUST_KEYS.join(', ')}.
+- chart: chartType (bar|donut|line), data (array of {label, value}, 2-12 real points), color,
+  labelColor, showValues. Geometry is computed from data — never ask for this unless the request is
+  genuinely data-driven, and never invent numbers that were not in the brief or the document.
+- image: never invent a URL — set "query" and Apollo resolves it, generating bespoke art when a
+  generator is configured and falling back to a stock photo search otherwise. Because it may be
+  generated rather than searched, write "query" as a real visual brief when the request calls for
+  new/custom imagery ("make the background a starry night" → a full scene description, lighting,
+  mood — not just "starry night"), and as a plain search phrase when a literal stock photo is what
+  was actually asked for. Other properties: fit (cover|contain|fill), borderRadius, focalX/focalY
+  (0-100), zoom (1-4), brightness/contrast/saturation (0-200, 100 = neutral), hue (-180..180),
+  grayscale (0-100), blur (0-20). Signed adjustments (-100..100): ${SIGNED_ADJUST_KEYS.join(', ')}.
   Unsigned (0..100): ${UNSIGNED_ADJUST_KEYS.join(', ')}.
 
 Operation shapes:

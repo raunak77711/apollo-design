@@ -1,5 +1,5 @@
 import { getAIProvider } from './ai/index.js';
-import { curateImages } from './images/curator.js';
+import { curateImages, generateBespokeImage } from './images/curator.js';
 import { getGeminiProvider } from './images/GeminiProvider.js';
 import { compose } from '../design/layout.js';
 import { critique, needsRework, summarize } from '../design/critique.js';
@@ -59,14 +59,17 @@ const SLOTS = {
   'corner-hero': [[0.62, 0.62]],
   'grid-editorial': [[0.3, 0.3], [0.3, 0.3], [0.3, 0.3]],
   'banner-lockup': [[0.42, 1]],
+  'stat-grid': [],
+  'labeled-diagram': [[0.5, 1]],
 };
 
 function slotsFor(brief) {
   const spec = SLOTS[brief.layout] || SLOTS['split-vertical'];
   const { width, height } = brief.canvas;
   const slots = spec.map(([w, h]) => ({ width: Math.round(width * w), height: Math.round(height * h) }));
-  // A portrait canvas splits horizontally rather than vertically.
-  if (brief.layout === 'split-vertical' && width / height < 0.95) {
+  // A portrait canvas splits horizontally rather than vertically — true for
+  // 'labeled-diagram' too, since it renders through the same archetype.
+  if ((brief.layout === 'split-vertical' || brief.layout === 'labeled-diagram') && width / height < 0.95) {
     return [{ width, height: Math.round(height * 0.54) }];
   }
   return slots.length ? slots : [{ width, height }];
@@ -156,14 +159,28 @@ export async function buildDesign({
 
     let images = [];
     if (brief.images.length) {
+      const slots = slotsFor(brief);
+      // A scribble is the one signal specific enough to justify bespoke art
+      // over a stock search: the user drew an actual scene, so generating it
+      // beats hoping a photo library has something close. Run alongside the
+      // stock curator rather than after it, so a scribble-driven generation
+      // costs no extra latency over an ordinary one.
+      const bespokeHero = reading
+        ? generateBespokeImage(brief.images[0], { slot: slots[0], palette: brief.palette, sceneNote: reading.reading })
+        : Promise.resolve(null);
       // The stage is announced by the curator's own first callback, which
       // fires as it starts on slot one — announcing it here as well would
       // just send the same event twice.
-      images = await curateImages(brief.images, {
-        slots: slotsFor(brief),
-        palette: brief.palette,
-        onProgress: (index, total) => stage('curating', { index, count: total }),
-      });
+      const [bespoke, curated] = await Promise.all([
+        bespokeHero,
+        curateImages(brief.images, {
+          slots,
+          palette: brief.palette,
+          onProgress: (index, total) => stage('curating', { index, count: total }),
+        }),
+      ]);
+      images = curated;
+      if (bespoke) images[0] = bespoke;
     }
 
     stage('composing');
@@ -313,7 +330,11 @@ function describe(brief, images, review, reading) {
   const hero = images.find((i) => i.url);
   if (hero) {
     const where = hero.negativeSpace && hero.negativeSpace !== 'any' ? ` with quiet space ${hero.negativeSpace}` : '';
-    parts.push(`Photography from ${hero.provider}${where}, cropped to its focal point.`);
+    parts.push(
+      hero.provider === 'openrouter'
+        ? `Bespoke artwork generated for this sketch${where}.`
+        : `Photography from ${hero.provider}${where}, cropped to its focal point.`
+    );
   }
 
   const notes = summarize(review);

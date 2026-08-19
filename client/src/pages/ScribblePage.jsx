@@ -297,12 +297,22 @@ export default function ScribblePage() {
       setResult({ document: finished, message: res.message, scribble });
       setSavedResult(true);
       stages.finish();
-      // The scene holds on "ready" for a beat and then clears to reveal the
-      // design underneath — a handover rather than a cut.
-      settleRef.current = setTimeout(() => {
-        setMode('result');
-        setBusy(null);
-      }, 750);
+      if (reuse) {
+        // "Try again" from an existing result: stay here so the new
+        // direction can be compared against the one already on screen,
+        // rather than jumping away every time.
+        settleRef.current = setTimeout(() => {
+          setMode('result');
+          setBusy(null);
+        }, 750);
+      } else {
+        // A first generation hands straight off to the editor — that's the
+        // whole point of sketching an idea, and a result screen in between
+        // would just be an extra click before the thing is actually editable.
+        settleRef.current = setTimeout(() => {
+          navigate(`/editor/${id}`);
+        }, 750);
+      }
     } catch (err) {
       if (err.name === 'AbortError') return;
       setError(err.message);

@@ -151,7 +151,8 @@ export class GeminiProvider {
 
 /* ------------------------------ scribble prompt ---------------------------- */
 
-function buildScribblePrompt(prompt) {
+/** Exported so `OpenRouterProvider` can read a scribble the same way when Gemini is down. */
+export function buildScribblePrompt(prompt) {
   return `You are looking at a rough sketch a person drew to plan a graphic design. It is deliberately
 crude — stick figures, blobs, squiggles standing in for text. Your job is to read their INTENT and
 the LAYOUT, not to judge the drawing.

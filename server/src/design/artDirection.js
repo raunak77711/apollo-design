@@ -217,6 +217,8 @@ export const LAYOUTS = [
   { id: 'corner-hero', label: 'Corner hero', images: 1, description: 'Image anchored into one corner behind a rounded mask, type on the diagonal opposite. Playful and dynamic.' },
   { id: 'grid-editorial', label: 'Editorial grid', images: 3, description: 'A modular grid of several images with type occupying one cell. Great for collections, menus and multi-item stories.' },
   { id: 'banner-lockup', label: 'Wide lockup', images: 1, description: 'Horizontal lockup for wide canvases: type left, photograph right, aligned to a firm baseline. Clean and corporate.' },
+  { id: 'stat-grid', label: 'Stat grid', images: 0, description: 'No photography — a headline over either a real chart or a grid of fact cards. Best for genuinely data-driven asks: statistics, a times table, a step-by-step process, a quick comparison.' },
+  { id: 'labeled-diagram', label: 'Labeled diagram', images: 1, description: 'A generated illustration beside a numbered key. For a labeled diagram — an anatomy chart, a machine, a process with named parts — where the picture stays clean and every label lives in the list next to it, not pinned to a point on the image.' },
 ];
 
 export const findLayout = (id) => LAYOUTS.find((l) => l.id === id) || null;
@@ -227,10 +229,10 @@ export const findLayout = (id) => LAYOUTS.find((l) => l.id === id) || null;
  * before it reaches the composer.
  */
 export function layoutsForAspect(ratio) {
-  if (ratio >= 1.6) return ['banner-lockup', 'split-vertical', 'full-bleed-hero', 'editorial-asymmetric', 'overlap-collage', 'grid-editorial'];
-  if (ratio >= 1.15) return ['banner-lockup', 'split-vertical', 'full-bleed-hero', 'editorial-asymmetric', 'overlap-collage', 'type-poster', 'grid-editorial'];
-  if (ratio >= 0.85) return ['full-bleed-hero', 'split-vertical', 'editorial-asymmetric', 'overlap-collage', 'type-poster', 'minimal-frame', 'corner-hero', 'band-stack', 'grid-editorial'];
-  return ['full-bleed-hero', 'editorial-asymmetric', 'type-poster', 'minimal-frame', 'band-stack', 'corner-hero', 'overlap-collage', 'grid-editorial', 'split-vertical'];
+  if (ratio >= 1.6) return ['banner-lockup', 'split-vertical', 'full-bleed-hero', 'editorial-asymmetric', 'overlap-collage', 'grid-editorial', 'stat-grid', 'labeled-diagram'];
+  if (ratio >= 1.15) return ['banner-lockup', 'split-vertical', 'full-bleed-hero', 'editorial-asymmetric', 'overlap-collage', 'type-poster', 'grid-editorial', 'stat-grid', 'labeled-diagram'];
+  if (ratio >= 0.85) return ['full-bleed-hero', 'split-vertical', 'editorial-asymmetric', 'overlap-collage', 'type-poster', 'minimal-frame', 'corner-hero', 'band-stack', 'grid-editorial', 'stat-grid', 'labeled-diagram'];
+  return ['full-bleed-hero', 'editorial-asymmetric', 'type-poster', 'minimal-frame', 'band-stack', 'corner-hero', 'overlap-collage', 'grid-editorial', 'split-vertical', 'stat-grid', 'labeled-diagram'];
 }
 
 /* ------------------------------ variations ------------------------------ */
@@ -331,6 +333,7 @@ export function normalizeBrief(input = {}, { canvas, prompt = '', forceLayout = 
     palette,
     fonts: pairing,
     copy: normalizeCopy(input.copy),
+    chart: normalizeChart(input.chart),
     images: normalizeImagePlan(input.images, style, findLayout(layout)),
     focal: input.focal === 'type' ? 'type' : 'image',
     rationale: str(input.rationale, ''),
@@ -361,6 +364,21 @@ function normalizeCopy(copy = {}) {
     details,
     meta: str(copy.meta, '').slice(0, 60),
   };
+}
+
+/**
+ * A chart is only real when the model actually gave real data — anything
+ * thinner than two labelled points is not a chart, it's noise, so it becomes
+ * `null` and the layout falls back to whatever it does without one.
+ */
+function normalizeChart(input) {
+  if (!input || typeof input !== 'object') return null;
+  const data = (Array.isArray(input.data) ? input.data : [])
+    .filter((d) => d && typeof d.label === 'string' && d.label.trim() && Number.isFinite(Number(d.value)))
+    .slice(0, 12)
+    .map((d) => ({ label: String(d.label).trim().slice(0, 24), value: Math.max(0, Number(d.value)) }));
+  if (data.length < 2) return null;
+  return { chartType: ['bar', 'donut', 'line'].includes(input.chartType) ? input.chartType : 'bar', data };
 }
 
 /**

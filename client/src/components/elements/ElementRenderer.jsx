@@ -6,6 +6,7 @@ import CircleElement from './CircleElement.jsx';
 import PolyElement from './PolyElement.jsx';
 import LineElement from './LineElement.jsx';
 import ButtonElement from './ButtonElement.jsx';
+import ChartElement from './ChartElement.jsx';
 import GroupElement from './GroupElement.jsx';
 
 const RENDERERS = {
@@ -18,6 +19,7 @@ const RENDERERS = {
   star: PolyElement,
   line: LineElement,
   button: ButtonElement,
+  chart: ChartElement,
   group: GroupElement,
 };
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Circle, Hexagon, ImageIcon, Minus, RectangleHorizontal, Search, Shapes, Sticker, Square, Star, Triangle, Upload } from 'lucide-react';
+import { BarChart3, Circle, Hexagon, ImageIcon, Minus, RectangleHorizontal, Search, Shapes, Sticker, Square, Star, Triangle, Upload } from 'lucide-react';
 import { api } from '../../api/client.js';
 import { cx } from '../../lib/cx.js';
 import { useToast } from '../../lib/toast.jsx';
@@ -27,6 +27,7 @@ const SHAPES = [
   { id: 'star', label: 'Star', icon: Star, size: { width: 220, height: 220 }, props: { points: 5, depth: 0.45 } },
   { id: 'line', label: 'Line', icon: Minus, size: { width: 320, height: 12 } },
   { id: 'button', label: 'Button', icon: RectangleHorizontal, size: { width: 220, height: 56 }, props: { text: 'Button' } },
+  { id: 'chart', label: 'Chart', icon: BarChart3, size: { width: 420, height: 300 } },
 ];
 
 /**

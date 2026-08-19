@@ -44,4 +44,20 @@ export const config = {
     visionModel: process.env.GEMINI_VISION_MODEL || 'gemini-flash-latest',
     baseUrl: process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta',
   },
+
+  // OpenRouter — bespoke background art for scribble-originated designs (and,
+  // from the edit path, "make the background X"-style requests). Klein 4B is
+  // FLUX.2's fast/cheap tier, priced per megapixel rather than per second like
+  // a video model, which is what this pipeline actually wants. `visionModel`
+  // is the fallback scribble reader used when Gemini is unconfigured or
+  // rejects the call (its free tier is 20 requests/day and exhausts fast) —
+  // confirmed live against OpenRouter's own chat/completions endpoint.
+  // Optional: with no key, every caller falls straight through to its
+  // non-bespoke path (stock photography, geometry-only scribble reading).
+  openrouter: {
+    apiKey: process.env.OPENROUTER_API_KEY || '',
+    imageModel: process.env.OPENROUTER_IMAGE_MODEL || 'black-forest-labs/flux.2-klein-4b',
+    visionModel: process.env.OPENROUTER_VISION_MODEL || 'google/gemini-2.5-flash-lite',
+    baseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+  },
 };

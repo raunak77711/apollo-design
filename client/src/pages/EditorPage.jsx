@@ -104,6 +104,9 @@ function EditorShell() {
   const [photoEditId, setPhotoEditId] = useState(null);
   const [photoEditView, setPhotoEditView] = useState('adjust');
   const [drawStudioId, setDrawStudioId] = useState(null);
+  // Opened via the dedicated "Scribble" entry point: DrawStudio offers a
+  // Generate action too, not just Apply/Cancel on the raster itself.
+  const [drawStudioScribble, setDrawStudioScribble] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
@@ -304,6 +307,7 @@ function EditorShell() {
   /** Draws on the selected image if there is one, otherwise starts a fresh blank layer. */
   const openDraw = useCallback(
     (elementId) => {
+      setDrawStudioScribble(false);
       if (elementId) {
         setDrawStudioId(elementId);
         return;
@@ -338,6 +342,36 @@ function EditorShell() {
     },
     [actions, state.document, state.selectedIds]
   );
+
+  /**
+   * Always a fresh, full-canvas frame to sketch on, regardless of what's
+   * selected — the dedicated entry point for "I just want to draw something
+   * new," as distinct from Draw's "paint on this specific element."
+   */
+  const openScribble = useCallback(() => {
+    setDrawStudioScribble(true);
+    const canvas = state.document.canvas;
+    const id = newElementId('image');
+    actions.apply(
+      [
+        {
+          type: 'CREATE_ELEMENT',
+          element: {
+            id,
+            type: 'image',
+            x: 0,
+            y: 0,
+            width: canvas.width,
+            height: canvas.height,
+            name: 'Sketch',
+            properties: { ...defaultPropertiesFor('image'), src: '' },
+          },
+        },
+      ],
+      { selectIds: [id] }
+    );
+    setDrawStudioId(id);
+  }, [actions, state.document]);
 
   const openAdjust = useCallback((elementId) => {
     setPhotoEditView('adjust');
@@ -751,13 +785,21 @@ function EditorShell() {
           onToggleApollo={toggleApollo}
           onRetouch={openRetouch}
           onDraw={() => openDraw()}
+          onScribble={openScribble}
           onSampleColour={'EyeDropper' in window ? sampleColour : undefined}
         />
 
         {/* Draw takes the row Stage normally occupies — TopBar and the rail
             stay put, so it reads as a tab, not a separate page. */}
         {drawStudioId ? (
-          <DrawStudio elementId={drawStudioId} onClose={() => setDrawStudioId(null)} />
+          <DrawStudio
+            elementId={drawStudioId}
+            scribbleMode={drawStudioScribble}
+            onClose={() => {
+              setDrawStudioId(null);
+              setDrawStudioScribble(false);
+            }}
+          />
         ) : (
           <>
             {leftPanel && (

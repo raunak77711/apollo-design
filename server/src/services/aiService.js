@@ -1,5 +1,6 @@
 import { getAIProvider } from './ai/index.js';
 import { resolveImageUrl } from './images/index.js';
+import { getOpenRouterProvider } from './images/OpenRouterProvider.js';
 import { validateOperation, applyOperations } from '../design/operations.js';
 import { buildDesign, buildVariations } from './designService.js';
 
@@ -40,7 +41,7 @@ export async function runAIEdit({ message, document, selectedElementId }) {
 
   const operations = [];
   for (const op of raw) {
-    const resolved = await resolveImageQueries(op);
+    const resolved = await resolveImageQueries(op, document);
     if (validateOperation(resolved).ok) operations.push(resolved);
   }
 
@@ -86,12 +87,32 @@ function summary(result) {
   };
 }
 
-async function resolveImageQueries(op) {
+/**
+ * Bespoke art first, stock photography as the fallback — the same order the
+ * generation pipeline uses for a scribble hero, applied here to any edit that
+ * asks for new imagery ("make the background a starry night"), not just a
+ * literal photo swap. Falls straight through to `resolveImageUrl` (which has
+ * its own placeholder fallback) on any failure or when no key is configured.
+ */
+async function resolveImage(query, { width, height } = {}) {
+  const generator = getOpenRouterProvider();
+  if (generator.configured) {
+    try {
+      const result = await generator.generateImage({ prompt: query, width, height });
+      if (result) return `data:${result.mimeType};base64,${result.buffer.toString('base64')}`;
+    } catch (err) {
+      console.warn(`[ai] bespoke image generation failed for "${query}": ${err.message}`);
+    }
+  }
+  return resolveImageUrl(query);
+}
+
+async function resolveImageQueries(op, document) {
   if (op.type === 'CREATE_ELEMENT' && op.element?.type === 'image') {
     const el = { ...op.element, properties: { ...op.element.properties } };
     const query = el.query || el.properties?.query;
     if (query && !el.properties.src) {
-      el.properties.src = await resolveImageUrl(query);
+      el.properties.src = await resolveImage(query, { width: el.width, height: el.height });
       el.properties.alt = el.properties.alt || query;
     }
     delete el.query;
@@ -99,8 +120,9 @@ async function resolveImageQueries(op) {
     return { ...op, element: el };
   }
   if ((op.type === 'UPDATE_ELEMENT' || op.type === 'SET_CONTENT') && op.changes?.query) {
+    const target = document?.elements?.find((e) => e.id === op.targetId);
     const changes = { ...op.changes };
-    changes.src = await resolveImageUrl(changes.query);
+    changes.src = await resolveImage(changes.query, { width: target?.width, height: target?.height });
     delete changes.query;
     return { ...op, changes };
   }

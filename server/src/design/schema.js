@@ -17,8 +17,11 @@ export const ELEMENT_TYPES = [
   'star',
   'line',
   'button',
+  'chart',
   'group',
 ];
+
+export const CHART_TYPES = ['bar', 'donut', 'line'];
 
 // Icon elements are never arbitrary SVG — only a name from one of these closed,
 // per-library sets. `lucide` is the default and the only library the AI is
@@ -106,8 +109,23 @@ const DEFAULT_PROPERTIES = {
     letterSpacing: 0, italic: false, underline: false, textCase: 'none',
     borderColor: '', borderWidth: 0, strokeStyle: 'solid',
   },
+  // A chart draws its own geometry from `data` — nothing here is an AI
+  // coordinate, it's numbers the model directs and the renderer plots.
+  chart: {
+    chartType: 'bar',
+    data: [
+      { label: 'A', value: 40 },
+      { label: 'B', value: 65 },
+      { label: 'C', value: 30 },
+    ],
+    color: '#D9A441',
+    labelColor: '#FFFFFF',
+    showValues: true,
+  },
   group: {},
 };
+
+const MAX_CHART_POINTS = 12;
 
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 const num = (v, fallback = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
@@ -224,6 +242,17 @@ export function sanitizeProperties(type, props = {}) {
   if (type === 'star') {
     out.points = Math.round(clamp(num(out.points, 5), 3, 24));
     out.depth = clamp(num(out.depth, 0.45), 0.05, 0.95);
+  }
+  if (type === 'chart') {
+    out.chartType = oneOf(out.chartType, CHART_TYPES, 'bar');
+    const points = (Array.isArray(out.data) ? out.data : [])
+      .filter((d) => d && typeof d.label === 'string' && d.label.trim())
+      .slice(0, MAX_CHART_POINTS)
+      .map((d) => ({ label: d.label.trim().slice(0, 24), value: Math.max(0, num(d.value, 0)) }));
+    // A chart with fewer than two real points is not a chart — fall back to
+    // the default dataset rather than render an empty/misleading shape.
+    out.data = points.length >= 2 ? points : defaultPropertiesFor('chart').data;
+    out.showValues = Boolean(out.showValues ?? true);
   }
   return out;
 }

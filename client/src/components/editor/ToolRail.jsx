@@ -10,6 +10,7 @@ import {
   LayoutTemplate,
   Minus,
   MousePointer2,
+  Pencil,
   Pipette,
   RectangleHorizontal,
   Shapes,
@@ -75,6 +76,7 @@ export default function ToolRail({
   onToggleApollo,
   onRetouch,
   onDraw,
+  onScribble,
   onSampleColour,
 }) {
   const { state, actions } = useEditor();
@@ -123,6 +125,7 @@ export default function ToolRail({
         <RailButton label="Images" icon={ImageIcon} active={panel === 'images'} onClick={() => onPanel('images')} />
         <RailButton label="Upload" icon={Upload} active={panel === 'uploads'} onClick={() => onPanel('uploads')} />
         <RailButton label="Draw" icon={Brush} onClick={onDraw} />
+        <RailButton label="Scribble" icon={Pencil} onClick={onScribble} />
         <RailButton
           label="Templates"
           icon={LayoutTemplate}

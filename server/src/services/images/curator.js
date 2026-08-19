@@ -1,5 +1,6 @@
 import sharp from 'sharp';
 import { searchImages } from './index.js';
+import { getOpenRouterProvider } from './OpenRouterProvider.js';
 import { contrastRatio, distance, isDark, luminance, parseHex, rgbToHsl, toHex } from '../../design/color.js';
 
 /**
@@ -348,6 +349,78 @@ export async function curateImage(plan, { slot, palette, exclude = new Set(), an
     negativeSpace: analysis?.negativeSpace || plan.negativeSpace,
     space: analysis?.space || null,
   };
+}
+
+/**
+ * A bespoke illustration for one slot, generated rather than sourced — shaped
+ * exactly like `curateImage`'s return value so a caller can drop it straight
+ * into the same array. Not part of the default per-slot loop below: it is
+ * only ever attempted by a caller that has a specific reason to prefer
+ * generated art over a photograph (a scribble-driven generation, where the
+ * user actually drew the scene). Returns null on any failure or when no
+ * generator is configured — the caller falls back to `curateImage` itself.
+ */
+export async function generateBespokeImage(plan, { slot, palette, sceneNote } = {}) {
+  const generator = getOpenRouterProvider();
+  if (!generator.configured) return null;
+
+  const prompt = buildBespokePrompt(plan, { slot, palette, sceneNote });
+  try {
+    const result = await generator.generateImage({ prompt, width: slot?.width, height: slot?.height });
+    if (!result) return null;
+
+    const [analysis, meta] = await Promise.all([analyzeBuffer(result.buffer), sharp(result.buffer).metadata()]);
+    const dataUrl = `data:${result.mimeType};base64,${result.buffer.toString('base64')}`;
+
+    return {
+      ...plan,
+      url: dataUrl,
+      thumbnail: dataUrl,
+      alt: plan.subject || plan.query,
+      provider: 'openrouter',
+      photographer: 'Generated art',
+      sourceUrl: '',
+      width: meta.width,
+      height: meta.height,
+      score: 1,
+      focalX: analysis?.focalX ?? 50,
+      focalY: analysis?.focalY ?? 50,
+      averageColor: analysis?.averageColor || '#6E6E6E',
+      luminance: analysis?.luminance ?? 0.45,
+      negativeSpace: analysis?.negativeSpace || plan.negativeSpace,
+      space: analysis?.space || null,
+    };
+  } catch (err) {
+    console.warn(`[openrouter] image generation failed for "${plan.query}": ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * This is the one place DeepSeek's brief and Flux's own prompt actually
+ * meet: the plan already carries where the composer intends to put text
+ * (`negativeSpace`) and what colours it sits alongside (`palette`), so the
+ * generator is told to leave that side visually quiet and to keep its own
+ * colours compatible — the same composition constraints a sourced photo is
+ * judged against in `curateImage`, given to the generator up front instead.
+ */
+function buildBespokePrompt(plan, { slot, palette, sceneNote }) {
+  const parts = [plan.query || plan.subject || 'a photograph that fits the brief'];
+  if (sceneNote) parts.push(sceneNote);
+  if (plan.subject && plan.subject !== plan.query) parts.push(`Subject: ${plan.subject}.`);
+
+  const ratio = slot?.width && slot?.height ? slot.width / slot.height : null;
+  if (ratio) {
+    const shape = ratio > 1.2 ? 'wide landscape' : ratio < 0.85 ? 'tall portrait' : 'square';
+    parts.push(`Compose for a ${shape} frame.`);
+  }
+  if (plan.negativeSpace && plan.negativeSpace !== 'any') {
+    parts.push(`Leave the ${plan.negativeSpace} side of the frame visually calm and uncluttered — headline text will be placed there, not rendered into the image.`);
+  }
+  if (palette?.background && palette?.accent) {
+    parts.push(`The palette this sits alongside is ${palette.dark ? 'dark' : 'light'}-toned with an accent colour around ${palette.accent} — keep the image's own colours compatible rather than clashing.`);
+  }
+  return parts.join(' ');
 }
 
 /**

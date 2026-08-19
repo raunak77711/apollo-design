@@ -29,6 +29,7 @@ import {
   Lock,
   LockOpen,
   PenTool,
+  Plus,
   Repeat2,
   SlidersHorizontal,
   Trash2,
@@ -46,7 +47,7 @@ import { cssGradient, joinAlpha, splitAlpha } from '../../design/color.js';
 import { FONTS } from '../../design/fonts.js';
 import { ICON_LIBRARIES, getIcon, iconNames } from '../../design/icons.js';
 import { PRESETS, presetLabel, ratioLabel } from '../../design/presets.js';
-import { BLEND_MODES, DEFAULT_SHADOW, STROKE_STYLES } from '../../design/schema.js';
+import { BLEND_MODES, CHART_TYPES, DEFAULT_SHADOW, STROKE_STYLES } from '../../design/schema.js';
 import {
   ActionButton,
   ColorField,
@@ -57,6 +58,7 @@ import {
   SelectField,
   Segmented,
   SliderRow,
+  TextField,
   Toggle,
 } from '../../ui/fields.jsx';
 import { IconButton, Tooltip } from '../../ui/primitives.jsx';
@@ -362,6 +364,8 @@ function ElementPanel({ element, onEditImage, onPickImage, onDraw }) {
             )}
           </Section>
         )}
+
+        {element.type === 'chart' && <ChartSection p={p} live={live} set={set} commit={commit} />}
 
         {(HAS_FILL.has(element.type) || HAS_STROKE.has(element.type)) && (
           <Section id="fill" label="Fill & stroke">
@@ -763,6 +767,66 @@ function ImageSection({ element, set, live, commit, onEditImage, onPickImage, on
         </Section>
       )}
     </>
+  );
+}
+
+/** Chart type, colours and the dataset itself — every number here is hand-editable, not just AI-authored. */
+function ChartSection({ p, live, set, commit }) {
+  const data = p.data || [];
+
+  const updateRow = (i, changes) => {
+    const next = data.map((row, idx) => (idx === i ? { ...row, ...changes } : row));
+    live({ data: next });
+  };
+  const removeRow = (i) => {
+    if (data.length <= 2) return; // a chart needs at least two points to mean anything
+    set({ data: data.filter((_, idx) => idx !== i) });
+  };
+  const addRow = () => {
+    const n = data.length + 1;
+    set({ data: [...data, { label: `Point ${n}`, value: Math.round((data[data.length - 1]?.value ?? 10) * 0.8) }] });
+  };
+
+  return (
+    <Section id="chart" label="Chart">
+      <PropRow label="Type">
+        <Segmented
+          className="w-full"
+          value={p.chartType || 'bar'}
+          onChange={(chartType) => set({ chartType })}
+          options={CHART_TYPES.map((t) => ({ value: t, label: t[0].toUpperCase() + t.slice(1) }))}
+        />
+      </PropRow>
+      <ColorField label="Colour" value={p.color} onChange={(color) => live({ color })} onCommit={commit} />
+      <ColorField label="Labels" value={p.labelColor} onChange={(labelColor) => live({ labelColor })} onCommit={commit} />
+      <SwitchRow label="Show values" checked={p.showValues !== false} onChange={(showValues) => set({ showValues })} />
+
+      <div className="space-y-1.5 pt-1">
+        {data.map((row, i) => (
+          <div key={i} className="flex items-center gap-1.5">
+            <TextField
+              className="min-w-0 flex-1"
+              value={row.label}
+              onChange={(e) => updateRow(i, { label: e.target.value })}
+              onBlur={commit}
+            />
+            <NumberField
+              name={`Value ${i + 1}`}
+              className="w-20"
+              value={row.value}
+              min={0}
+              max={1000000}
+              onChange={(value) => updateRow(i, { value })}
+              onCommit={commit}
+            />
+            <IconButton size="sm" onClick={() => removeRow(i)} disabled={data.length <= 2} aria-label="Remove point">
+              <Trash2 size={13} />
+            </IconButton>
+          </div>
+        ))}
+        <ActionButton icon={Plus} label="Add point" onClick={addRow} />
+      </div>
+    </Section>
   );
 }
 

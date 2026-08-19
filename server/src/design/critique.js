@@ -95,7 +95,7 @@ function backdropBehind(elements, index, box, canvasBackground) {
 
   for (let i = 0; i < index; i += 1) {
     const el = elements[i];
-    if (isCopy(el) || el.type === 'icon' || el.type === 'line') continue;
+    if (isCopy(el) || el.type === 'icon' || el.type === 'line' || el.type === 'chart') continue;
     if (coverage(box, el) < 0.55) continue;
     const opacity = el.opacity ?? 1;
     if (opacity < 0.03) continue;
