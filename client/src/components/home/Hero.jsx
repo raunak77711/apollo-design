@@ -50,7 +50,7 @@ export default function Hero({ onCreate, creating }) {
             className="animate-lift mt-5 max-w-[15ch] font-display text-[clamp(2.6rem,7.2vw,5.25rem)] font-semibold leading-[0.94] tracking-[-0.045em] text-[var(--sky-ink)]"
             style={{ animationDelay: '90ms' }}
           >
-            Describe it.
+            Describe it,
             <br />
             Apollo draws it.
           </h1>
