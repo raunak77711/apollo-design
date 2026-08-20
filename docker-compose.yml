@@ -7,7 +7,7 @@
 # Optional API keys are read from a root .env file (see .env.example); without them
 # the app still runs with the built-in mock AI + placeholder images.
 #
-#   docker compose up --build
+#   docker compose up --build ( docker)
 
 services:
   mongo:
