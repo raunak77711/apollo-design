@@ -175,16 +175,7 @@ export function layoutFromScribble(scribble, { canvas } = {}) {
 
   if (!subjects.length && texts.length) return pick('type-poster', 'minimal-frame');
 
-  /* ---- several subjects filling the sheet are one scene, not a list ----- */
-
-  // A moon above a mountain above a figure is not three subjects competing
-  // for the frame — it is one landscape, and it wants one photograph. Judging
-  // them separately would hand the biggest of them a panel and drop the rest,
-  // which is the surest way to lose the picture the user actually drew.
-  const scene = sceneBox(subjects);
-  const hero = scene
-    ? { box: scene }
-    : subjects.slice().sort((a, b) => area(b) - area(a))[0];
+  const hero = pickHero(scribble);
 
   if (hero) {
     const heroArea = area(hero.box);
@@ -255,6 +246,45 @@ export function layoutFromScribble(scribble, { canvas } = {}) {
 }
 
 /**
+ * The one drawn subject (or scene of several) that reads as the design's main
+ * image — the same selection `layoutFromScribble` uses to choose a structure,
+ * shared here so `imageBoxFromScribble` picks exactly the same one.
+ */
+function pickHero(scribble) {
+  const subjects = scribble.regions.filter((r) => r.role === 'subject');
+  if (!subjects.length) return null;
+  // A moon above a mountain above a figure is not three subjects competing
+  // for the frame — it is one landscape, and it wants one photograph. Judging
+  // them separately would hand the biggest of them a panel and drop the rest,
+  // which is the surest way to lose the picture the user actually drew.
+  const scene = sceneBox(subjects);
+  return scene ? { box: scene } : subjects.slice().sort((a, b) => area(b.box) - area(a.box))[0];
+}
+
+/**
+ * The exact box the drawn subject occupies, in canvas pixels — how the hero
+ * image gets placed exactly where it was sketched rather than in whatever
+ * slot the chosen layout archetype would otherwise give it. Only a couple of
+ * archetypes (`full-bleed-hero`, `split-vertical`) currently honour this; the
+ * rest still place the image with their own grid, already informed by the
+ * scribble's negative space and layout choice, just not pinned to the exact
+ * drawn pixels — an archetype like `corner-hero` or `overlap-collage` has
+ * geometry too specific to safely retarget at one drawn box.
+ */
+export function imageBoxFromScribble(scribble, { canvas } = {}) {
+  const hero = pickHero(scribble);
+  if (!hero) return null;
+  const width = canvas?.width || 1080;
+  const height = canvas?.height || 1080;
+  return {
+    x: Math.round(hero.box.x * width),
+    y: Math.round(hero.box.y * height),
+    width: Math.max(24, Math.round(hero.box.width * width)),
+    height: Math.max(24, Math.round(hero.box.height * height)),
+  };
+}
+
+/**
  * The combined frame of several drawn objects, when together they read as one
  * scene rather than as separate elements — they cover a real part of the
  * canvas, and none of them is off on its own in a corner.
@@ -317,14 +347,17 @@ export function negativeSpaceFromScribble(scribble) {
 /**
  * Fold the drawing into the planner's raw output.
  *
- * Returns `{ plan, forceLayout }`. `forceLayout` is set whenever the scribble
- * genuinely described a structure, because at that point the user has drawn
- * their answer and the aspect-ratio filter has already had its say (the
- * candidate came out of `layoutsForAspect`). Ignoring it would mean asking
- * someone to draw their idea and then designing something else.
+ * Returns `{ plan, forceLayout, imageBox }`. `forceLayout` is set whenever
+ * the scribble genuinely described a structure, because at that point the
+ * user has drawn their answer and the aspect-ratio filter has already had
+ * its say (the candidate came out of `layoutsForAspect`). Ignoring it would
+ * mean asking someone to draw their idea and then designing something else.
+ * `imageBox` is the drawn subject's exact box in canvas pixels, for the
+ * archetypes that place the hero image there instead of in their own slot
+ * (see `imageBoxFromScribble`) — null when nothing was drawn to honour.
  */
 export function applyScribble(plan, scribble, { canvas } = {}) {
-  if (!scribble) return { plan, forceLayout: null };
+  if (!scribble) return { plan, forceLayout: null, imageBox: null };
 
   const next = { ...plan };
   const layout = layoutFromScribble(scribble, { canvas });
@@ -395,7 +428,7 @@ export function applyScribble(plan, scribble, { canvas } = {}) {
   if (cta) copy.cta = cta.words.slice(0, 28);
   next.copy = copy;
 
-  return { plan: next, forceLayout };
+  return { plan: next, forceLayout, imageBox: imageBoxFromScribble(scribble, { canvas }) };
 }
 
 /**

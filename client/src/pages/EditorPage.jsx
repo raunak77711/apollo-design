@@ -318,8 +318,6 @@ function EditorShell() {
         return;
       }
       const canvas = state.document.canvas;
-      const width = Math.round(Math.min(canvas.width * 0.6, 640));
-      const height = Math.round(width * 0.7);
       const id = newElementId('image');
       actions.apply(
         [
@@ -328,10 +326,10 @@ function EditorShell() {
             element: {
               id,
               type: 'image',
-              x: Math.round(canvas.width / 2 - width / 2),
-              y: Math.round(canvas.height / 2 - height / 2),
-              width,
-              height,
+              x: 0,
+              y: 0,
+              width: canvas.width,
+              height: canvas.height,
               properties: { ...defaultPropertiesFor('image'), src: '' },
             },
           },

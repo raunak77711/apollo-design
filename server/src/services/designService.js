@@ -150,23 +150,30 @@ export async function buildDesign({
     // scribble is what they drew, and a drawing is the more specific
     // instruction, so it gets the last word on structure.
     const { plan: preferred, forceLayout: preferenceLayout } = applyPreferences(raw, preferences, { canvas });
-    const { plan: directed, forceLayout: scribbleLayout } = applyScribble(preferred, reading, { canvas });
+    const { plan: directed, forceLayout: scribbleLayout, imageBox } = applyScribble(preferred, reading, { canvas });
     const brief = normalizeBrief(directed, {
       canvas,
       prompt: message,
       forceLayout: scribbleLayout || preferenceLayout,
     });
+    // Not part of the model's brief — a measurement taken directly off the
+    // drawing. Only `full-bleed-hero` and `split-vertical` (in layout.js)
+    // read it; every other archetype places the image with its own grid.
+    brief.imageBox = imageBox;
 
     let images = [];
     if (brief.images.length) {
       const slots = slotsFor(brief);
+      // The drawn box is also the truest slot to generate against, when
+      // there is one — it is what decides the aspect ratio Flux renders at.
+      const heroSlot = imageBox || slots[0];
       // A scribble is the one signal specific enough to justify bespoke art
       // over a stock search: the user drew an actual scene, so generating it
       // beats hoping a photo library has something close. Run alongside the
       // stock curator rather than after it, so a scribble-driven generation
       // costs no extra latency over an ordinary one.
       const bespokeHero = reading
-        ? generateBespokeImage(brief.images[0], { slot: slots[0], palette: brief.palette, sceneNote: reading.reading })
+        ? generateBespokeImage(brief.images[0], { slot: heroSlot, palette: brief.palette, sceneNote: reading.reading })
         : Promise.resolve(null);
       // The stage is announced by the curator's own first callback, which
       // fires as it starts on slot one — announcing it here as well would

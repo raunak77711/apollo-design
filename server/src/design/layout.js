@@ -477,8 +477,16 @@ const ARCHETYPES = {
     const hero = ctx.images[0];
     const anchor = hero?.negativeSpace === 'top' ? 'top' : 'bottom';
     const tall = canvas.height / canvas.width > 1.2;
+    // A scribble that drew the subject smaller than the full frame gets that
+    // exact box; everyone else still gets the full bleed the archetype is
+    // named for.
+    const box = brief.imageBox || { x: 0, y: 0, width: canvas.width, height: canvas.height };
 
-    photo(scene, { x: 0, y: 0, width: canvas.width, height: canvas.height, image: hero, treatment: ctx.treatment, name: 'Hero photograph' });
+    // A ground fill first — only ever visible in the margin a drawn box
+    // leaves around itself, but without it that margin would show whatever
+    // the page behind the canvas happens to be.
+    block(scene, { x: 0, y: 0, width: canvas.width, height: canvas.height, fill: palette.background, name: 'Ground' });
+    photo(scene, { ...box, image: hero, treatment: ctx.treatment, name: 'Hero photograph' });
 
     // Directional scrim: strongest where the type lands, clear where it does
     // not, and only as deep as this particular photograph requires.
@@ -520,15 +528,23 @@ const ARCHETYPES = {
 
   /* Two fields: photography and colour, meeting on a hard edge. */
   'split-vertical'(ctx) {
-    const { scene, canvas, grid, palette, style, rand } = ctx;
+    const { scene, canvas, grid, palette, style, brief, rand } = ctx;
     const hero = ctx.images[0];
     const horizontal = canvas.width / canvas.height >= 0.95;
-    // The photograph goes on the side its own composition supports.
-    const imageFirst = hero?.negativeSpace === 'right' ? false : hero?.negativeSpace === 'left' ? true : rand() > 0.5;
+    const box = brief.imageBox;
+    // The photograph goes on the side it was actually drawn on, when there
+    // is a box to ask; otherwise the side its own composition supports.
+    const imageFirst = box
+      ? box.x + box.width / 2 < canvas.width / 2
+      : hero?.negativeSpace === 'right' ? false : hero?.negativeSpace === 'left' ? true : rand() > 0.5;
     const ratio = horizontal ? 0.48 + rand() * 0.06 : 0.52;
 
     if (horizontal) {
-      const imageWidth = Math.round(canvas.width * ratio);
+      // Clamped well short of either extreme — the colour field this shares
+      // its width with still has to hold a real lockup of type.
+      const imageWidth = box
+        ? Math.round(Math.min(canvas.width * 0.74, Math.max(canvas.width * 0.28, box.width)))
+        : Math.round(canvas.width * ratio);
       const imageX = imageFirst ? 0 : canvas.width - imageWidth;
       const fieldX = imageFirst ? imageWidth : 0;
       const fieldWidth = canvas.width - imageWidth;
@@ -547,7 +563,9 @@ const ARCHETYPES = {
         width: Math.max(2, style.geometry.rule), height: canvas.height, fill: palette.accent, name: 'Seam',
       });
     } else {
-      const imageHeight = Math.round(canvas.height * 0.54);
+      const imageHeight = box
+        ? Math.round(Math.min(canvas.height * 0.7, Math.max(canvas.height * 0.3, box.height)))
+        : Math.round(canvas.height * 0.54);
       photo(scene, { x: 0, y: 0, width: canvas.width, height: imageHeight, image: hero, treatment: ctx.treatment, name: 'Photograph' });
       block(scene, { x: 0, y: imageHeight, width: canvas.width, height: canvas.height - imageHeight, fill: palette.surface, gradient: sheen(palette.surface, palette.accent, { angle: 160 }), name: 'Colour field' });
 
