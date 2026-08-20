@@ -1,11 +1,11 @@
 import { getAIProvider } from './ai/index.js';
-import { curateImages, generateBespokeImage } from './images/curator.js';
+import { curateImages, generateBespokeImage, imageFromScribble } from './images/curator.js';
 import { getGeminiProvider } from './images/GeminiProvider.js';
 import { compose } from '../design/layout.js';
 import { critique, needsRework, summarize } from '../design/critique.js';
 import { detectFormat, findLayout, normalizeBrief, VARIATIONS } from '../design/artDirection.js';
 import { applyPreferences, describePreferences } from '../design/preferences.js';
-import { applyScribble, describeScribble } from '../design/scribble.js';
+import { applyScribble, describeScribble, heroBoxFromScribble } from '../design/scribble.js';
 import { readScribble } from './scribbleReader.js';
 
 /**
@@ -172,8 +172,20 @@ export async function buildDesign({
       // beats hoping a photo library has something close. Run alongside the
       // stock curator rather than after it, so a scribble-driven generation
       // costs no extra latency over an ordinary one.
+      //
+      // The drawing itself goes to the generator, not just the sentence the
+      // vision pass wrote about it. That sentence is a lossy description at
+      // best and absent entirely when the vision read degrades to geometry —
+      // either way it is what let the hero image drift off into a scene the
+      // user never drew.
       const bespokeHero = reading
-        ? generateBespokeImage(brief.images[0], { slot: heroSlot, palette: brief.palette, sceneNote: reading.reading })
+        ? generateBespokeImage(brief.images[0], {
+            slot: heroSlot,
+            palette: brief.palette,
+            sceneNote: reading.reading,
+            scribble,
+            scribbleBox: heroBoxFromScribble(reading),
+          })
         : Promise.resolve(null);
       // The stage is announced by the curator's own first callback, which
       // fires as it starts on slot one — announcing it here as well would
@@ -187,7 +199,21 @@ export async function buildDesign({
         }),
       ]);
       images = curated;
-      if (bespoke) images[0] = bespoke;
+      if (bespoke) {
+        images[0] = bespoke;
+      } else if (reading) {
+        // Nothing generated, but the user still drew something — and a stock
+        // photograph of a subject they never asked for is the worst of the
+        // three answers available here. Their own drawing goes in the slot
+        // instead, which is at least the thing they actually sketched.
+        const drawn = await imageFromScribble(brief.images[0], {
+          scribble,
+          slot: heroSlot,
+          palette: brief.palette,
+          scribbleBox: heroBoxFromScribble(reading),
+        });
+        if (drawn) images[0] = drawn;
+      }
     }
 
     stage('composing');

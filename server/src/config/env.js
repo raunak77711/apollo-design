@@ -36,8 +36,10 @@ export const config = {
   },
 
   // Gemini — captions an attached reference image for the DeepSeek brief
-  // prompt (`describeReference`). Its own `generateImage` is not wired into
-  // the pipeline; imagery comes from the stock-photo curator. Optional.
+  // prompt (`describeReference`), and reads a scribble into located regions.
+  // Its `generateImage` is the *backup* route for rendering a drawing (the
+  // primary one reaches the same model through OpenRouter, below, because
+  // this key's own image quota is the first thing to run out). Optional.
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || '',
     imageModel: process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image',
@@ -54,9 +56,15 @@ export const config = {
   // confirmed live against OpenRouter's own chat/completions endpoint.
   // Optional: with no key, every caller falls straight through to its
   // non-bespoke path (stock photography, geometry-only scribble reading).
+  // `imageEditModel` is the one that can be shown a drawing. FLUX takes a
+  // prompt and nothing else, so a scribble could never reach it — which is
+  // exactly why scribble-driven art used to come back unrelated to the
+  // sketch. Nano banana accepts the drawing itself through chat/completions,
+  // and reaching it on the OpenRouter key sidesteps Gemini's own image quota.
   openrouter: {
     apiKey: process.env.OPENROUTER_API_KEY || '',
     imageModel: process.env.OPENROUTER_IMAGE_MODEL || 'black-forest-labs/flux.2-klein-4b',
+    imageEditModel: process.env.OPENROUTER_IMAGE_EDIT_MODEL || 'google/gemini-2.5-flash-image',
     visionModel: process.env.OPENROUTER_VISION_MODEL || 'google/gemini-2.5-flash-lite',
     baseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
   },

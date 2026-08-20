@@ -272,16 +272,34 @@ function pickHero(scribble) {
  * geometry too specific to safely retarget at one drawn box.
  */
 export function imageBoxFromScribble(scribble, { canvas } = {}) {
-  const hero = pickHero(scribble);
+  const hero = heroBoxFromScribble(scribble);
   if (!hero) return null;
   const width = canvas?.width || 1080;
   const height = canvas?.height || 1080;
   return {
-    x: Math.round(hero.box.x * width),
-    y: Math.round(hero.box.y * height),
-    width: Math.max(24, Math.round(hero.box.width * width)),
-    height: Math.max(24, Math.round(hero.box.height * height)),
+    x: Math.round(hero.x * width),
+    y: Math.round(hero.y * height),
+    width: Math.max(24, Math.round(hero.width * width)),
+    height: Math.max(24, Math.round(hero.height * height)),
   };
+}
+
+/**
+ * The same hero box, left in 0..1 fractions — which is what anyone cropping
+ * the drawing *image* needs, since the scribble PNG has its own resolution
+ * and knows nothing about canvas pixels.
+ *
+ * This is how a traced image ends up containing only what was drawn as
+ * picture. A scribble usually carries ruled lines standing in for a headline
+ * and some body copy; feed the whole sheet to an image generator and it
+ * dutifully renders those bars *into the photograph*, which then sits behind
+ * the real text layers the pipeline builds for the same regions — the words
+ * drawn twice, once as a picture of a line and once as type.
+ */
+export function heroBoxFromScribble(scribble) {
+  if (!scribble) return null;
+  const hero = pickHero(scribble);
+  return hero ? hero.box : null;
 }
 
 /**

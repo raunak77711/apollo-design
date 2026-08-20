@@ -1,5 +1,6 @@
 import sharp from 'sharp';
 import { searchImages } from './index.js';
+import { getGeminiProvider } from './GeminiProvider.js';
 import { getOpenRouterProvider } from './OpenRouterProvider.js';
 import { contrastRatio, distance, isDark, luminance, parseHex, rgbToHsl, toHex } from '../../design/color.js';
 
@@ -359,40 +360,242 @@ export async function curateImage(plan, { slot, palette, exclude = new Set(), an
  * generated art over a photograph (a scribble-driven generation, where the
  * user actually drew the scene). Returns null on any failure or when no
  * generator is configured — the caller falls back to `curateImage` itself.
+ *
+ * `scribble` is the drawing itself, and passing it changes which generators
+ * are even eligible. A sketch can only be *followed* by a model that accepts
+ * it as input, and the text-to-image route (FLUX) accepts a prompt and
+ * nothing else — handing it a sentence *about* a drawing is precisely how "I
+ * drew a boat" came back as a picture with no relationship to what was drawn.
+ *
+ * So with a drawing in hand only the reference-capable generators are tried,
+ * in order, and the text-only route is *not* used as a safety net: it would
+ * reintroduce the exact failure this exists to prevent. If none of them can
+ * render the drawing, this returns null and the caller falls back to the
+ * drawing itself (`imageFromScribble`) rather than to something invented.
  */
-export async function generateBespokeImage(plan, { slot, palette, sceneNote } = {}) {
-  const generator = getOpenRouterProvider();
-  if (!generator.configured) return null;
+export async function generateBespokeImage(plan, { slot, palette, sceneNote, scribble = null, scribbleBox = null } = {}) {
+  const openrouter = getOpenRouterProvider();
+  const gemini = getGeminiProvider();
+  // Only the part of the sheet that was drawn as picture goes to the
+  // generator — see `heroBoxFromScribble`.
+  const reference = scribble ? await cropScribble(scribble, scribbleBox) : null;
 
-  const prompt = buildBespokePrompt(plan, { slot, palette, sceneNote });
+  // Ordered by which is most likely to actually answer. Gemini's own image
+  // quota is the first thing to run out on a free project, and the same model
+  // sits behind the OpenRouter key, so the OpenRouter route is tried first
+  // and the direct one is the backup rather than the other way round.
+  const attempts = [];
+  if (reference) {
+    if (openrouter.configured) {
+      attempts.push({
+        label: 'openrouter:sketch',
+        tracing: true,
+        run: (prompt) => openrouter.generateImageFromReference({ prompt, referenceImages: [reference] }),
+      });
+    }
+    if (gemini.configured) {
+      attempts.push({
+        label: 'gemini:sketch',
+        tracing: true,
+        run: (prompt) => gemini.generateImage({ prompt, referenceImages: [reference] }),
+      });
+    }
+  } else if (openrouter.configured) {
+    attempts.push({
+      label: 'openrouter',
+      tracing: false,
+      run: (prompt) => openrouter.generateImage({ prompt, width: slot?.width, height: slot?.height }),
+    });
+  }
+
+  for (const attempt of attempts) {
+    const prompt = buildBespokePrompt(plan, { slot, palette, sceneNote, tracing: attempt.tracing });
+    try {
+      const result = await attempt.run(prompt);
+      if (!result) {
+        console.warn(`[${attempt.label}] returned no image for "${plan.query}"`);
+        continue;
+      }
+
+      const [analysis, meta] = await Promise.all([analyzeBuffer(result.buffer), sharp(result.buffer).metadata()]);
+      const dataUrl = `data:${result.mimeType};base64,${result.buffer.toString('base64')}`;
+
+      return {
+        ...plan,
+        url: dataUrl,
+        thumbnail: dataUrl,
+        alt: plan.subject || plan.query,
+        provider: attempt.label,
+        photographer: attempt.tracing ? 'Generated from your sketch' : 'Generated art',
+        sourceUrl: '',
+        width: meta.width,
+        height: meta.height,
+        score: 1,
+        focalX: analysis?.focalX ?? 50,
+        focalY: analysis?.focalY ?? 50,
+        averageColor: analysis?.averageColor || '#6E6E6E',
+        luminance: analysis?.luminance ?? 0.45,
+        negativeSpace: analysis?.negativeSpace || plan.negativeSpace,
+        space: analysis?.space || null,
+      };
+    } catch (err) {
+      console.warn(`[${attempt.label}] image generation failed for "${plan.query}": ${err.message}`);
+    }
+  }
+  return null;
+}
+
+/**
+ * The user's own drawing, as the image itself.
+ *
+ * The last resort when a sketch was drawn but no generator could render it —
+ * and a far better answer than the alternative, which is a stock photograph
+ * of something they never asked for sitting where their drawing was.
+ *
+ * The canvas arrives as a transparent PNG, so it has to be flattened onto
+ * something. That ground is chosen for contrast against the ink rather than
+ * taken from the palette: the pen defaults to near-black and most of these
+ * designs are dark, so using the palette background verbatim renders the
+ * drawing invisible — a black-on-black rectangle where the sketch should be.
+ * Recolouring the strokes instead would throw away whatever colours the user
+ * actually drew in, so it is the paper that moves, not the ink.
+ *
+ * Same shape as everything else in the array.
+ */
+export async function imageFromScribble(plan, { scribble, slot, palette, scribbleBox = null } = {}) {
+  // Narrowed to the drawn subject for the same reason the traced path is:
+  // the ruled lines standing in for a headline become real type elsewhere.
+  const buffer = decodeDataUrl(await cropScribble(scribble, scribbleBox));
+  if (!buffer) return null;
+
   try {
-    const result = await generator.generateImage({ prompt, width: slot?.width, height: slot?.height });
-    if (!result) return null;
+    const width = Math.max(1, Math.round(slot?.width || 1080));
+    const height = Math.max(1, Math.round(slot?.height || 1080));
+    const paper = await paperFor(buffer, palette);
+    const flattened = await sharp(buffer)
+      // `contain` rather than `cover`: cropping someone's drawing to fill a
+      // box is exactly the kind of liberty this fallback exists to avoid.
+      .resize(width, height, { fit: 'contain', background: paper })
+      .flatten({ background: paper })
+      .png()
+      .toBuffer();
 
-    const [analysis, meta] = await Promise.all([analyzeBuffer(result.buffer), sharp(result.buffer).metadata()]);
-    const dataUrl = `data:${result.mimeType};base64,${result.buffer.toString('base64')}`;
+    const analysis = await analyzeBuffer(flattened);
+    const dataUrl = `data:image/png;base64,${flattened.toString('base64')}`;
 
     return {
       ...plan,
       url: dataUrl,
       thumbnail: dataUrl,
-      alt: plan.subject || plan.query,
-      provider: 'openrouter',
-      photographer: 'Generated art',
+      alt: plan.subject || plan.query || 'Your sketch',
+      provider: 'scribble',
+      photographer: 'Your sketch',
       sourceUrl: '',
-      width: meta.width,
-      height: meta.height,
+      width,
+      height,
       score: 1,
       focalX: analysis?.focalX ?? 50,
       focalY: analysis?.focalY ?? 50,
-      averageColor: analysis?.averageColor || '#6E6E6E',
+      averageColor: analysis?.averageColor || palette?.background || '#6E6E6E',
       luminance: analysis?.luminance ?? 0.45,
       negativeSpace: analysis?.negativeSpace || plan.negativeSpace,
       space: analysis?.space || null,
     };
   } catch (err) {
-    console.warn(`[openrouter] image generation failed for "${plan.query}": ${err.message}`);
+    console.warn(`[scribble] could not use the drawing as imagery: ${err.message}`);
     return null;
+  }
+}
+
+/** A base64 data URL back into bytes, or null if it is not one. */
+function decodeDataUrl(value) {
+  const match = typeof value === 'string' && value.match(/^data:image\/[a-zA-Z+]+;base64,(.+)$/);
+  return match ? Buffer.from(match[1], 'base64') : null;
+}
+
+/** A little air around the drawn subject, so strokes are not clipped at the edge. */
+const CROP_MARGIN = 0.04;
+
+/**
+ * The drawing, narrowed to the part of it that is meant to be a picture.
+ *
+ * `box` is the drawn subject in 0..1 fractions (`heroBoxFromScribble`). With
+ * no box, or a box covering most of the sheet anyway, the whole drawing is
+ * used unchanged — cropping is only worth doing when it actually excludes
+ * something. Falls back to the original on any failure; a slightly-too-wide
+ * reference is much better than none.
+ */
+async function cropScribble(dataUrl, box) {
+  if (!box) return dataUrl;
+  const buffer = decodeDataUrl(dataUrl);
+  if (!buffer) return dataUrl;
+
+  const x0 = Math.max(0, box.x - CROP_MARGIN);
+  const y0 = Math.max(0, box.y - CROP_MARGIN);
+  const x1 = Math.min(1, box.x + box.width + CROP_MARGIN);
+  const y1 = Math.min(1, box.y + box.height + CROP_MARGIN);
+  if ((x1 - x0) * (y1 - y0) > 0.9) return dataUrl;
+
+  try {
+    const meta = await sharp(buffer).metadata();
+    if (!meta.width || !meta.height) return dataUrl;
+    const left = Math.round(x0 * meta.width);
+    const top = Math.round(y0 * meta.height);
+    const width = Math.max(8, Math.round((x1 - x0) * meta.width));
+    const height = Math.max(8, Math.round((y1 - y0) * meta.height));
+    const cropped = await sharp(buffer)
+      .extract({
+        left,
+        top,
+        width: Math.min(width, meta.width - left),
+        height: Math.min(height, meta.height - top),
+      })
+      .png()
+      .toBuffer();
+    return `data:image/png;base64,${cropped.toString('base64')}`;
+  } catch (err) {
+    console.warn(`[scribble] could not crop to the drawn subject: ${err.message}`);
+    return dataUrl;
+  }
+}
+
+/** Ink this light or darker than its ground has effectively vanished. */
+const MIN_INK_CONTRAST = 0.22;
+
+/**
+ * What to flatten a drawing onto so the drawing is still visible afterwards.
+ *
+ * Keeps the design's own background whenever the ink already reads against it
+ * — a coherent panel is worth having — and only falls back to plain paper
+ * when it does not.
+ */
+async function paperFor(buffer, palette) {
+  const ground = palette?.background || '#0A0A0B';
+  try {
+    const { data, info } = await sharp(buffer)
+      .resize(64, 64, { fit: 'inside' })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    let sum = 0;
+    let inked = 0;
+    for (let i = 0; i < data.length; i += info.channels) {
+      // Only the strokes vote; the transparent field around them is not ink.
+      if (data[i + 3] < 40) continue;
+      sum += (0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]) / 255;
+      inked += 1;
+    }
+    if (!inked) return ground;
+
+    const ink = sum / inked;
+    const groundLuma = luminance(ground);
+    if (Math.abs(ink - groundLuma) >= MIN_INK_CONTRAST) return ground;
+    // Dark ink gets paper, light ink gets night — whichever the strokes are
+    // not. The user's own colours survive either way.
+    return ink < 0.5 ? '#F5F5F3' : '#0E0E10';
+  } catch {
+    return ground;
   }
 }
 
@@ -404,21 +607,47 @@ export async function generateBespokeImage(plan, { slot, palette, sceneNote } = 
  * colours compatible — the same composition constraints a sourced photo is
  * judged against in `curateImage`, given to the generator up front instead.
  */
-function buildBespokePrompt(plan, { slot, palette, sceneNote }) {
-  const parts = [plan.query || plan.subject || 'a photograph that fits the brief'];
-  if (sceneNote) parts.push(sceneNote);
+function buildBespokePrompt(plan, { slot, palette, sceneNote, tracing = false }) {
+  const parts = [];
+
+  // With the drawing attached, the sketch leads and the brief follows. Said
+  // first and said plainly, because the failure mode being fixed here is a
+  // model treating an attached drawing as loose inspiration and rendering
+  // whatever the words alone suggested.
+  if (tracing) {
+    parts.push(
+      'The attached image is a rough hand drawing by the user. Render THAT drawing as a finished image: keep its subject, its composition, and the position, scale and orientation of everything in it. Do not invent subjects that are absent from the drawing, do not rearrange it, and do not substitute a different scene. Add nothing decorative that is not in the drawing — no borders, frames, rules, stripes, bands or ornamental lines of any kind. Treat the strokes as the plan and add only the craft the drawing implies — real lighting, material, depth and finish.'
+    );
+  }
+
+  parts.push(plan.query || plan.subject || 'a photograph that fits the brief');
+  if (sceneNote) parts.push(tracing ? `The drawing reads as: ${sceneNote}` : sceneNote);
   if (plan.subject && plan.subject !== plan.query) parts.push(`Subject: ${plan.subject}.`);
 
   const ratio = slot?.width && slot?.height ? slot.width / slot.height : null;
   if (ratio) {
     const shape = ratio > 1.2 ? 'wide landscape' : ratio < 0.85 ? 'tall portrait' : 'square';
-    parts.push(`Compose for a ${shape} frame.`);
+    // Tracing a drawing means matching its frame, not recomposing inside a
+    // new one — the drawing was made at this shape in the first place.
+    parts.push(
+      tracing
+        ? `Output a ${shape} frame matching the drawing's own proportions.`
+        : `Compose for a ${shape} frame.`
+    );
   }
-  if (plan.negativeSpace && plan.negativeSpace !== 'any') {
+  // Only meaningful when the generator is free to compose. Against a drawing
+  // it is a direct contradiction — the user already decided what goes where,
+  // and "keep the left side empty" would have it move their subject.
+  if (!tracing && plan.negativeSpace && plan.negativeSpace !== 'any') {
     parts.push(`Leave the ${plan.negativeSpace} side of the frame visually calm and uncluttered — headline text will be placed there, not rendered into the image.`);
   }
   if (palette?.background && palette?.accent) {
-    parts.push(`The palette this sits alongside is ${palette.dark ? 'dark' : 'light'}-toned with an accent colour around ${palette.accent} — keep the image's own colours compatible rather than clashing.`);
+    const tone = `${palette.dark ? 'dark' : 'light'}-toned with an accent colour around ${palette.accent}`;
+    parts.push(
+      tracing
+        ? `Colours the user drew in take priority; where the drawing leaves colour open, the palette this sits alongside is ${tone}.`
+        : `The palette this sits alongside is ${tone} — keep the image's own colours compatible rather than clashing.`
+    );
   }
   return parts.join(' ');
 }

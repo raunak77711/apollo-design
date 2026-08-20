@@ -25,10 +25,13 @@ const CALL_TIMEOUT_MS = 30_000;
  * Both optional and a silent no-op without a key.
  */
 export class OpenRouterProvider {
-  constructor({ apiKey, baseUrl, imageModel, visionModel }) {
+  constructor({ apiKey, baseUrl, imageModel, imageEditModel, visionModel }) {
     this.apiKey = apiKey;
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.imageModel = imageModel;
+    // Distinct from `imageModel`: the text-to-image route (FLUX) cannot take
+    // a reference image at all, so honouring a drawing needs a second model.
+    this.imageEditModel = imageEditModel;
     this.visionModel = visionModel;
   }
 
@@ -74,6 +77,67 @@ export class OpenRouterProvider {
       buffer: Buffer.from(image.b64_json, 'base64'),
       mimeType: image.media_type || 'image/png',
     };
+  }
+
+  /**
+   * Generate one image *from a reference image* — the drawing goes in, a
+   * finished picture of that same drawing comes out.
+   *
+   * A separate method rather than an option on `generateImage` because it is
+   * a different endpoint and a different model: the `/images` route above is
+   * FLUX, which takes a prompt and nothing else, so a sketch cannot reach it.
+   * Image-editing models are reached through chat/completions instead, asking
+   * for an image modality back and attaching the reference as an ordinary
+   * image part — the same request shape `readScribble` below already uses.
+   *
+   * This is what routes around Gemini's own quota: the same nano-banana model
+   * is available on the OpenRouter key, so a project whose Google image quota
+   * is exhausted still gets its drawing honoured.
+   *
+   * Returns { buffer, mimeType }, or null if the model replied with text but
+   * no picture (a safety block, or a model that ignored the modality).
+   */
+  async generateImageFromReference({ prompt, referenceImages = [], negativePrompt } = {}) {
+    if (!this.configured) return null;
+    const references = referenceImages.filter((url) => typeof url === 'string' && url.startsWith('data:image/'));
+    if (!references.length) return null;
+
+    const instruction = [
+      prompt,
+      'Output an image only. Absolutely no rendered text, words, letters, numbers, watermarks or captions anywhere in the image.',
+      negativePrompt ? `Avoid: ${negativePrompt}.` : '',
+    ].filter(Boolean).join(' ');
+
+    const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
+      body: JSON.stringify({
+        model: this.imageEditModel,
+        modalities: ['image', 'text'],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: instruction },
+              // Three at most: the reference budget these models actually honour.
+              ...references.slice(0, 3).map((url) => ({ type: 'image_url', image_url: { url } })),
+            ],
+          },
+        ],
+      }),
+      timeoutMs: CALL_TIMEOUT_MS,
+    });
+
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw statusError(`OpenRouter API error ${res.status}: ${detail.slice(0, 300)}`, res.status);
+    }
+
+    const data = await res.json();
+    const url = data?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    const match = typeof url === 'string' && url.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+    if (!match) return null;
+    return { buffer: Buffer.from(match[2], 'base64'), mimeType: match[1] };
   }
 
   /**
