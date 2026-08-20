@@ -3,7 +3,6 @@ import { cx } from '../../lib/cx.js';
 import { useTheme } from '../../lib/theme.jsx';
 import { useMediaQuery } from '../../lib/useMediaQuery.js';
 import { Wordmark } from '../../ui/brand.jsx';
-import MagnifyLens from './MagnifyLens.jsx';
 import { STAGE_ORDER, stageDetail, stageLabel } from './stages.js';
 
 /**
@@ -119,13 +118,7 @@ export default function GenerationScene({ stage, open = true, onExited }) {
       {fallback ? (
         <StaticSky light={theme === 'light'} />
       ) : (
-        <>
-          <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
-          {/* Hovering the sky magnifies whatever's under the pointer — the moon's
-              own relief reads clearest up close, which drifting past at this
-              scale mostly hides. */}
-          <MagnifyLens sourceRef={canvasRef} />
-        </>
+        <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
       )}
 
       {/* A dark scrim under the type only, so the status stays legible against
