@@ -41,8 +41,8 @@ async function main() {
   // ---- Frontend / page-load path ----
   console.log('--- FRONTEND (page load path) ---');
   results['HTML shell'] = await timeIt(BASE + '/', {}, 5);
-  results['JS bundle (uncompressed)'] = await timeIt(BASE + '/assets/index-CFkc-44J.js', {}, 5);
-  results['CSS bundle'] = await timeIt(BASE + '/assets/index-CWL3Am1C.css', {}, 5);
+  results['JS bundle (uncompressed)'] = await timeIt(BASE + '/assets/index-B06uQo-5.js', {}, 5);
+  results['CSS bundle'] = await timeIt(BASE + '/assets/index-Cu26NH8j.css', {}, 5);
 
   // ---- Backend API ----
   console.log('--- BACKEND API (via nginx on :5180) ---');

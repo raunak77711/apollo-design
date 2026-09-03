@@ -48,6 +48,8 @@ export const api = {
   aiGenerate: (payload) => request('/ai/generate', { method: 'POST', body: payload }),
   aiGenerateStream,
   aiVariations: (payload) => request('/ai/variations', { method: 'POST', body: payload }),
+  // Pure image generation from a sketch — no design brief, no text layers.
+  aiGenerateImage: (payload) => request('/ai/generate-image', { method: 'POST', body: payload }),
 
   // Images
   searchImages: (q) => request(`/images/search?q=${encodeURIComponent(q)}`),

@@ -248,11 +248,13 @@ export default function DrawStudio({ elementId, onClose, scribbleMode = false })
   };
 
   /**
-   * The same pipeline `/scribble` uses, called from right inside the editor:
-   * this raster layer's own strokes go up as the scribble, Apollo reads and
-   * composes from them, and the result replaces the whole document — the
-   * sketch layer included, since a fresh design supersedes it rather than
-   * sitting underneath it.
+   * Image generation only — no DeepSeek brief, no composed document, no
+   * text. This raster layer's own strokes go up as the sketch, and the
+   * frame's own picture is replaced with a generated one honouring it;
+   * nothing else in the document is touched. Apollo never bakes text into
+   * a generated image regardless (see `OpenRouterProvider`/`GeminiProvider`),
+   * so this mode's "no texts" is really "no text *layers* either" — a pure
+   * image swap, the way Apply already works for the raw sketch itself.
    */
   const runGenerate = async () => {
     if (!touchedRef.current) {
@@ -262,13 +264,14 @@ export default function DrawStudio({ elementId, onClose, scribbleMode = false })
     setGenerating(true);
     try {
       const scribble = canvasRef.current.toDataURL('image/png');
-      const res = await api.aiGenerate({
-        message: genPrompt.trim() || 'Design this',
-        document: state.document,
+      const res = await api.aiGenerateImage({
+        message: genPrompt.trim(),
         scribble,
+        width: element.width,
+        height: element.height,
       });
-      if (!res.operations?.length) throw new Error('Apollo could not compose a design from that.');
-      actions.apply(res.operations);
+      if (!res?.src) throw new Error('Apollo could not turn that into an image.');
+      actions.apply([{ type: 'UPDATE_ELEMENT', targetId: element.id, changes: { src: res.src, fit: 'cover' } }]);
       onClose();
     } catch (err) {
       toast.error('Apollo could not draw that', err.message);
@@ -426,7 +429,7 @@ export default function DrawStudio({ elementId, onClose, scribbleMode = false })
             <DesignPreview document={belowDoc} className="absolute inset-0" />
 
             <div
-              className="checkerboard absolute outline outline-2 outline-accent/70"
+              className="absolute outline outline-2 outline-accent/70"
               style={{
                 left: element.x * stageScale,
                 top: element.y * stageScale,
@@ -435,7 +438,15 @@ export default function DrawStudio({ elementId, onClose, scribbleMode = false })
                 visibility: loading ? 'hidden' : 'visible',
               }}
             >
-              <canvas ref={canvasRef} className="block h-full w-full" style={{ cursor: cursorSize ? 'none' : 'crosshair' }} {...handlers} />
+              {/* A faint transparency cue, not the old opaque one: full
+                  strength it hid `belowDoc` completely (the "I can't see my
+                  other frames" bug) — but with nothing here at all, a
+                  genuinely empty frame is just a flat rectangle the same
+                  colour as whatever sits behind it, which reads as broken
+                  too. Low opacity gives both at once — the design still
+                  shows through, and an empty area still looks paintable. */}
+              <div className="checkerboard pointer-events-none absolute inset-0 opacity-20" />
+              <canvas ref={canvasRef} className="relative block h-full w-full" style={{ cursor: cursorSize ? 'none' : 'crosshair' }} {...handlers} />
               <canvas ref={previewCanvasRef} className="pointer-events-none absolute inset-0 block h-full w-full" />
               {hover && cursorSize > 0 && (
                 <span

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { runAIEdit, runVariations } from '../services/aiService.js';
-import { buildDesign } from '../services/designService.js';
+import { buildDesign, generateSketchImage } from '../services/designService.js';
 import { normalizePreferences } from '../design/preferences.js';
 import { validateDocument } from '../design/schema.js';
 import { validateOperation, applyOperations } from '../design/operations.js';
@@ -126,6 +126,34 @@ aiRouter.post('/generate/stream', async (req, res) => {
     send('failed', { error: err.message });
   } finally {
     if (!res.writableEnded) res.end();
+  }
+});
+
+/**
+ * POST /api/ai/generate-image
+ * body: { scribble, message, width, height }
+ *
+ * Pure image generation from a drawing — no DeepSeek brief, no composed
+ * document, no text layers. The editor's Scribble tab uses this: draw,
+ * optionally say what it should become, and the frame's own picture is
+ * replaced with a generated one honouring the sketch. Nothing else about
+ * the document changes.
+ */
+aiRouter.post('/generate-image', async (req, res, next) => {
+  try {
+    const { message, width, height } = req.body || {};
+    const scribble = readScribbleField(req.body?.scribble);
+    if (!scribble) return res.status(400).json({ error: 'a scribble is required' });
+    const result = await generateSketchImage({
+      scribble,
+      message: typeof message === 'string' ? message : '',
+      width: Number(width) || undefined,
+      height: Number(height) || undefined,
+    });
+    if (!result) return res.status(502).json({ error: 'Apollo could not turn that into an image right now.' });
+    res.json(result);
+  } catch (err) {
+    next(err);
   }
 });
 

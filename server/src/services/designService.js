@@ -245,6 +245,35 @@ export async function buildDesign({
   return { operations, brief, images, review, scribble: reading, message: describe(brief, images, review, reading) };
 }
 
+/**
+ * Pure image generation from a drawing — no DeepSeek brief, no composed
+ * document, no text. `buildDesign` above always produces a full design
+ * (copy, palette, layout, live text layers); this is for when the ask is
+ * only "turn this sketch into a real picture," which the editor's Scribble
+ * tab uses so a frame's own image can be replaced without touching anything
+ * else in the document.
+ *
+ * Reuses `generateBespokeImage` directly — same sketch-conditioned
+ * generation chain (OpenRouter's image-edit route, then Gemini, then the
+ * user's own drawing as a last resort) a full design's hero image goes
+ * through, just without a brief or a palette to matter against.
+ */
+export async function generateSketchImage({ scribble, message, width, height }) {
+  const plan = {
+    query: message?.trim() || 'A clean, professional illustration true to this drawing',
+    subject: message?.trim() || '',
+    negativeSpace: 'any',
+  };
+  const image = await generateBespokeImage(plan, {
+    slot: { width: width || 1024, height: height || 1024 },
+    palette: null,
+    sceneNote: '',
+    scribble,
+    scribbleBox: null,
+  });
+  return image ? { src: image.url, width: image.width, height: image.height } : null;
+}
+
 /** Generate the three directions side by side. */
 export async function buildVariations({ message, document }) {
   const provider = getAIProvider();
