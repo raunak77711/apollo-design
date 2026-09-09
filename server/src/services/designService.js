@@ -1,5 +1,5 @@
 import { getAIProvider } from './ai/index.js';
-import { curateImages, generateBespokeImage, imageFromScribble } from './images/curator.js';
+import { curateImages, generateBespokeImage, imageFromReference, imageFromScribble } from './images/curator.js';
 import { getGeminiProvider } from './images/GeminiProvider.js';
 import { getOpenRouterProvider } from './images/OpenRouterProvider.js';
 import { compose } from '../design/layout.js';
@@ -118,8 +118,11 @@ export async function buildDesign({
   // see the file itself, so a vision model captions it once up front and
   // that caption rides along in the brief prompt as `referenceNote` —
   // otherwise an attached reference is silently dropped and has zero effect
-  // on the direction.
-  const referenceNote = await describeFirstReference(referenceImages);
+  // on the direction. When it reads as the user's own brand mark rather than
+  // a mood photo, `isReferenceLogo` says so: a logo is attached to be
+  // *used*, not redrawn, so it gets placed verbatim later instead of
+  // sourced or generated (see the "logo" role handling below).
+  const { note: referenceNote, isLogo: isReferenceLogo } = await describeFirstReference(referenceImages);
 
   // The drawing is read once, before the first attempt — it is the same
   // drawing on a rework, and re-reading it would cost a second vision call to
@@ -141,6 +144,7 @@ export async function buildDesign({
       critique: attempt > 0 ? notes : null,
       previous: attempt > 0 ? plan : null,
       referenceNote,
+      isReferenceLogo,
       preferenceNote: describePreferences(preferences),
       scribbleNote,
     });
@@ -237,12 +241,25 @@ export async function buildDesign({
     notes = review.outstanding.map((issue) => issue.message);
   }
 
-  const { brief, images, review } = best;
+  const { brief, images, review, composed } = best;
   const operations = [
     ...clearOperations(document),
     { type: 'SET_CANVAS', changes: { width: brief.canvas.width, height: brief.canvas.height, background: brief.palette.background } },
     ...review.elements.map((element) => ({ type: 'CREATE_ELEMENT', element })),
   ];
+
+  // The user's own brand mark, when one was attached — placed verbatim as a
+  // small fixed corner badge, after composition and outside the layout
+  // archetypes entirely. It does not go through the "images" role system:
+  // that sizes photography to whatever slot the chosen layout happens to
+  // have, anywhere from one grid cell to the full canvas, and a small icon
+  // stretched to fill a full-bleed hero (or reused to fill a leftover grid
+  // cell) both read as broken. A fixed, modest corner mark is correct
+  // regardless of which layout archetype was picked.
+  if (isReferenceLogo && referenceImages[0]) {
+    const badge = await logoBadge(referenceImages[0], { canvas: brief.canvas, grid: composed.grid });
+    if (badge) operations.push({ type: 'CREATE_ELEMENT', element: badge });
+  }
 
   return { operations, brief, images, review, scribble: reading, message: describe(brief, images, review, reading) };
 }
@@ -302,10 +319,45 @@ export async function buildVariations({ message, document }) {
 
 /* ------------------------------- internals ------------------------------- */
 
-/** Caption the first reference image for the brief prompt, or '' if there is none/no key/it fails. */
+/**
+ * A small, fixed top-left mark for the user's own logo — see the comment
+ * where this is called for why it is not routed through the "images" role
+ * system. `null` on any failure (a corrupt reference, an unsupported
+ * format), same as every other best-effort image step in this pipeline.
+ *
+ * Sized and placed to sit entirely inside the margin band every archetype
+ * leaves empty above and left of `grid.top`/`grid.left` — none of them draw
+ * copy, photography or a chart out there, only the full-bleed background.
+ * The eyebrow, a chart, even a photo frame can start flush at `grid.top`/
+ * `grid.left` itself (confirmed live — an early version placed the badge
+ * exactly there and it sat on top of the eyebrow label), so this stays
+ * inside the margin, never past it.
+ */
+async function logoBadge(referenceImage, { canvas, grid }) {
+  const margin = grid?.margin ?? Math.round(Math.min(canvas.width, canvas.height) * 0.06);
+  const size = Math.min(120, Math.max(20, Math.round(margin * 0.8)));
+  const inset = Math.max(0, Math.round((margin - size) / 2));
+  const own = await imageFromReference(
+    { subject: 'the attached logo' },
+    { referenceImage, slot: { width: size, height: size }, palette: null }
+  );
+  if (!own) return null;
+  return {
+    type: 'image',
+    x: inset,
+    y: inset,
+    width: size,
+    height: size,
+    name: 'Logo',
+    zIndex: 999,
+    properties: { src: own.url, alt: own.alt, fit: 'contain' },
+  };
+}
+
+/** `{ note, isLogo }` for the first reference image, or `{ note: '', isLogo: false }` if there is none/no key/it fails. */
 async function describeFirstReference(referenceImages) {
   const first = referenceImages?.[0];
-  if (!first) return '';
+  if (!first) return { note: '', isLogo: false };
   // Gemini first, OpenRouter as the fallback — same reasoning as the
   // scribble reader: Gemini's free tier is the first thing to run out, and
   // without a second captioner an attached image was silently described as
@@ -313,13 +365,13 @@ async function describeFirstReference(referenceImages) {
   for (const provider of [getGeminiProvider(), getOpenRouterProvider()]) {
     if (!provider.configured) continue;
     try {
-      const note = await provider.describeReference(first);
-      if (note) return note;
+      const result = await provider.describeReference(first);
+      if (result?.note) return result;
     } catch (err) {
       console.warn(`[design] reference captioning failed (${err.message})`);
     }
   }
-  return '';
+  return { note: '', isLogo: false };
 }
 
 /** Read the drawing, or null — a failed read must never fail a generation. */

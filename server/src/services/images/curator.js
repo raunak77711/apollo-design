@@ -507,6 +507,53 @@ export async function imageFromScribble(plan, { scribble, slot, palette, scribbl
   }
 }
 
+/**
+ * The user's own attached image, used verbatim rather than sourced or
+ * generated — for a brand mark, "find something like their logo" is the
+ * wrong answer once they have handed over the actual file. Same shape as
+ * every other entry in the array. Alpha is preserved rather than flattened
+ * onto a paper colour (unlike `imageFromScribble`'s ink): a logo composites
+ * straight onto the design's own background, so painting a box behind it
+ * would be the one thing that makes it look pasted on.
+ */
+export async function imageFromReference(plan, { referenceImage, slot, palette } = {}) {
+  const buffer = decodeDataUrl(referenceImage);
+  if (!buffer) return null;
+  try {
+    const width = Math.max(1, Math.round(slot?.width || 400));
+    const height = Math.max(1, Math.round(slot?.height || 400));
+    const flattened = await sharp(buffer)
+      .resize(width, height, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .ensureAlpha()
+      .png()
+      .toBuffer();
+    const analysis = await analyzeBuffer(flattened);
+    const dataUrl = `data:image/png;base64,${flattened.toString('base64')}`;
+
+    return {
+      ...plan,
+      url: dataUrl,
+      thumbnail: dataUrl,
+      alt: plan.subject || plan.query || 'Your logo',
+      provider: 'reference',
+      photographer: '',
+      sourceUrl: '',
+      width,
+      height,
+      score: 1,
+      focalX: 50,
+      focalY: 50,
+      averageColor: analysis?.averageColor || palette?.background || '#6E6E6E',
+      luminance: analysis?.luminance ?? 0.45,
+      negativeSpace: analysis?.negativeSpace || plan.negativeSpace,
+      space: analysis?.space || null,
+    };
+  } catch (err) {
+    console.warn(`[curator] could not use the reference image as the logo: ${err.message}`);
+    return null;
+  }
+}
+
 /** A base64 data URL back into bytes, or null if it is not one. */
 function decodeDataUrl(value) {
   const match = typeof value === 'string' && value.match(/^data:image\/[a-zA-Z+]+;base64,(.+)$/);

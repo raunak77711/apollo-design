@@ -83,28 +83,20 @@ export class GeminiProvider {
     };
   }
 
-  /** A short art-direction caption for a reference image, or '' on any failure. */
+  /** `{ note, isLogo }` for a reference image, or `{ note: '', isLogo: false }` on any failure. */
   async describeReference(dataUrl) {
-    if (!this.configured) return '';
+    if (!this.configured) return { note: '', isLogo: false };
     const inline = dataUrlToInline(dataUrl);
-    if (!inline) return '';
+    if (!inline) return { note: '', isLogo: false };
     try {
       const data = await this._call(this.visionModel, [
-        {
-          role: 'user',
-          parts: [
-            {
-              text: 'In one or two sentences, describe this reference image for a design brief: the literal subject, the visual style, the dominant colours, and the mood. Plain prose, no markdown.',
-            },
-            { inlineData: inline },
-          ],
-        },
+        { role: 'user', parts: [{ text: REFERENCE_PROMPT }, { inlineData: inline }] },
       ]);
       const text = data?.candidates?.[0]?.content?.parts?.find((part) => typeof part.text === 'string')?.text;
-      return typeof text === 'string' ? text.trim().slice(0, 400) : '';
+      return parseReferenceCaption(text);
     } catch (err) {
       console.warn(`[gemini] describeReference failed: ${err.message}`);
-      return '';
+      return { note: '', isLogo: false };
     }
   }
 
@@ -147,6 +139,31 @@ export class GeminiProvider {
       return null;
     }
   }
+}
+
+/* ----------------------------- reference prompt ----------------------------- */
+
+/**
+ * Exported so `OpenRouterProvider` reads a reference image the same way when
+ * Gemini is down. Asks for a LOGO/PHOTO tag ahead of the caption because the
+ * two need different treatment downstream: a photo is only ever a mood/style
+ * cue for the brief, but a logo is the user's own brand mark — attached to be
+ * *used*, not redrawn — so `designService` needs to know which one it got
+ * back before it decides whether to place the file itself in the design.
+ */
+export const REFERENCE_PROMPT =
+  'Look at this reference image. First line: reply with exactly LOGO if it is itself a logo, brand ' +
+  'mark, wordmark or icon graphic (simple, flat, on a plain or transparent background) — reply exactly ' +
+  'PHOTO otherwise. Then, in one or two sentences, describe it for a design brief: the literal subject, ' +
+  'the visual style, the dominant colours, and the mood. Plain prose after the tag line, no markdown.';
+
+/** `{ note, isLogo }` from the raw two-part reply `REFERENCE_PROMPT` asks for. */
+export function parseReferenceCaption(text) {
+  if (typeof text !== 'string' || !text.trim()) return { note: '', isLogo: false };
+  const lines = text.trim().split('\n');
+  const isLogo = /^logo\b/i.test(lines[0].trim());
+  const note = (/^(logo|photo)\b/i.test(lines[0].trim()) ? lines.slice(1) : lines).join(' ').trim();
+  return { note: note.slice(0, 400), isLogo };
 }
 
 /* ------------------------------ scribble prompt ---------------------------- */

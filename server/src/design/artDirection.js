@@ -243,7 +243,13 @@ export const LAYOUTS = [
   { id: 'overlap-collage', label: 'Overlapping collage', images: 1, description: 'Image panel and colour block overlap, with type crossing the boundary for depth. Energetic and modern.' },
   { id: 'band-stack', label: 'Colour bands', images: 1, description: 'Horizontal bands of colour and photography stacked with a firm rhythm. Bold, promotional, poster-like.' },
   { id: 'corner-hero', label: 'Corner hero', images: 1, description: 'Image anchored into one corner behind a rounded mask, type on the diagonal opposite. Playful and dynamic.' },
-  { id: 'grid-editorial', label: 'Editorial grid', images: 3, description: 'A modular grid of several images with type occupying one cell. Great for collections, menus and multi-item stories.' },
+  // 4, not 3: layout.js's grid-editorial always lays out 4 image cells (a
+  // 3x2 or 2x3 grid minus the 2 cells the type lockup's first row spans),
+  // for either canvas shape — a budget of 3 left the last cell one image
+  // short, so `ctx.images[i % ctx.images.length]` wrapped around and
+  // silently repeated the first image (the hero, or now a user's own logo)
+  // into an unrelated grid cell.
+  { id: 'grid-editorial', label: 'Editorial grid', images: 4, description: 'A modular grid of several images with type occupying one cell. Great for collections, menus and multi-item stories.' },
   { id: 'banner-lockup', label: 'Wide lockup', images: 1, description: 'Horizontal lockup for wide canvases: type left, photograph right, aligned to a firm baseline. Clean and corporate.' },
   { id: 'stat-grid', label: 'Stat grid', images: 0, description: 'No photography — a headline over either a real chart or a grid of fact cards. Best for genuinely data-driven asks: statistics, a times table, a step-by-step process, a quick comparison.' },
   { id: 'labeled-diagram', label: 'Labeled diagram', images: 1, description: 'A generated illustration beside a numbered key. For a labeled diagram — an anatomy chart, a machine, a process with named parts — where the picture stays clean and every label lives in the list next to it, not pinned to a point on the image.' },

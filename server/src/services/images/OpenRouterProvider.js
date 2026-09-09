@@ -1,6 +1,6 @@
 import { config } from '../../config/env.js';
 import { fetchWithTimeout, statusError } from '../upstream.js';
-import { buildScribblePrompt } from './GeminiProvider.js';
+import { buildScribblePrompt, parseReferenceCaption, REFERENCE_PROMPT } from './GeminiProvider.js';
 
 /** Bespoke art is worth waiting a little longer for than a caption call, but not forever. */
 const CALL_TIMEOUT_MS = 30_000;
@@ -141,16 +141,15 @@ export class OpenRouterProvider {
   }
 
   /**
-   * A short art-direction caption for a reference image, or '' on any
-   * failure — same contract and same prompt as `GeminiProvider.describeReference`,
-   * used as its fallback for the identical reason `readScribble` below is:
-   * Gemini's own free tier is the first thing to run out, at which point an
-   * attached reference image was silently captioned as nothing and never
-   * reached the brief at all.
+   * `{ note, isLogo }` for a reference image — same contract and same prompt
+   * as `GeminiProvider.describeReference`, used as its fallback for the
+   * identical reason `readScribble` below is: Gemini's own free tier is the
+   * first thing to run out, at which point an attached reference image was
+   * silently captioned as nothing and never reached the brief at all.
    */
   async describeReference(dataUrl) {
-    if (!this.configured) return '';
-    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) return '';
+    if (!this.configured) return { note: '', isLogo: false };
+    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) return { note: '', isLogo: false };
     try {
       const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
@@ -161,10 +160,7 @@ export class OpenRouterProvider {
             {
               role: 'user',
               content: [
-                {
-                  type: 'text',
-                  text: 'In one or two sentences, describe this reference image for a design brief: the literal subject, the visual style, the dominant colours, and the mood. Plain prose, no markdown.',
-                },
+                { type: 'text', text: REFERENCE_PROMPT },
                 { type: 'image_url', image_url: { url: dataUrl } },
               ],
             },
@@ -175,10 +171,10 @@ export class OpenRouterProvider {
       if (!res.ok) throw statusError(`OpenRouter API error ${res.status}`, res.status);
       const data = await res.json();
       const text = data?.choices?.[0]?.message?.content;
-      return typeof text === 'string' ? text.trim().slice(0, 400) : '';
+      return parseReferenceCaption(text);
     } catch (err) {
       console.warn(`[openrouter] describeReference failed: ${err.message}`);
-      return '';
+      return { note: '', isLogo: false };
     }
   }
 

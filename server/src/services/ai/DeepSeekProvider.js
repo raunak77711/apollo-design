@@ -80,10 +80,10 @@ export class DeepSeekProvider extends AIProvider {
    * `critique` is fed back on a second attempt, which is how a weak first pass
    * gets genuinely reconsidered rather than nudged.
    */
-  async planDesign({ message, canvas, variation, critique, previous, referenceNote, preferenceNote, scribbleNote }) {
+  async planDesign({ message, canvas, variation, critique, previous, referenceNote, isReferenceLogo, preferenceNote, scribbleNote }) {
     const parsed = await this.chat({
       system: buildDirectorPrompt(),
-      user: buildBriefPrompt({ message, canvas, variation, critique, previous, referenceNote, preferenceNote, scribbleNote }),
+      user: buildBriefPrompt({ message, canvas, variation, critique, previous, referenceNote, isReferenceLogo, preferenceNote, scribbleNote }),
       // Art direction benefits from real temperature; the schema keeps it safe.
       temperature: critique ? 0.85 : 1.0,
       maxTokens: 1800,
@@ -316,7 +316,7 @@ it cannot be crowded and be good. Never add decoration for its own sake.
 Respond with valid JSON only.`;
 }
 
-function buildBriefPrompt({ message, canvas, variation, critique, previous, referenceNote, preferenceNote, scribbleNote }) {
+function buildBriefPrompt({ message, canvas, variation, critique, previous, referenceNote, isReferenceLogo, preferenceNote, scribbleNote }) {
   const ratio = canvas ? (canvas.width / canvas.height).toFixed(2) : '1.00';
   const shape = Number(ratio) > 1.25 ? 'landscape' : Number(ratio) < 0.85 ? 'portrait' : 'square';
 
@@ -329,9 +329,20 @@ function buildBriefPrompt({ message, canvas, variation, critique, previous, refe
 
   if (preferenceNote) parts.push(preferenceNote);
 
-  if (referenceNote) {
+  if (referenceNote && isReferenceLogo) {
+    // Not sent as an image role: the mark is placed separately, as a small
+    // fixed corner badge outside the photography system entirely — role
+    // "logo" is sized to whatever the chosen layout gives its one photo
+    // slot (anywhere from a grid cell to the full canvas), and a small icon
+    // stretched to fill a full-bleed hero reads as broken. Do not propose an
+    // image with role "logo" for this brief; the "images" array stays pure
+    // photography, exactly as for a brief with no attached logo.
     parts.push(
-      `The user also attached a reference image. What it shows: ${referenceNote} Let it inform subject, mood and palette choices — the image itself will be generated separately using this same reference.`
+      `The user also attached their own logo. What it shows: ${referenceNote} It is placed separately as a small brand mark — do not propose an image with role "logo" for it, and do not describe it as photography. Let its colours inform the palette.`
+    );
+  } else if (referenceNote) {
+    parts.push(
+      `The user also attached a reference photo. What it shows: ${referenceNote} Let it inform subject, mood and palette choices.`
     );
   }
 
