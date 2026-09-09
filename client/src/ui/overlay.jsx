@@ -19,44 +19,90 @@ export function useEscape(handler, active = true) {
  * styling; the panel closes on outside click, Escape, or an explicit close().
  * `side` flips it above the trigger, for controls that sit at the bottom of a
  * panel with nowhere below them to open into.
+ *
+ * The panel is portalled to `document.body` (the same reason `ContextMenu`
+ * below is): rendered inline, an `absolute` panel is only ever positioned
+ * and stacked relative to its own nearest ancestors, not the page — a
+ * dropdown tall enough to reach past its trigger's own local stacking
+ * context (the format picker's 11 presets, say) would visually collide with
+ * unrelated content elsewhere on the page instead of sitting cleanly on top
+ * of everything, `z-[60]` notwithstanding. Position is measured in two
+ * passes, same as `ContextMenu`: rendered once off-screen to get its real
+ * size, then placed against the trigger's own bounding rect.
  */
 export function Popover({ button, children, align = 'start', side = 'bottom', panelClassName, className }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const [place, setPlace] = useState(null);
+  const triggerRef = useRef(null);
+  const panelRef = useRef(null);
   const close = () => setOpen(false);
 
   useEscape(close, open);
   useEffect(() => {
     if (!open) return undefined;
     const onDown = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+      if (triggerRef.current?.contains(e.target)) return;
+      if (panelRef.current?.contains(e.target)) return;
+      setOpen(false);
     };
     window.addEventListener('pointerdown', onDown);
     return () => window.removeEventListener('pointerdown', onDown);
   }, [open]);
 
+  useLayoutEffect(() => {
+    if (!open) {
+      setPlace(null);
+      return;
+    }
+    const trigger = triggerRef.current?.getBoundingClientRect();
+    const panel = panelRef.current?.getBoundingClientRect();
+    if (!trigger || !panel) return;
+    const gap = 8;
+    const left = Math.max(
+      8,
+      Math.min(align === 'end' ? trigger.right - panel.width : trigger.left, window.innerWidth - panel.width - 8)
+    );
+    const top = Math.max(8, side === 'top' ? trigger.top - gap - panel.height : trigger.bottom + gap);
+    // A long panel (the format picker's dozen-odd presets) must never run
+    // into whatever the page happens to have below it — it is portalled
+    // specifically to stack on top of that content, not to overlap it.
+    // Capped to the room actually available and left to scroll internally.
+    const maxHeight = Math.max(120, (side === 'top' ? trigger.top - gap : window.innerHeight) - top - 8);
+    setPlace({ left, top, maxHeight });
+    // `children` too: a panel whose content changes size while open (the
+    // format picker's custom-size row toggling in, say) has to re-measure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, align, side, children]);
+
   return (
-    <div ref={ref} className={cx('relative', className)}>
+    <div ref={triggerRef} className={cx('relative', className)}>
       {button({ open, toggle: () => setOpen((o) => !o), close })}
-      {open && (
-        <div
-          className={cx(
-            'absolute z-[60] min-w-[12rem] animate-pop rounded-lg border border-line bg-surface p-1 shadow-pop',
-            side === 'top' ? 'bottom-full mb-2' : 'mt-2',
-            align === 'end' ? 'right-0' : 'left-0',
-            side === 'top'
-              ? align === 'end'
-                ? 'origin-bottom-right'
-                : 'origin-bottom-left'
-              : align === 'end'
-                ? 'origin-top-right'
-                : 'origin-top-left',
-            panelClassName
-          )}
-        >
-          {typeof children === 'function' ? children({ close }) : children}
-        </div>
-      )}
+      {open &&
+        createPortal(
+          <div
+            ref={panelRef}
+            style={{
+              left: place?.left ?? -9999,
+              top: place?.top ?? -9999,
+              maxHeight: place?.maxHeight,
+              visibility: place ? 'visible' : 'hidden',
+            }}
+            className={cx(
+              'fixed z-[60] min-w-[12rem] animate-pop overflow-y-auto rounded-lg border border-line bg-surface p-1 shadow-pop',
+              side === 'top'
+                ? align === 'end'
+                  ? 'origin-bottom-right'
+                  : 'origin-bottom-left'
+                : align === 'end'
+                  ? 'origin-top-right'
+                  : 'origin-top-left',
+              panelClassName
+            )}
+          >
+            {typeof children === 'function' ? children({ close }) : children}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { getAIProvider } from './ai/index.js';
 import { curateImages, generateBespokeImage, imageFromScribble } from './images/curator.js';
 import { getGeminiProvider } from './images/GeminiProvider.js';
+import { getOpenRouterProvider } from './images/OpenRouterProvider.js';
 import { compose } from '../design/layout.js';
 import { critique, needsRework, summarize } from '../design/critique.js';
 import { detectFormat, findLayout, normalizeBrief, VARIATIONS } from '../design/artDirection.js';
@@ -114,9 +115,10 @@ export async function buildDesign({
   let notes = [];
 
   // The user's own words describe what a reference photo is; DeepSeek can't
-  // see the file itself, so Gemini captions it once up front and that caption
-  // rides along in the brief prompt as `referenceNote` — otherwise an attached
-  // reference is silently dropped and has zero effect on the direction.
+  // see the file itself, so a vision model captions it once up front and
+  // that caption rides along in the brief prompt as `referenceNote` —
+  // otherwise an attached reference is silently dropped and has zero effect
+  // on the direction.
   const referenceNote = await describeFirstReference(referenceImages);
 
   // The drawing is read once, before the first attempt — it is the same
@@ -304,14 +306,20 @@ export async function buildVariations({ message, document }) {
 async function describeFirstReference(referenceImages) {
   const first = referenceImages?.[0];
   if (!first) return '';
-  const gemini = getGeminiProvider();
-  if (!gemini.configured) return '';
-  try {
-    return await gemini.describeReference(first);
-  } catch (err) {
-    console.warn(`[design] reference captioning failed (${err.message})`);
-    return '';
+  // Gemini first, OpenRouter as the fallback — same reasoning as the
+  // scribble reader: Gemini's free tier is the first thing to run out, and
+  // without a second captioner an attached image was silently described as
+  // nothing, so it never reached the brief at all.
+  for (const provider of [getGeminiProvider(), getOpenRouterProvider()]) {
+    if (!provider.configured) continue;
+    try {
+      const note = await provider.describeReference(first);
+      if (note) return note;
+    } catch (err) {
+      console.warn(`[design] reference captioning failed (${err.message})`);
+    }
   }
+  return '';
 }
 
 /** Read the drawing, or null — a failed read must never fail a generation. */
