@@ -140,7 +140,7 @@ async function elementToSvg(el, opacity) {
       return wrap(positioned);
     }
     case 'image': {
-      const image = await processedImage(p.src, p);
+      const image = await processedImage(p.src, p, el);
       if (!image) return '';
       const rx = p.borderRadius ? ` rx="${p.borderRadius}"` : '';
       const box = imageBox(el, p, image);
@@ -392,11 +392,28 @@ function imageBox(el, p, image) {
  * what was previewed even though Sharp has no direct primitive for them.
  * grain/bloom/glamour are preview-only — see README.
  */
-async function processedImage(src, p = {}) {
+async function processedImage(src, p = {}, el = {}) {
   const buf = await fetchImageBuffer(src);
   if (!buf) return null;
 
   let img = sharp(buf);
+  // A source photo (an Unsplash/Pexels original, easily several thousand
+  // pixels on a side) goes into the composed document SVG as an inline
+  // base64 `<image>` — capped here, or it gets embedded at whatever
+  // resolution it was fetched at. A flat 2200px ceiling still let a lossless
+  // PNG re-encode of a detailed photo run past a single XML attribute's
+  // buffer limit in librsvg ("Buffer size limit exceeded, try
+  // XML_PARSE_HUGE") and export failed outright — so this is capped to what
+  // the element actually needs on screen instead: double its own box (for a
+  // sharp render under zoom/crop), never more than that regardless of the
+  // source's native size.
+  const meta = await img.metadata();
+  const zoom = Math.max(1, p.zoom ?? 1);
+  const needed = Math.round(Math.max(el.width || 0, el.height || 0) * zoom * 2);
+  const cap = Math.min(2200, Math.max(400, needed || 2200));
+  if ((meta.width || 0) > cap || (meta.height || 0) > cap) {
+    img = img.resize({ width: cap, height: cap, fit: 'inside', withoutEnlargement: true });
+  }
   if (needsProcessing(p)) {
     const brightnessPct = (p.brightness ?? 100)
       + (p.exposure ?? 0) * 0.8 + (p.white ?? 0) * 0.15 - (p.black ?? 0) * 0.15 + (p.highlights ?? 0) * 0.1;
