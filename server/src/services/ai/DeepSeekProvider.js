@@ -436,6 +436,31 @@ Rules:
 - Respond with valid JSON only.`;
 }
 
+/** Longer than this and a property is either a full data URI or not worth sending verbatim. */
+const MAX_PROPERTY_STRING_CHARS = 400;
+
+/**
+ * Generated and sourced images are stored with their actual pixel data inline —
+ * `properties.src` is a `data:` URI that can run to megabytes for a full-resolution
+ * photo. The model only ever reasons about layout, not pixels, so sending that
+ * verbatim wastes the entire context window for nothing (and is exactly what blew
+ * a document with a few real images past DeepSeek's token limit). Strip any long
+ * or data-URI string down to a placeholder, recursively, so nothing hiding in a
+ * nested property (e.g. a gradient stop) can do the same.
+ */
+function sanitizeForPrompt(value) {
+  if (typeof value === 'string') {
+    if (value.startsWith('data:')) return `[image data omitted, ${value.length} chars]`;
+    if (value.length > MAX_PROPERTY_STRING_CHARS) return `${value.slice(0, MAX_PROPERTY_STRING_CHARS)}…`;
+    return value;
+  }
+  if (Array.isArray(value)) return value.map(sanitizeForPrompt);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, sanitizeForPrompt(v)]));
+  }
+  return value;
+}
+
 function buildEditPrompt({ message, document, selectedElementId }) {
   const summary = {
     canvas: document?.canvas,
@@ -446,7 +471,7 @@ function buildEditPrompt({ message, document, selectedElementId }) {
       x: e.x, y: e.y, width: e.width, height: e.height,
       rotation: e.rotation, zIndex: e.zIndex, opacity: e.opacity,
       blendMode: e.blendMode, shadow: e.shadow, parentId: e.parentId,
-      properties: e.properties,
+      properties: sanitizeForPrompt(e.properties),
     })),
     selectedElementId: selectedElementId || null,
   };
