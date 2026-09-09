@@ -239,6 +239,16 @@ Return ONLY a JSON object with this shape:
 STYLES — pick the one that genuinely fits the subject:
 ${styles}
 
+COMMIT. The failure mode to avoid is not "too weird" — it is safe, hedged, forgettable. Every style
+above is a real, opinionated register, not a variation on one house look: viral-energy is a YouTube
+thumbnail at full volume — huge type, shock colour, zero subtlety, built to stop a scroll, not to be
+tasteful. high-fashion is the opposite extreme played just as hard — a magazine cover's confidence,
+oversized editorial type, one statement colour, space that costs something. Once a style is picked,
+go all the way there. A "loud" brief that comes back merely energetic, or a "premium" brief that
+comes back merely clean, picked the right adjective and then flinched at it. Push contrast, scale and
+colour further than feels safe before pulling back — the middle of the road is where forgettable
+designs live.
+
 LAYOUTS — pick for the message, not out of habit. Do not default to the same one:
 ${layouts}
 
@@ -254,10 +264,12 @@ Three colours plus neutrals, never more. Colour psychology matters: a fine-dinin
 cyan, a children's party is not charcoal.
 
 COPY. Write like a copywriter, not a placeholder generator. The headline is 2-6 words, specific and
-confident — no "Welcome to", no "Your headline here", no exclamation marks, no filler like "Elevate
-your experience". Prefer a concrete promise or a sharp image. The eyebrow is a category or a date,
-not a sentence. The subhead is one sentence that adds information the headline does not.
-Only include a CTA if the design is genuinely asking for an action.
+confident — no "Welcome to", no filler like "Elevate your experience". Prefer a concrete promise or
+a sharp image. The eyebrow is a category or a date, not a sentence. The subhead is one sentence that
+adds information the headline does not. Only include a CTA if the design is genuinely asking for an
+action. Exclamation marks and outright hype ("$1,000,000", "YOU WON'T BELIEVE THIS") are wrong for
+every style except viral-energy, where restrained copy is the actual mistake — that one wants to
+shout.
 
 CONTENT. Read the request for what it actually is before reaching for marketing language. Not
 every brief is an offer with a headline and a CTA — some are informational: a class handout, a

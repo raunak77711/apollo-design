@@ -195,6 +195,34 @@ export const STYLES = [
     geometry: { radius: 6, rule: 2, density: 'balanced' },
     type: { eyebrowTracking: 0.3, headlineWeight: 600, ctaCase: 'none' },
   },
+  {
+    // Thumbnail-culture maximalism: the loudest entry in the catalogue on
+    // purpose — huge type, a shock-saturated palette, zero subtlety. Built
+    // for the brief that wants to stop a scroll, not to be tasteful.
+    id: 'viral-energy',
+    label: 'Viral energy',
+    mood: ['explosive', 'urgent', 'maximal', 'shareable'],
+    pairing: 'poster',
+    palette: { background: '#0A0A0A', surface: '#1A1502', primary: '#FFFFFF', accent: '#FFD400', muted: '#C9C4B8' },
+    layouts: ['type-poster', 'full-bleed-hero', 'corner-hero', 'overlap-collage'],
+    photo: { treatment: 'punchy', keywords: 'extreme reaction, wide-eyed expression, mid-action, exaggerated gesture, saturated colour, flash lighting', contrast: 132, saturation: 138, vignette: 12, grain: 0 },
+    geometry: { radius: 24, rule: 8, density: 'dense' },
+    type: { eyebrowTracking: 0.5, headlineWeight: 900, ctaCase: 'uppercase' },
+  },
+  {
+    // The opposite extreme, not a compromise with it: a magazine-cover
+    // register — oversized editorial serif, stark contrast, one statement
+    // colour, space that costs something. Restraint played at full volume.
+    id: 'high-fashion',
+    label: 'High-fashion editorial',
+    mood: ['dramatic', 'iconic', 'graphic', 'directional'],
+    pairing: 'editorial',
+    palette: { background: '#000000', surface: '#0D0D0D', primary: '#FFFFFF', accent: '#C41E3A', muted: '#9B9B9B' },
+    layouts: ['minimal-frame', 'full-bleed-hero', 'editorial-asymmetric', 'type-poster'],
+    photo: { treatment: 'moody', keywords: 'high fashion studio photography, dramatic hard light, strong pose, graphic shadow, monochrome mood', contrast: 120, saturation: 88, vignette: 18, grain: 10 },
+    geometry: { radius: 0, rule: 1, density: 'airy' },
+    type: { eyebrowTracking: 0.42, headlineWeight: 700, ctaCase: 'uppercase' },
+  },
 ];
 
 export const findStyle = (id) => STYLES.find((s) => s.id === id) || null;
@@ -421,6 +449,8 @@ export function pickStyleFor(prompt = '') {
     ['corporate-clean', ['corporate', 'consulting', 'finance', 'bank', 'insurance', 'b2b', 'conference', 'webinar', 'law', 'accounting', 'recruit']],
     ['vibrant-energetic', ['festival', 'concert', 'party', 'music', 'carnival', 'summer', 'dance', 'live show', 'celebration']],
     ['modern-minimal', ['minimal', 'clean', 'architecture', 'furniture', 'portfolio', 'studio', 'gallery', 'product launch']],
+    ['viral-energy', ['viral', 'youtube', 'thumbnail', 'challenge', 'giveaway', 'reaction', 'subscribe', 'mrbeast', 'clickbait', 'gaming stream', 'unboxing']],
+    ['high-fashion', ['vogue', 'fashion week', 'runway', 'couture', 'cover story', 'editorial fashion', 'fashion magazine', 'lookbook', 'haute']],
   ];
   let best = null;
   let bestScore = 0;
