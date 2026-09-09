@@ -47,6 +47,12 @@ const EXAMPLES = [
   'A cinematic space poster — dark, atmospheric, a lot of depth',
   'A music festival flyer, neon and loud',
   'A calm, premium menu for a coffee bar',
+  'A luxury skincare ad, soft light and minimal',
+  'A streetwear drop poster — bold, gritty, high contrast',
+  'A cozy bakery flyer, warm and handwritten',
+  'A tech product launch banner, sleek and futuristic',
+  'A vintage travel poster for a coastal town',
+  'A bold sale banner for a streetwear brand',
 ];
 
 export default function ScribblePage() {
