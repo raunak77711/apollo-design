@@ -13,6 +13,8 @@ const Scribble = lazy(() => import('./pages/ScribblePage.jsx'));
 const ApolloAI = lazy(() => import('./pages/ApolloAI.jsx'));
 const Assets = lazy(() => import('./pages/Assets.jsx'));
 const EditorPage = lazy(() => import('./pages/EditorPage.jsx'));
+const Boards = lazy(() => import('./pages/BoardsPage.jsx'));
+const BoardPage = lazy(() => import('./pages/BoardPage.jsx'));
 
 export default function App() {
   return (
@@ -27,6 +29,8 @@ export default function App() {
               <Route path="/ai" element={<ApolloAI />} />
               <Route path="/assets" element={<Assets />} />
               <Route path="/editor/:id" element={<EditorPage />} />
+              <Route path="/board" element={<Boards />} />
+              <Route path="/board/:id" element={<BoardPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
