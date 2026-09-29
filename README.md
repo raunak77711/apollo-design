@@ -196,6 +196,32 @@ design document sent from the editor), `prepareTurn()` is where a request would
 be classified and enriched, and `streamReply()` is where a tool loop would wrap
 the provider call. None are built yet, and none need to be for this to work.
 
+## Jam board
+
+A different way to use Apollo: a big, quiet, scrollable board for **recording a video essay**. `/board`.
+
+Paste the story of your video — chapters, flows like `GOOGLE ↓ WEBSITE ↓ LEAD`, the lines you will say on screen, how it should build — and Apollo turns it into a board: titles, flows, dependency graphs, cards, comparisons, timelines and screenshots frames, laid out on a white canvas that scrolls smoothly and never runs out. Then you record yourself talking over it: scroll, zoom, draw, circle the leak, add a note, drop in a screenshot, move a piece if the composition is wrong.
+
+```
+brief → outline → one call per section (four at a time) → validate → repair → board spec
+board spec → layout (measured, centred, deterministic) → Fabric canvas
+```
+
+As in the design pipeline, **the model never chooses coordinates.** DeepSeek returns *structure* — which blocks a section needs and what they say — from a fixed vocabulary of thirteen (`title`, `statement`, `bigtype`, `quote`, `flow`, `hub`, `cards`, `compare`, `panels`, `code`, `timeline`, `funnel`, `browser`). `client/.../engine/layoutBoard.js` places them, centred on the board's midline with text inside a ~700-unit column, so a centred 9:16 crop of a landscape recording still holds the story.
+
+**One state, changed only by operations.** A board is `{ spec, overrides, annotations, connections, assets }`. Every change — a drag, a toolbar button, a colour swatch — is a validated operation applied by `applyOperation`; Fabric only *renders* that state. That is what makes undo exact, lets connectors follow the pieces they join, and is the seam Direct mode uses.
+
+**It survives a bad section.** The outline and sections are separate calls. A section that fails validation is retried once with the errors fed back; one that still fails becomes a plain title-and-statement section marked *needs a second try*, and can be rebuilt on its own from the section rail. The rest of the board, and everything you drew, is untouched.
+
+**Direct mode** (`/` or `Ctrl/⌘ K`) edits the board you have, in plain English — *"make the $5 click huge and put the browser diagram under it"*. The model is sent a compact outline (section, block and part ids with their labels — never image data) and answers with the same validated operations the toolbar uses. Anything that names an id the outline did not contain is dropped, relative placement ("under X") is resolved to numbers from the objects' real bounds at that moment, and the whole instruction is one undo step. It edits; it never regenerates.
+
+**Boards live in your browser** (IndexedDB, with a localStorage fallback) and save themselves 800 ms after you stop. *Save* writes a board to a file and *Load* restores from one. *Clear* removes only what you added.
+
+- **Runs without a key:** the example board (this project's "Your Website Is Losing You Sales" deck) opens with no `DEEPSEEK_API_KEY`; generating a new board needs one and says so.
+- **Tools:** select, hand, pen, highlighter, eraser, arrow, line, rectangle, circle, text, sticky note, image (upload, drop or paste), undo/redo, zoom, reset. `?` lists every shortcut.
+- **Recording mode** strips everything but the board, a slim toolbar, zoom, and a `4 / 12 — TITLE` pill.
+- **Limits, honestly:** the eraser removes whole marks, not pixels; text inside a card or node is edited by rebuilding the section, not in place; there is no image crop; a board lives in one browser (use Save/Load to move it); the model chooses *which* diagram fits a chapter, and can pick differently than you would — rebuild the section with a note.
+
 ## Stack
 
 | Layer     | Tech |
@@ -427,6 +453,11 @@ GET    /api/images/search?q=    # searches every configured library, interleaved
 GET    /api/assets              POST /api/assets/upload    # multipart (file, projectId)
 POST   /api/export              # { projectId, document, format }
 POST   /api/export/flatten      # { document } → { dataUrl }  — layer merge/flatten
+GET    /api/board/status               # → { ready, model } — is a live model configured?
+POST   /api/board/generate/stream      # { brief } → SSE: outline · section · result · failed
+POST   /api/board/generate             # { brief } → { board } — the stream's fallback
+POST   /api/board/section              # { brief, outline, index, note? } → { section }
+POST   /api/board/edit                 # { message, outline, selection } → { operations, message }
 ```
 
 ## Security notes
