@@ -1,0 +1,165 @@
+{
+  "title": "Your Website Is Losing You Sales",
+  "audience": "business owners",
+  "sections": [
+    {
+      "title": "THE SALE",
+      "beat": "This is not a web design video. It is about money.",
+      "density": 1,
+      "blocks": [
+        { "type": "title", "text": "YOUR WEBSITE\nIS LOSING\nYOU SALES", "size": "xl" },
+        { "type": "flow", "direction": "up", "tone": "money", "scale": "normal", "steps": ["GOOGLE", "WEBSITE", "CONTACT", "LEAD", "CUSTOMER", "$1,500 JOB"] }
+      ]
+    },
+    {
+      "title": "HOW DID THEY FIND YOU?",
+      "beat": "They searched and clicked. You already paid for the attention.",
+      "density": 1,
+      "blocks": [
+        { "type": "title", "text": "HOW DID THEY FIND YOU?", "size": "l" },
+        { "type": "flow", "direction": "down", "tone": "movement", "steps": ["GOOGLE", "SEARCH", "AD / ORGANIC RESULT", "CLICK"] },
+        { "type": "quote", "text": "\"I paid for this click. What happens now?\"" }
+      ]
+    },
+    {
+      "title": "YOU PAID FOR THE CLICK",
+      "beat": "A slow site turns a paid visitor into waiting, and waiting into a lost customer.",
+      "density": 3,
+      "blocks": [
+        { "type": "title", "text": "YOU PAID FOR THE CLICK.\nDON'T WASTE IT.", "size": "l" },
+        { "type": "flow", "direction": "down", "tone": "problem", "steps": ["$5 CLICK", "WEBSITE", "LOADING...", "CUSTOMER LEAVES"] },
+        { "type": "hub", "center": "BROWSER", "tone": "tech", "links": "spokes", "nodes": ["HTML", "CSS", "IMAGES", "FONTS", "ANALYTICS", "CHAT", "HEATMAP", "BOOKING", "REVIEWS", "PIXELS"] },
+        { "type": "code", "text": "LCP · TBT · JavaScript · third-party scripts · mobile" },
+        { "type": "statement", "text": "PAID VISITOR → WAITING → LOST OPPORTUNITY", "tone": "problem" }
+      ]
+    },
+    {
+      "title": "THEY FINALLY SEE THE WEBSITE",
+      "beat": "Four questions decide the sale in seconds, and small leaks answer them badly.",
+      "density": 3,
+      "blocks": [
+        { "type": "flow", "direction": "down", "tone": "ink", "steps": ["WHO ARE YOU?", "WHAT DO YOU DO?", "CAN I TRUST YOU?", "WHAT DO I DO NOW?"] },
+        {
+          "type": "cards", "columns": 3, "tone": "problem",
+          "items": [
+            { "label": "Phone isn't clickable", "tag": "LEAK" },
+            { "label": "CTA buried", "tag": "LEAK" },
+            { "label": "No service area", "tag": "LEAK" },
+            { "label": "Huge paragraph", "tag": "LEAK" },
+            { "label": "Too many form fields", "tag": "LEAK" },
+            { "label": "Tiny mobile button", "tag": "LEAK" }
+          ]
+        },
+        { "type": "code", "text": "<a href=\"tel:+15551234567\">" },
+        { "type": "statement", "text": "A PHONE NUMBER ISN'T JUST TEXT. IT'S AN ACTION.", "tone": "ink" }
+      ]
+    },
+    {
+      "title": "THE CUSTOMER DOESN'T WANT YOUR WEBSITE",
+      "beat": "The site exists to solve the customer's problem, not to impress the owner.",
+      "density": 2,
+      "blocks": [
+        { "type": "statement", "text": "NOBODY WANTS TO LOOK AT AN HVAC WEBSITE.", "tone": "ink" },
+        { "type": "flow", "direction": "down", "tone": "problem", "steps": ["BROKEN AC", "SEARCH", "\"I NEED SOMEONE\""] },
+        { "type": "flow", "direction": "down", "tone": "money", "steps": ["PROBLEM", "CONFIDENCE", "ACTION"] },
+        {
+          "type": "cards", "columns": 4, "tone": "money",
+          "items": [{ "label": "Reviews" }, { "label": "Testimonials" }, { "label": "Service Area" }, { "label": "Pricing" }, { "label": "Guarantee" }, { "label": "Credentials" }, { "label": "Case Studies" }, { "label": "FAQs" }]
+        }
+      ]
+    },
+    {
+      "title": "8:47 PM",
+      "beat": "A hot lead becomes tomorrow's problem when the form only sends an email.",
+      "density": 3,
+      "blocks": [
+        { "type": "bigtype", "text": "8:47 PM", "tone": "ink" },
+        { "type": "flow", "direction": "down", "tone": "ink", "steps": ["CUSTOMER", "\"I NEED AN HVAC COMPANY\"", "CONTACT FORM", "SUBMIT"] },
+        { "type": "flow", "direction": "down", "tone": "problem", "steps": ["EMAIL", "OWNER'S INBOX", "TOMORROW MORNING"] },
+        { "type": "statement", "text": "YOU JUST TURNED A HOT LEAD INTO TOMORROW'S PROBLEM.", "tone": "problem" },
+        { "type": "flow", "direction": "down", "tone": "money", "steps": ["LEAD", "INSTANT NOTIFICATION", "SMS", "OWNER", "RESPONSE"] },
+        { "type": "code", "text": "lead routing · SMS · instant notifications · response time · booking · automation" }
+      ]
+    },
+    {
+      "title": "THE WEBSITE SHOULDN'T JUST COLLECT LEADS",
+      "beat": "A customer with a question at night should get a real answer and a booking.",
+      "density": 4,
+      "blocks": [
+        { "type": "statement", "text": "WHAT IF THE CUSTOMER HAS A QUESTION?", "tone": "ink" },
+        { "type": "quote", "text": "\"Do you service commercial properties?\"", "attribution": "10:30 PM" },
+        {
+          "type": "compare",
+          "left": { "heading": "GENERIC AI", "tone": "tech", "steps": ["QUESTION", "LLM", "GENERIC ANSWER"] },
+          "right": { "heading": "BUSINESS AI", "tone": "money", "steps": ["QUESTION", "BUSINESS KNOWLEDGE", "ANSWER", "BOOKING"], "footnote": "Services · Pricing · Policies · FAQs · Service areas" }
+        },
+        { "type": "flow", "direction": "down", "tone": "tech", "scale": "small", "steps": ["Documents", "Chunking", "Embeddings", "Retrieval", "Context", "LLM", "Answer"] },
+        { "type": "statement", "text": "QUESTION → ANSWER → BOOKING", "tone": "ink" }
+      ]
+    },
+    {
+      "title": "NOW THEY'RE READY TO BOOK",
+      "beat": "Every external system between the customer and the sale is something you now maintain.",
+      "density": 3,
+      "blocks": [
+        { "type": "flow", "direction": "down", "tone": "money", "steps": ["CUSTOMER", "\"I WANT TO BOOK\"", "BOOK NOW", "CALENDAR"] },
+        { "type": "flow", "direction": "down", "tone": "tech", "scale": "small", "steps": ["YOUR WEBSITE", "IFRAME", "OTHER DOMAIN", "JAVASCRIPT", "TRACKING", "LAYOUT", "ANOTHER SYSTEM"] },
+        { "type": "browser", "url": "booking.example.com", "title": "Your booking widget", "note": "iframe · external scripts · loading · layout shift · tracking · failure", "placeholder": "screenshot" },
+        { "type": "statement", "text": "EVERY EXTERNAL DEPENDENCY BETWEEN THE CUSTOMER AND THE SALE IS SOMETHING YOU NOW HAVE TO MAINTAIN.", "tone": "problem" }
+      ]
+    },
+    {
+      "title": "THEY BOOKED. NOW WHAT?",
+      "beat": "Conversion becomes business intelligence: can you see where leads came from?",
+      "density": 4,
+      "blocks": [
+        { "type": "flow", "direction": "right", "tone": "money", "steps": ["LEAD", "BOOKING", "CRM", "FOLLOW-UP", "SALE"] },
+        { "type": "hub", "center": "CRM", "tone": "movement", "links": "spokes", "nodes": ["Lead data", "Notifications", "Email", "SMS", "Automation", "Analytics", "Attribution"] },
+        { "type": "statement", "text": "CAN YOU ACTUALLY SEE WHERE YOUR LEADS CAME FROM?", "tone": "ink" }
+      ]
+    },
+    {
+      "title": "SIX MONTHS LATER",
+      "beat": "One sentence changes, and the owner ends up inside the layout system.",
+      "density": 3,
+      "blocks": [
+        { "type": "statement", "text": "WE'RE NOW OFFERING EMERGENCY WEEKEND SERVICE.", "tone": "ink" },
+        { "type": "flow", "direction": "down", "tone": "problem", "steps": ["EDIT", "TEXT", "LAYOUT", "SPACING", "RESPONSIVE RULES", "💀"] },
+        { "type": "title", "text": "FIELD-LOCKED CMS", "size": "m" },
+        {
+          "type": "panels",
+          "panels": [
+            { "heading": "CONTENT", "tone": "money", "rows": [{ "label": "Headline", "state": "open" }, { "label": "Description", "state": "open" }, { "label": "Phone", "state": "open" }, { "label": "Image", "state": "open" }, { "label": "CTA", "state": "open" }] },
+            { "heading": "LAYOUT", "tone": "tech", "rows": [{ "label": "Layout system", "state": "locked" }] }
+          ]
+        },
+        { "type": "statement", "text": "THE BUSINESS OWNER JUST WANTED TO CHANGE ONE SENTENCE. WHY ARE THEY EDITING THE LAYOUT SYSTEM?", "tone": "problem" }
+      ]
+    },
+    {
+      "title": "THE RIDICULOUS STACK",
+      "beat": "They do not own a website. They own a pile of services pointed at one domain.",
+      "density": 5,
+      "blocks": [
+        { "type": "title", "text": "THE RIDICULOUS STACK", "size": "l" },
+        { "type": "hub", "center": "BUSINESS", "tone": "problem", "links": "spokes+cross", "nodes": ["Website", "CMS", "Booking", "Chatbot", "Analytics", "Heatmaps", "CRM", "Email", "SMS", "Hosting"] },
+        { "type": "statement", "text": "THEY DON'T OWN A WEBSITE.", "emphasis": "loud", "tone": "problem" },
+        { "type": "statement", "text": "THEY OWN A COLLECTION OF SERVICES THAT HAPPEN TO POINT AT THE SAME DOMAIN.", "emphasis": "quiet", "tone": "ink" }
+      ]
+    },
+    {
+      "title": "WEB OPERATIONS",
+      "beat": "Everything clears. The website is infrastructure, not the product.",
+      "density": 1,
+      "blocks": [
+        { "type": "title", "text": "WEB OPERATIONS", "size": "xl" },
+        { "type": "flow", "direction": "down", "tone": "ink", "steps": ["BUSINESS", "WEB OPERATIONS"] },
+        { "type": "code", "text": "WEBSITE · LEADS · DATA" },
+        { "type": "code", "text": "CONTENT · BOOKING · ANALYTICS · UPDATES · ROUTING · OPTIMIZATION" },
+        { "type": "statement", "text": "THE WEBSITE ISN'T THE PRODUCT.", "tone": "ink" },
+        { "type": "title", "text": "IT'S INFRASTRUCTURE.", "size": "l" },
+        { "type": "title", "text": "KIT", "size": "m", "tone": "tech" }
+      ]
+    }
+  ]
+}
