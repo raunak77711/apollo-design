@@ -52,6 +52,18 @@ export default function BoardPage() {
   const recordingRef = useRef(false);
   recordingRef.current = recording;
 
+  // The board is a white page you record; its controls should be white too, whatever the app theme is.
+  // The attribute is put back on the way out, and the saved preference is never touched.
+  useEffect(() => {
+    const root = document.documentElement;
+    const previous = root.getAttribute('data-theme');
+    root.setAttribute('data-theme', 'light');
+    return () => {
+      if (previous) root.setAttribute('data-theme', previous);
+      else root.removeAttribute('data-theme');
+    };
+  }, []);
+
   useEffect(() => {
     let live = true;
     setLoaded(null);
