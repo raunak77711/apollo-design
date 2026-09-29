@@ -5,6 +5,7 @@ import { config } from './config/env.js';
 import { projectsRouter } from './routes/projects.js';
 import { aiRouter } from './routes/ai.js';
 import { assistantRouter } from './routes/assistant.js';
+import { boardRouter } from './routes/board.js';
 import { imagesRouter } from './routes/images.js';
 import { assetsRouter } from './routes/assets.js';
 import { exportRouter } from './routes/export.js';
@@ -38,6 +39,7 @@ export function createApp() {
   // Apollo AI — the general-purpose assistant. Separate from /api/ai on purpose:
   // that one compiles language into design operations, this one just talks.
   app.use('/api/assistant', assistantRouter);
+  app.use('/api/board', boardRouter);
   app.use('/api/images', imagesRouter);
   app.use('/api/assets', assetsRouter);
   app.use('/api/export', exportRouter);

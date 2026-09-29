@@ -16,6 +16,8 @@ const CHAT_TIMEOUT_MS = 45_000;
 const CONVERSE_TIMEOUT_MS = 120_000;
 const CONVERSE_MAX_TOKENS = 4000;
 
+const BOARD_TIMEOUT_MS = 90_000;
+
 /**
  * DeepSeek-backed provider, used for two very different jobs.
  *
@@ -40,7 +42,7 @@ export class DeepSeekProvider extends AIProvider {
     this.model = model;
   }
 
-  async chat({ system, user, temperature = 0.6, maxTokens = 2400 }) {
+  async chat({ system, user, temperature = 0.6, maxTokens = 2400, signal, timeoutMs = CHAT_TIMEOUT_MS }) {
     const res = await fetchWithTimeout(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
@@ -57,7 +59,8 @@ export class DeepSeekProvider extends AIProvider {
       // The art-direction call is legitimately slow, but a model that has
       // stopped answering must still surface as an error — `safePlan` can only
       // fall back to the heuristic planner if this actually throws.
-      timeoutMs: CHAT_TIMEOUT_MS,
+      timeoutMs,
+      signal,
     });
 
     if (!res.ok) {
@@ -181,6 +184,15 @@ export class DeepSeekProvider extends AIProvider {
       operations: Array.isArray(parsed.operations) ? parsed.operations : [],
       message: typeof parsed.message === 'string' ? parsed.message : 'Done.',
     };
+  }
+
+  async completeJSON({ system, user, temperature = 0.5, maxTokens = 3500, signal, timeoutMs = BOARD_TIMEOUT_MS }) {
+    const parsed = await this.chat({ system, user, temperature, maxTokens, signal, timeoutMs });
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  }
+
+  get live() {
+    return true;
   }
 }
 
