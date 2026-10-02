@@ -9,6 +9,7 @@ import { boardRouter } from './routes/board.js';
 import { imagesRouter } from './routes/images.js';
 import { assetsRouter } from './routes/assets.js';
 import { exportRouter } from './routes/export.js';
+import { createContentRouter } from './routes/content.js';
 import { notFound, errorHandler } from './middleware/error.js';
 import { isMongoConnected } from './config/db.js';
 
@@ -43,6 +44,8 @@ export function createApp() {
   app.use('/api/images', imagesRouter);
   app.use('/api/assets', assetsRouter);
   app.use('/api/export', exportRouter);
+  // Content Factory: long-form recordings -> transcript -> Jam board tally -> shorts.
+  app.use('/api/content', createContentRouter());
 
   app.use(notFound);
   app.use(errorHandler);

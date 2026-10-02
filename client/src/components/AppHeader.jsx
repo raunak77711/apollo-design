@@ -17,6 +17,7 @@ const LINKS = [
   { to: '/templates', label: 'Templates' },
   { to: '/assets', label: 'Assets' },
   { to: '/board', label: 'Jam board' },
+  { to: '/content', label: 'Content' },
   { to: '/ai', label: 'Apollo AI', mark: true },
 ];
 

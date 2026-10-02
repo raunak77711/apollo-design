@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { readFileRetry, writeFileAtomic } from '../content/atomicFile.js';
 import { normalizeTranscript } from './transcriptSchema.js';
 
 /**
@@ -26,7 +27,7 @@ export function createTranscriptCache(dir) {
     async get(hash) {
       let text;
       try {
-        text = await fs.readFile(fileFor(hash), 'utf8');
+        text = await readFileRetry(fileFor(hash));
       } catch (err) {
         if (err.code === 'ENOENT') return null;
         throw err;
@@ -51,10 +52,8 @@ export function createTranscriptCache(dir) {
     async put(hash, transcript, source = {}) {
       await fs.mkdir(dir, { recursive: true });
       const target = fileFor(hash);
-      const tmp = `${target}.${process.pid}.${Date.now()}.tmp`;
       const body = { version: 1, sourceHash: hash, createdAt: new Date().toISOString(), source, transcript };
-      await fs.writeFile(tmp, JSON.stringify(body), 'utf8');
-      await fs.rename(tmp, target);
+      await writeFileAtomic(target, JSON.stringify(body));
       return target;
     },
 

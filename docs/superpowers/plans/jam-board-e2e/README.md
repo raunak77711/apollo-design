@@ -57,3 +57,11 @@ in the implementation, not in the script — the assertions are the behaviour th
 
 The board exposes `window.__boardEditor` in development builds only (`import.meta.env.DEV`); the scripts use it
 to read state and to reach objects by id.
+
+## 05 - Content Factory
+
+`05-content-factory.mjs` uploads a recording, links a Jam board, processes it (real Whisper) and checks the board tally, timestamp seeking and transcript. It needs the Docker backend, the host worker (`npm run whisper:worker --prefix server`), the Vite dev server (it seeds a board through the app's own modules) and `server/whisper/samples/sample_short.mp4`:
+
+```
+BASE_URL=http://127.0.0.1:5299 node 05-content-factory.mjs
+```

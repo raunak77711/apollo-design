@@ -14,7 +14,8 @@ export async function start({ acceptDownloads = false } = {}) {
   const context = await browser.newContext({ viewport: { width: 1600, height: 900 }, acceptDownloads });
   const page = await context.newPage();
   const errors = [];
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  // ERR_CACHE_WRITE_FAILURE is Chrome's media cache declining a big video, not an app error.
+  page.on('console', (m) => { if (m.type() === 'error' && !/ERR_CACHE_WRITE_FAILURE/.test(m.text())) errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   page.on('dialog', (d) => d.accept()); // confirm() prompts (clear, reset, replace) are accepted
 

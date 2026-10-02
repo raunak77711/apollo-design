@@ -44,13 +44,14 @@ export function createTranscriptionService({ runner, cache, hash = hashFile }) {
       return cache.get(sourceHash);
     },
 
-    async transcribeVideo(videoPath, { force = false, onProgress, onStage } = {}) {
+    async transcribeVideo(videoPath, { force = false, onProgress, onStage, sourceHash: knownHash } = {}) {
       const absPath = path.resolve(videoPath);
       const stat = await fs.stat(absPath).catch(() => null);
       if (!stat?.isFile()) throw new Error(`video not found: ${absPath}`);
 
+      // A caller that already hashed the bytes (the upload does, while writing) passes it in and skips a second full read.
       onStage?.('hashing');
-      const sourceHash = await hash(absPath);
+      const sourceHash = knownHash || (await hash(absPath));
 
       if (!force) {
         const hit = await cache.get(sourceHash);

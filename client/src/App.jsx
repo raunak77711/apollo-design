@@ -15,6 +15,7 @@ const Assets = lazy(() => import('./pages/Assets.jsx'));
 const EditorPage = lazy(() => import('./pages/EditorPage.jsx'));
 const Boards = lazy(() => import('./pages/BoardsPage.jsx'));
 const BoardPage = lazy(() => import('./pages/BoardPage.jsx'));
+const Content = lazy(() => import('./pages/ContentPage.jsx'));
 
 export default function App() {
   return (
@@ -31,6 +32,8 @@ export default function App() {
               <Route path="/editor/:id" element={<EditorPage />} />
               <Route path="/board" element={<Boards />} />
               <Route path="/board/:id" element={<BoardPage />} />
+              <Route path="/content" element={<Content />} />
+              <Route path="/content/:id" element={<Content />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>

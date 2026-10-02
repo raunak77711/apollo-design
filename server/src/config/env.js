@@ -32,6 +32,11 @@ export const config = {
   },
   transcriptsDir: path.resolve(__dirname, '../../storage/transcripts'),
 
+  // Content Factory sessions (long-form recordings and what is derived from them).
+  content: {
+    maxUploadBytes: (Number(process.env.CONTENT_MAX_UPLOAD_GB) || 20) * 1024 ** 3,
+  },
+
   ai: {
     provider: process.env.AI_PROVIDER || 'deepseek',
     deepseek: {
