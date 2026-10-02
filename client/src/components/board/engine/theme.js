@@ -46,14 +46,14 @@ export const FONT_PROBES = [
   '600 16px "Source Serif 4"', 'italic 600 16px "Source Serif 4"',
 ];
 
-const PAD_TOP = [280, 240, 200, 160, 120];
-const PAD_BOTTOM = [280, 240, 200, 160, 120];
-const GAP = [150, 120, 96, 76, 60];
+const PAD_TOP = [220, 180, 150, 120, 90];
+const PAD_BOTTOM = [220, 180, 150, 120, 90];
+const GAP = [120, 96, 76, 60, 48];
 
 /** Density 1 is airy, 5 is tight — the "simple → chaos → simple" arc lives here and in the block choices. */
 export function spacingFor(density) {
   const i = Math.min(5, Math.max(1, Math.round(density) || 3)) - 1;
-  return { padTop: PAD_TOP[i], padBottom: PAD_BOTTOM[i], gap: GAP[i], minHeight: 1000 };
+  return { padTop: PAD_TOP[i], padBottom: PAD_BOTTOM[i], gap: GAP[i], minHeight: 780 };
 }
 
 export const font = (overrides = {}) => ({

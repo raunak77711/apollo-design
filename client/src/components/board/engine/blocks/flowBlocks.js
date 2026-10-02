@@ -9,6 +9,7 @@ import { boxItem, textItem } from './common.js';
  * away takes its arrows with it.
  */
 
+const COLUMN_MAX = 7;
 const COLUMN = { hero: { size: 64, gap: 100, note: 26 }, normal: { size: 40, gap: 76, note: 22 }, small: { size: 24, gap: 48, note: 16 } };
 const NODE = { hero: { size: 34, pad: 24 }, normal: { size: 26, pad: 20 }, small: { size: 18, pad: 14 } };
 
@@ -68,17 +69,25 @@ function layoutColumn(block, { measure, id }) {
 }
 
 function layoutRow(block, { measure, id }) {
-  const cfg = NODE[block.scale] || NODE.normal;
   const n = block.steps.length;
-  const perRow = block.scale === 'small' ? 5 : 4;
+  // A long chain at hero size is a wall of shouting: past seven steps the type steps down.
+  const scale = block.scale === 'hero' && n > 7 ? 'normal' : block.scale;
+  const cfg = NODE[scale] || NODE.normal;
+  const perRow = scale === 'small' || n > 12 ? 5 : 4;
   const cols = Math.min(perRow, n);
   const gapX = 64;
   const rowGap = 96;
-  const nodeW = Math.min(240, Math.floor((1000 - (cols - 1) * gapX) / cols));
-  const labelWidth = nodeW - cfg.pad * 2;
   const labelFont = font({ family: 'DM Sans', size: cfg.size, weight: 700, lineHeight: 1.15 });
+  // A box is never narrower than its longest word, or the word spills out of it.
+  const longestWord = Math.max(...block.steps.flatMap((s) => s.label.split(/\s+/).map((w) => Math.ceil(measure(w, labelFont, 1000).w))));
+  const nodeW = Math.min(
+    Math.max(240, longestWord + cfg.pad * 2 + 8),
+    Math.floor((1180 - (cols - 1) * gapX) / cols)
+  );
+  const labelWidth = nodeW - cfg.pad * 2;
   const nodeH = Math.max(...block.steps.map((s) => Math.ceil(measure(s.label, labelFont, labelWidth).h))) + cfg.pad * 2 + 8;
   const rows = Math.ceil(n / perRow);
+  const up = block.direction === 'up'; // a climb still starts at the bottom when it is folded into rows
   const fullW = cols * nodeW + (cols - 1) * gapX;
 
   // Serpentine: rows alternate direction, and a new row starts in the slot the
@@ -91,7 +100,7 @@ function layoutRow(block, { measure, id }) {
     const color = toneColor(step.tone || block.tone);
     return boxItem({
       id: `${id}.n${i + 1}`, cx: CX - fullW / 2 + nodeW / 2 + slot * (nodeW + gapX),
-      cy: Math.floor(i / perRow) * (nodeH + rowGap) + nodeH / 2, w: nodeW, h: nodeH, radius: 18,
+      cy: (up ? rows - 1 - Math.floor(i / perRow) : Math.floor(i / perRow)) * (nodeH + rowGap) + nodeH / 2, w: nodeW, h: nodeH, radius: 18,
       stroke: color, strokeWidth: 3, label: step.label, labelFont, labelColor: color, pad: cfg.pad, labelWidth,
     });
   });
@@ -100,7 +109,9 @@ function layoutRow(block, { measure, id }) {
 }
 
 export function layoutFlow(block, ctx) {
-  return block.direction === 'right' ? layoutRow(block, ctx) : layoutColumn(block, ctx);
+  // Seven steps is as tall as a column can get before the board becomes a long corridor: fold longer chains into rows.
+  const folded = block.direction === 'right' || block.steps.length > COLUMN_MAX;
+  return folded ? layoutRow(block, ctx) : layoutColumn(block, ctx);
 }
 
 /* -------------------------------- timeline -------------------------------- */

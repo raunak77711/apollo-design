@@ -16,7 +16,7 @@ const CHAT_TIMEOUT_MS = 45_000;
 const CONVERSE_TIMEOUT_MS = 120_000;
 const CONVERSE_MAX_TOKENS = 4000;
 
-const BOARD_TIMEOUT_MS = 90_000;
+const BOARD_TIMEOUT_MS = 150_000;
 
 /**
  * DeepSeek-backed provider, used for two very different jobs.
@@ -186,7 +186,7 @@ export class DeepSeekProvider extends AIProvider {
     };
   }
 
-  async completeJSON({ system, user, temperature = 0.5, maxTokens = 3500, signal, timeoutMs = BOARD_TIMEOUT_MS }) {
+  async completeJSON({ system, user, temperature = 0.5, maxTokens = 6500, signal, timeoutMs = BOARD_TIMEOUT_MS }) {
     const parsed = await this.chat({ system, user, temperature, maxTokens, signal, timeoutMs });
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
   }

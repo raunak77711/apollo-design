@@ -106,8 +106,14 @@ export function createRenderer(fabric, canvas, { objectById = () => null } = {})
 
   function makePoly(item) {
     const poly = new fabric.Polygon(item.points.map(([x, y]) => ({ x, y })), {
-      fill: item.fill, originX: 'center', originY: 'center', left: 0, top: 0,
+      fill: item.fill, stroke: item.stroke || null, strokeWidth: item.stroke ? item.strokeWidth || 2 : 0, strokeUniform: true,
+      strokeLineJoin: 'round', originX: 'center', originY: 'center', left: 0, top: 0,
     });
+    if (!item.label) {
+      // A shape with no words on it (a bucket, a splash of water) is the polygon itself.
+      poly.set({ left: item.cx, top: item.cy, data: data(item) });
+      return poly;
+    }
     const label = new fabric.Textbox(item.label, {
       ...textboxOptions(item.labelFont, item.labelWidth),
       fill: item.labelColor, originX: 'center', originY: 'center', left: 0, top: 0, selectable: false, evented: false,

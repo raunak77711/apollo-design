@@ -89,7 +89,7 @@ function placement(op) {
   }
   if (typeof op.section === 'string' && SECTION_RE.test(op.section)) out.section = op.section;
   const x = num(op.x, -5000, 6000);
-  const y = num(op.y, -5000, 60000);
+  const y = num(op.y, -5000, 200000);
   if (x !== null) out.x = x;
   if (y !== null) out.y = y;
   return out;
@@ -192,12 +192,12 @@ export function validateBoardOperation(op) {
     case 'ADD_ARROW': {
       const from = idOf(op.from);
       const to = idOf(op.to);
-      const hasCoords = ['x1', 'y1', 'x2', 'y2'].every((k) => num(op[k], -5000, 60000) !== null);
+      const hasCoords = ['x1', 'y1', 'x2', 'y2'].every((k) => num(op[k], -5000, 200000) !== null);
       if (!(from && to) && !hasCoords) return fail('ADD_ARROW needs from/to ids, or x1 y1 x2 y2');
       const out = { type: op.type, dashed: op.dashed === true, tone: TONES.includes(op.tone) ? op.tone : 'problem' };
       if (from && to) Object.assign(out, { from, to });
       else {
-        for (const k of ['x1', 'y1', 'x2', 'y2']) out[k] = num(op[k], -5000, 60000);
+        for (const k of ['x1', 'y1', 'x2', 'y2']) out[k] = num(op[k], -5000, 200000);
         if (typeof op.section === 'string' && SECTION_RE.test(op.section)) out.section = op.section;
       }
       return { ok: true, op: out };

@@ -16,10 +16,10 @@ import { BLOCK_TYPES, LIMITS, TONES } from './schema.js';
 /** One example per block type. A block type added to the schema must appear here (a test checks). */
 export const BLOCK_SHAPES = {
   title: '{"type":"title","text":"YOUR WEBSITE\\nIS LOSING\\nYOU SALES","size":"xl"|"l"|"m","eyebrow":"optional small label","tone":"ink"}',
-  statement: '{"type":"statement","text":"the claim the video lands on","emphasis":"loud"|"quiet","tone":"problem"}',
+  statement: '{"type":"statement","text":"the claim the video lands on","emphasis":"loud"|"quiet"|"inverse","tone":"problem"}   // "inverse" = a black band: the ONE punchline of a section',
   bigtype: '{"type":"bigtype","text":"8:47 PM","caption":"optional line under it","tone":"ink"}',
   quote: '{"type":"quote","text":"\\"Do you service commercial properties?\\"","attribution":"optional, e.g. 10:30 PM"}',
-  flow: '{"type":"flow","direction":"down"|"up"|"right","scale":"hero"|"normal"|"small","tone":"money","steps":[{"label":"GOOGLE","note":"optional","tone":"optional"}]}   // 2-9 steps',
+  flow: '{"type":"flow","direction":"down"|"up"|"right","scale":"hero"|"normal"|"small","tone":"money","steps":[{"label":"GOOGLE","note":"optional","tone":"optional"}]}   // 2-14 steps',
   hub: '{"type":"hub","center":"BROWSER","links":"spokes"|"spokes+cross","tone":"tech","nodes":[{"label":"HTML"}]}   // 3-12 nodes',
   cards: '{"type":"cards","columns":2|3|4,"tone":"problem","items":[{"label":"Phone isn\'t clickable","tag":"LEAK","tone":"problem"}]}   // 2-12 items',
   compare: '{"type":"compare","left":{"heading":"GENERIC AI","tone":"tech","steps":[{"label":"QUESTION"}],"footnote":"optional"},"right":{"heading":"BUSINESS AI","tone":"money","steps":[{"label":"QUESTION"}]}}   // 1-7 steps a side',
@@ -28,6 +28,11 @@ export const BLOCK_SHAPES = {
   timeline: '{"type":"timeline","direction":"right"|"down","tone":"problem","events":[{"when":"8:47 PM","label":"Form submitted"}]}   // 2-8 events',
   funnel: '{"type":"funnel","tone":"money","stages":[{"label":"Searches","value":"1,000"}]}   // 3-7 stages, widest first',
   browser: '{"type":"browser","url":"example.com","title":"optional","note":"optional","placeholder":"screenshot"|"blank"}',
+  equation: '{"type":"equation","terms":["ATTENTION","CONVERSION","VALUE"],"operator":"×"|"+"|"−"|"÷","result":"REVENUE","tone":"ink","resultTone":"money"}   // 2-6 terms, drawn as one line of chips ending in the result',
+  loop: '{"type":"loop","center":"optional label in the middle","tone":"movement","nodes":[{"label":"ATTENTION"}]}   // 3-8 nodes in a CYCLE: the last arrow returns to the first, so never repeat the first node at the end',
+  matrix: '{"type":"matrix","columns":["FEATURE","PROBLEM","VALUE"],"tones":["tech","problem","money"],"rows":[["Booking","Too much back-and-forth","Faster appointments"]]}   // 2-4 columns, 1-8 rows; each row reads left to right with arrows between cells',
+  bucket: '{"type":"bucket","top":"TRAFFIC","bottom":"CUSTOMERS","tone":"problem","leaks":[{"label":"SLOW"}]}   // a bucket with a labelled hole per leak; 2-9 leaks',
+  list: '{"type":"list","tone":"ink","items":[{"label":"ACQUISITION","detail":"How do people find us?"}]}   // 2-8 numbered items, each with an optional one-line detail',
 };
 
 const VOCABULARY = BLOCK_TYPES.map((type) => BLOCK_SHAPES[type]).join('\n');
@@ -49,18 +54,25 @@ The brief mixes several kinds of text. Only ONE kind becomes sections:
 - Instructions about a tool or interface: toolbars, shortcuts, file names, storage, testing, "build me an HTML page", how software should behave. IGNORE these completely.
 - Visual style guidance (white theme, typography, restraint, "premium"). IGNORE it: the board's look is built in.
 
-Follow the brief's own chapter structure. If chapters are numbered, keep their numbering and order. If it has none, split the narrative into 6-14 sections at natural beats. Never more than ${LIMITS.sections}.
+A brief is often a SCRIPT with two voices: a spoken track (marked CAMERA, VOICEOVER, NARRATION, or just plain prose the creator will say) and a visual track (marked CANVAS, ON SCREEN, BOARD, DRAW, WRITE, SHOW, with code blocks, arrows and diagrams). The board shows the visual track. A script's headings are its sections: "OPEN", "SCENE 4 — FOLLOW ONE CUSTOMER", "CLOSING". Every such heading is one section, even when its visual track is empty (the creator is just talking), so that the board keeps pace with the video.
+
+Follow the brief's own chapter structure and order. If chapters are numbered, keep their numbering. If it has none, split the narrative into 6-14 sections at natural beats. Never more than ${LIMITS.sections}.
 
 Return ONLY a JSON object:
 {
-  "title": "the video's title",
+  "title": "the video's title, in normal title case",
   "audience": "who it is for, a short phrase",
   "sections": [
-    { "title": "SHORT SECTION TITLE, ${LIMITS.label} characters at most", "beat": "one sentence: what this section makes the viewer feel or understand", "density": 1 }
+    {
+      "kicker": "the marker a viewer sees above the title: \\"OPEN\\", \\"SCENE 4\\", \\"CLOSING\\" — copied from the heading, empty if the heading has none",
+      "title": "SHORT SECTION TITLE without the marker, ${LIMITS.label} characters at most, e.g. FOLLOW ONE CUSTOMER",
+      "beat": "one sentence: what the viewer should feel or understand here",
+      "density": 1
+    }
   ]
 }
 
-density is 1-5 and follows the video's arc: a section that opens or resolves the story is sparse (1-2); the middle builds (3-4); the section the brief describes as chaotic, exploding or the biggest visual moment is 5. If the brief describes a progression such as "simple, then complex, then chaos, then simplified", make the densities follow it.`;
+density is 1-5 and says how much there is to look at: 1 = the creator is just talking (no canvas cues) or a single huge line; 2 = one short flow or one statement; 3 = one diagram (a flow, a comparison, a list); 4 = a rich diagram (a bucket, a loop, a matrix, a hub); 5 = the section the brief calls chaotic, exploding or the biggest visual moment. If the brief describes a progression such as "simple, then complex, then chaos, then simplified", make the densities follow it.`;
 
 export function buildOutlinePrompt(brief) {
   return {
@@ -71,44 +83,58 @@ export function buildOutlinePrompt(brief) {
 
 /* -------------------------------- sections -------------------------------- */
 
-const SECTION_SYSTEM = `You build ONE section of a visual board for a video essay. The creator will screen-record themselves scrolling down this board and talking, so every section must work as a big, sparse, readable picture — not a slide of bullet points.
+const SECTION_SYSTEM = `You build ONE section of a visual board for a video essay. The creator will screen-record themselves scrolling down this board and talking, so every section must work as a big, sparse, readable picture that the creator can point at while they speak. It is a canvas, not a slide of bullet points.
 
-You are given the creator's whole brief, then told which section to build. Build ONLY that section. The brief mixes real content with instructions about a tool, a toolbar, shortcuts, saving, or visual style: ignore all of that; it is not content.
+You are given the creator's whole brief, then told which section to build. Build ONLY that section. Ignore anything in the brief about a tool, a toolbar, shortcuts, saving, or visual style: that is not content.
 
-Return ONLY a JSON object: { "blocks": [ ... ] } — between 2 and ${LIMITS.blocks} blocks, in reading order, top to bottom.
+TWO VOICES, ONE BOARD
+A brief is often a script with two tracks. The SPOKEN track (CAMERA, VOICEOVER, NARRATION, or plain prose) is what the creator will SAY. The VISUAL track (CANVAS, ON SCREEN, BOARD, DRAW, WRITE, SHOW, code blocks, arrows, "Left:/Right:", "Two columns", "One by one") is what the board SHOWS. The board is the visual track.
+1. The visual track is the section's content. Build exactly what it describes, in its order, using its words verbatim.
+2. The spoken track is context. NEVER put narration sentences on the board. At most ONE short line from it may appear as a punchline (a statement of 12 words or fewer, copied word for word, the line the section lands on) — and only if the visual track has no punchline of its own.
+3. A section whose visual track is empty (the creator is only talking) is just: a title, plus at most one punchline, plus — when the narration reels off a list of nouns — one cards block of those nouns. Two or three blocks. No more.
+4. Never show the same idea twice in different forms. One diagram per idea.
+
+Return ONLY a JSON object: { "blocks": [ ... ] } — usually 2-4 blocks (at most ${LIMITS.blocks}), in reading order, top to bottom.
 
 BLOCK VOCABULARY (use only these; this is the JSON shape of each):
 ${VOCABULARY}
 
-TONES are colour roles — never write hex codes. Use: ${TONES.join(', ')}.
-- money: revenue, customers, things that work, the good path.
-- problem: leaks, failures, losses, the bad path.
-- movement: the customer's journey, traffic, steps in motion.
-- tech: infrastructure, code, secondary technical detail.
-- ink: neutral headlines and plain statements.
-- solution: the resolved end state.
+MATCH THE VISUAL TO THE CUE
+- "Write: # X" → title (a numeral, a time or a price → bigtype). A word like "SUCCESS!" → statement, loud, tone money.
+- A code block of steps joined by ↓ or → → flow. Long chains are fine: the board lays more than seven steps out in a compact snake by itself. "up" climbs toward a goal (first step at the bottom); "right" is for chains of 2-5 steps.
+- Terms joined by operators (ATTENTION × CONVERSION × VALUE = REVENUE; 1,000 VISITORS × 2% = 20 LEADS) → equation. Never put an equation in a title.
+- "Draw a bucket", holes, leaks, labels on holes → bucket.
+- A funnel that "turns into a circle", or a chain whose last step feeds the first → loop.
+- "Create three columns … populate" with rows of cells → matrix, one row per line.
+- "Two columns", "Left:/Right:", before and after → compare. A panel of editable and locked fields → panels.
+- Several numbered headings, each with a sentence beneath → list.
+- A plain list of words with no arrows → cards (tag "LEAK" when the brief calls them problems or holes). Items joined to a hub or "everything connected to X" → hub.
+- "One by one" headings → one statement per heading, loud, ink.
+- A day-by-day or time sequence ("Branch: DAY 1 / DAY 3 / DAY 7") → timeline. A narrowing pipeline with counts → funnel. A web page the creator will drop a screenshot into → browser.
+- "Beside CLICK: $5" → put the $5 in that step's note.
+- A spoken customer line in quotes → quote. A snippet of code or a metric list → code (always subordinate).
 
-CHOOSING A FORM FROM THE BRIEF'S PROSE
-- "A ↓ B ↓ C", "A → B → C" or a numbered journey → flow. Direction "up" for a funnel that climbs toward a goal (the FIRST step is drawn at the bottom), "right" for short left-to-right chains of 2-5 steps, "down" otherwise. scale "hero" for the one journey that IS the section; "small" for a technical detail the brief says to keep subordinate.
-- A network, dependency graph, architecture, or "everything connected to X" → hub. links "spokes+cross" when the point is tangled chaos, "spokes" otherwise.
-- A grid of small labelled things, "leak cards", supporting elements → cards. Use a tag such as "LEAK" when the brief tags them.
-- "versus", "generic … versus business …", before and after → compare.
-- A panel with editable and locked fields → panels.
-- One dominant clock, price or number such as "8:47 PM" or "$1,500" → bigtype.
-- A spoken customer line or a quoted question → quote.
-- A big claim the video lands on → statement: "loud" for the claim, "quiet" for a follow-up line.
-- A code snippet or a metric list such as LCP · TBT → code (always visually subordinate).
-- A sequence with times → timeline. A narrowing pipeline with counts → funnel. A picture of a web page or a screenshot the creator will drop in → browser.
-- Open the section with a title or statement, unless the brief opens it with a bigtype.
+TONE DISCIPLINE
+Tones are colour roles — never write hex codes: ${TONES.join(', ')}. Colour carries meaning; most of a board is ink.
+- ink: titles, plain statements, neutral flows. This is your default.
+- problem: ONLY leaks, failures, losses and the bad path. Never a whole section out of habit.
+- money: results, customers, revenue, the good path.
+- movement: the customer's journey and traffic. tech: infrastructure and secondary detail. solution: a resolved end state.
+- When a section contrasts bad with good, use problem against money. Use at most two tones per section besides ink.
+
+EMPHASIS
+- A statement is "loud" for a claim, "quiet" for a follow-up, and "inverse" (a black band) for THE punchline. Use inverse once per section at most, and not on every section.
+- Do not use a title's "eyebrow": the board already prints the scene marker above each section.
+- Titles are short (one to four lines). Prefer the brief's own capitalisation.
 
 FIDELITY
-- Copy quoted strings and explicit flow labels from the brief EXACTLY, including capitalisation, punctuation and emoji. Prefer the brief's own words for labels.
+- Copy quoted strings, labels and flow steps from the brief EXACTLY, including capitalisation, punctuation and emoji.
 - Never invent statistics, prices, company names, testimonials or claims that are not in the brief.
-- If the brief says a product or brand should be introduced subtly, keep it a small title (size "m") or a code block, never a hero.
+- If the brief says a product or brand should be introduced subtly, keep it a small title (size "m"), never a hero.
 
 RULES
 - Labels at most ${LIMITS.label} characters, statements at most ${LIMITS.statement}, code at most ${LIMITS.code}.
-- Match the density you are given: 1 is one or two blocks with generous space; 3 is a normal section; 5 is dense — several diagrams, many nodes.
+- Match the density you are given: 1 is a title and at most one line; 3 is one diagram; 5 is dense, many parts on screen.
 - No markdown, no commentary, no code fences. JSON only.`;
 
 export function buildSectionPrompt({ brief, outline, index, note = '', issues = [] }) {
@@ -121,7 +147,7 @@ export function buildSectionPrompt({ brief, outline, index, note = '', issues = 
     `BRIEF:\n${brief}`,
     '---',
     `Video: ${outline.title}${outline.audience ? ` — for ${outline.audience}` : ''}`,
-    `Build section ${index + 1} of ${total}: "${entry.title}"`,
+    `Build section ${index + 1} of ${total}: "${entry.title}"${entry.kicker ? ` (marker: ${entry.kicker})` : ''}`,
     entry.beat ? `What this section is for: ${entry.beat}` : '',
     `Density: ${entry.density}/5 (${DENSITY_WORDS[entry.density] || DENSITY_WORDS[3]})`,
     previous ? `Previous section: "${previous}"` : 'This is the first section.',

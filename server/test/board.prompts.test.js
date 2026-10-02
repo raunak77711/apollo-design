@@ -54,6 +54,6 @@ test('the outline prompt tells the model to ignore tool and style instructions',
   const { system, user } = buildOutlinePrompt(BRIEF);
   assert.match(system, /IGNORE/);
   assert.match(system, /toolbar/i);
-  assert.match(system, /never more than 20/i);
+  assert.match(system, /never more than \d+/i);
   assert.ok(user.startsWith(`BRIEF:\n${BRIEF}`));
 });

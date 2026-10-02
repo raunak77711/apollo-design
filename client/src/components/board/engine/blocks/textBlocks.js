@@ -34,7 +34,27 @@ export function layoutTitle(block, { measure, id }) {
   return { items, w: FIT_W, h };
 }
 
-export function layoutStatement(block, { measure, id }) {
+/** The punchline: white words on a black band, so it reads from across the room and on a thumbnail. */
+function layoutInverse(block, { measure, id }) {
+  const W = 860;
+  const pad = 48;
+  const base = font({ weight: 900, lineHeight: 1.12, letterSpacing: 10 });
+  const size = fitSize(measure, block.text, base, W - pad * 2, [52, 48, 44, 40, 36, 32], 4);
+  const labelFont = { ...base, size };
+  const h = Math.ceil(measure(block.text, labelFont, W - pad * 2).h) + 76;
+  return {
+    items: [boxItem({
+      id: `${id}.text`, cx: CX, cy: h / 2, w: W, h, radius: 22, fill: '#0a0a0a', stroke: '#0a0a0a', strokeWidth: 0,
+      label: block.text, labelFont, labelColor: '#ffffff', pad, labelWidth: W - pad * 2,
+    })],
+    w: W,
+    h,
+  };
+}
+
+export function layoutStatement(block, ctx) {
+  if (block.emphasis === 'inverse') return layoutInverse(block, ctx);
+  const { measure, id } = ctx;
   const loud = block.emphasis === 'loud';
   const base = font({ weight: loud ? 900 : 700, lineHeight: 1.12, letterSpacing: loud ? 10 : 0 });
   const sizes = loud ? [56, 52, 48, 44, 40, 36] : [40, 36, 32, 28];

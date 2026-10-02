@@ -91,7 +91,7 @@ test('normalizeSection reports a missing headline block', () => {
 });
 
 test('normalizeSection caps blocks per section', () => {
-  const blocks = Array.from({ length: 14 }, () => SAMPLES.statement);
+  const blocks = Array.from({ length: 16 }, () => SAMPLES.statement);
   const { section, issues } = normalizeSection({ title: 'x', blocks }, 0);
   assert.equal(section.blocks.length, LIMITS.blocks);
   assert.equal(issues.length, 4);
@@ -141,4 +141,51 @@ test('normalizeBoard re-indexes after dropping empty sections', () => {
   assert.equal(board.version, 1);
   assert.equal(normalizeBoard({ sections: [] }), null);
   assert.equal(normalizeBoard('x'), null);
+});
+
+test('equation: terms, a normalised operator, and an optional result', () => {
+  const b = normalizeBlock({ type: 'equation', terms: ['A', { label: 'B' }, ''], operator: 'x', result: 'C' });
+  assert.deepEqual(b.terms, ['A', 'B']);
+  assert.equal(b.operator, '×');
+  assert.equal(b.result, 'C');
+  assert.equal(b.resultTone, 'money');
+  assert.equal(normalizeBlock({ type: 'equation', terms: ['A'] }), null);
+  assert.equal(normalizeBlock({ type: 'equation', terms: ['A', 'B'], operator: '-' }).operator, '−');
+  assert.equal('result' in normalizeBlock({ type: 'equation', terms: ['A', 'B'] }), false);
+});
+
+test('loop needs three nodes; the centre is optional', () => {
+  assert.equal(normalizeBlock({ type: 'loop', nodes: ['a', 'b'] }), null);
+  const b = normalizeBlock({ type: 'loop', center: 'LOOP', steps: ['a', 'b', 'c'] });
+  assert.deepEqual(b.nodes, [{ label: 'a' }, { label: 'b' }, { label: 'c' }]);
+  assert.equal(b.center, 'LOOP');
+});
+
+test('matrix pads short rows, drops empty ones, and gives each column a tone', () => {
+  const b = normalizeBlock({ type: 'matrix', columns: ['A', 'B', 'C'], tones: ['tech', 'nope'], rows: [['1', '2'], [], ['x', 'y', 'z', 'extra'], { cells: ['p', 'q', 'r'] }] });
+  assert.deepEqual(b.rows, [['1', '2', ''], ['x', 'y', 'z'], ['p', 'q', 'r']]);
+  assert.deepEqual(b.tones, ['tech', 'ink', 'ink']);
+  assert.equal(normalizeBlock({ type: 'matrix', columns: ['A'], rows: [['1']] }), null);
+  assert.equal(normalizeBlock({ type: 'matrix', columns: ['A', 'B'], rows: [] }), null);
+});
+
+test('bucket keeps its leaks and defaults to the problem tone', () => {
+  const b = normalizeBlock({ type: 'bucket', top: 'TRAFFIC', holes: ['SLOW', 'NO TRUST'] });
+  assert.deepEqual(b.leaks, [{ label: 'SLOW' }, { label: 'NO TRUST' }]);
+  assert.equal(b.tone, 'problem');
+  assert.equal(normalizeBlock({ type: 'bucket', leaks: ['one'] }), null);
+});
+
+test('list needs two items and keeps details', () => {
+  const b = normalizeBlock({ type: 'list', items: [{ label: 'A', detail: 'why' }, 'B', ''] });
+  assert.deepEqual(b.items, [{ label: 'A', detail: 'why' }, { label: 'B' }]);
+  assert.equal(normalizeBlock({ type: 'list', items: ['only'] }), null);
+});
+
+test('statements may be inverse; sections and outlines carry a kicker', () => {
+  assert.equal(normalizeBlock({ type: 'statement', text: 'x', emphasis: 'inverse' }).emphasis, 'inverse');
+  const { section } = normalizeSection({ title: 'T', kicker: 'SCENE 3', blocks: [SAMPLES.title] }, 2);
+  assert.equal(section.kicker, 'SCENE 3');
+  assert.equal(normalizeOutline({ sections: [{ title: 'T', kicker: 'OPEN' }] }).sections[0].kicker, 'OPEN');
+  assert.equal(degradedSection(0, { title: 'T', kicker: 'OPEN' }).kicker, 'OPEN');
 });

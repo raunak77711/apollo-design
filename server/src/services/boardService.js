@@ -16,7 +16,7 @@ import { buildEditPrompt, buildOutlinePrompt, buildSectionPrompt } from '../desi
  */
 
 export const BRIEF_MIN = 40;
-export const BRIEF_MAX = 60_000;
+export const BRIEF_MAX = 120_000;
 const CONCURRENCY = 4;
 const FATAL_STATUSES = new Set([401, 402, 403]);
 
@@ -56,7 +56,7 @@ export const isUsable = (section) =>
 
 async function generateOutline({ brief, provider, signal }) {
   throwIfAborted(signal);
-  const raw = await provider.completeJSON({ ...buildOutlinePrompt(brief), temperature: 0.3, maxTokens: 1800, signal });
+  const raw = await provider.completeJSON({ ...buildOutlinePrompt(brief), temperature: 0.3, maxTokens: 4500, signal });
   const outline = normalizeOutline(raw);
   if (!outline) {
     throw new BoardError(
@@ -84,7 +84,7 @@ export async function generateSection({ brief, outline, index, note = '', provid
       const raw = await provider.completeJSON({
         ...buildSectionPrompt({ brief, outline, index, note, issues }),
         temperature: attempt === 0 ? 0.5 : 0.3,
-        maxTokens: 3500,
+        maxTokens: 6500,
         signal,
       });
       const { section, issues: found } = normalizeSection({ ...entry, blocks: raw?.blocks }, index);
@@ -140,9 +140,9 @@ export async function generateBoard({ brief, provider = getAIProvider(), signal,
 export const EDIT_MIN_CHARS = 3;
 export const EDIT_MAX_CHARS = 600;
 const MAX_EDIT_OPS = 40;
-const RAW_CONTEXT_CHARS = 500_000; //  refuse to even walk something absurd
-const MAX_CONTEXT_CHARS = 90_000; //   what may actually reach the model (roughly 25k tokens)
-const CAPS = { sections: 20, blocks: 12, parts: 30, annotations: 60, selection: 30, label: 80 };
+const RAW_CONTEXT_CHARS = 900_000; //  refuse to even walk something absurd
+const MAX_CONTEXT_CHARS = 140_000; //  what may actually reach the model (roughly 35k tokens)
+const CAPS = { sections: 40, blocks: 12, parts: 30, annotations: 60, selection: 30, label: 80 };
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 

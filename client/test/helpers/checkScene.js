@@ -8,7 +8,7 @@ export function checkScene(scene) {
   let y = 0;
   for (const s of scene.sections) {
     assert.equal(s.y, y, `section ${s.id} should start where the last ended`);
-    assert.ok(s.height >= 1000, 'sections have a minimum height');
+    assert.ok(s.height >= 780, 'sections have a minimum height');
     y += s.height;
   }
   assert.equal(scene.height, y);

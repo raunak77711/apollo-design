@@ -87,14 +87,14 @@ test('a fatal provider error propagates', async () => {
 test('sanitizeEditContext never lets pixel data or huge lists reach the model', () => {
   const dirty = {
     title: 'T',
-    sections: Array.from({ length: 30 }, (_, i) => ({
+    sections: Array.from({ length: 50 }, (_, i) => ({
       id: `s${i + 1}`, title: 'x'.repeat(300),
       blocks: [{ id: `s${i + 1}.b1`, type: 'flow', parts: Array.from({ length: 80 }, (__, j) => ({ id: `s${i + 1}.b1.n${j}`, label: 'data:image/png;base64,AAAA' })) }],
     })),
     annotations: Array.from({ length: 100 }, (_, i) => ({ id: `a_${i}`, kind: 'text', section: 's1', label: 'data:image/png;base64,BBBB' })),
   };
   const { outline: clean, selection } = sanitizeEditContext(dirty, Array.from({ length: 50 }, (_, i) => `a_${i}`));
-  assert.equal(clean.sections.length, 20);
+  assert.equal(clean.sections.length, 40);
   assert.equal(clean.sections[0].blocks[0].parts.length, 30);
   assert.equal(clean.annotations.length, 60);
   assert.equal(selection.length, 30);
@@ -105,11 +105,11 @@ test('sanitizeEditContext never lets pixel data or huge lists reach the model', 
 test('sanitizeEditContext rejects a context that is not an outline or is enormous', () => {
   assert.throws(() => sanitizeEditContext('nope', []), (e) => e.status === 400);
   assert.throws(() => sanitizeEditContext({ sections: 'x' }, []), (e) => e.status === 400);
-  const enormous = { sections: [{ id: 's1', title: 't', blocks: [] }], annotations: [], padding: 'x'.repeat(600000) };
+  const enormous = { sections: [{ id: 's1', title: 't', blocks: [] }], annotations: [], padding: 'x'.repeat(1000000) };
   assert.throws(() => sanitizeEditContext(enormous, []), (e) => e.status === 400);
   const wide = {
     title: 'T',
-    sections: Array.from({ length: 20 }, (_, i) => ({
+    sections: Array.from({ length: 10 }, (_, i) => ({
       id: `s${i + 1}`, title: 't',
       blocks: Array.from({ length: 12 }, (__, j) => ({
         id: `s${i + 1}.b${j + 1}`, type: 'flow',

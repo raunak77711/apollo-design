@@ -37,7 +37,7 @@ export function sanitizeSpec(raw) {
   const keepIds = givenIds.every((id) => /^s\d{1,2}$/.test(id)) && new Set(givenIds).size === givenIds.length;
 
   const sections = cleaned.map(({ rs, blocks }, i) => {
-    const meta = normalizeSection({ title: rs.title, beat: rs.beat, density: rs.density, degraded: rs.degraded, blocks: [] }, i).section;
+    const meta = normalizeSection({ title: rs.title, beat: rs.beat, density: rs.density, kicker: rs.kicker, degraded: rs.degraded, blocks: [] }, i).section;
     const id = keepIds ? rs.id : `s${i + 1}`;
     const out = { ...meta, id, blocks: [] };
     const used = new Set();
@@ -153,7 +153,7 @@ export function parseBoardFile(text) {
       title: spec.title,
       createdAt: typeof board.createdAt === 'number' ? board.createdAt : now,
       updatedAt: now,
-      brief: typeof board.brief === 'string' ? board.brief.slice(0, 60000) : '',
+      brief: typeof board.brief === 'string' ? board.brief.slice(0, 120000) : '',
       spec,
       overrides: cleanOverrides(board.overrides),
       annotations,

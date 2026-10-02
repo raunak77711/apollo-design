@@ -35,4 +35,15 @@ export const SAMPLES = {
     stages: [{ label: 'Searches', value: '1,000' }, { label: 'Clicks', value: '120' }, { label: 'Leads', value: '12' }, { label: 'Customers', value: '4' }],
   },
   browser: { type: 'browser', url: 'example.com', title: 'Your homepage', placeholder: 'screenshot' },
+  equation: { type: 'equation', terms: ['ATTENTION', 'CONVERSION', 'VALUE'], operator: '×', result: 'REVENUE' },
+  loop: { type: 'loop', center: 'THE SALES LOOP', nodes: ['ATTENTION', 'LEAD', 'CUSTOMER', 'RESULT', 'REVIEW', 'REFERRAL'] },
+  matrix: {
+    type: 'matrix', columns: ['FEATURE', 'PROBLEM', 'VALUE'], tones: ['tech', 'problem', 'money'],
+    rows: [['Booking', 'Too much back-and-forth', 'Faster appointments'], ['Lead routing', 'Slow response', 'Faster contact'], ['Analytics', "Don't know what works", 'Better decisions']],
+  },
+  bucket: { type: 'bucket', top: 'TRAFFIC', bottom: 'CUSTOMERS', leaks: ['SLOW', 'CONFUSING', 'NO TRUST', 'BAD CTA', 'LONG FORM', 'SLOW RESPONSE', 'NO FOLLOW-UP'] },
+  list: {
+    type: 'list',
+    items: [{ label: 'ACQUISITION', detail: 'How do people find us?' }, { label: 'CLARITY', detail: 'Do they immediately understand what we do?' }, { label: 'TRUST', detail: 'Why should they believe us?' }],
+  },
 };

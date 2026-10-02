@@ -18,14 +18,15 @@ export const TONES = ['ink', 'money', 'problem', 'movement', 'tech', 'solution']
 export const BLOCK_TYPES = [
   'title', 'statement', 'bigtype', 'quote', 'flow', 'hub', 'cards',
   'compare', 'panels', 'code', 'timeline', 'funnel', 'browser',
+  'equation', 'loop', 'matrix', 'bucket', 'list',
 ];
 
 /** A section without one of these has nothing to say out loud and is sent back for repair. */
 export const HEADLINE_TYPES = ['title', 'statement', 'bigtype'];
 
 export const LIMITS = {
-  sections: 20,
-  blocks: 10,
+  sections: 40,
+  blocks: 12,
   label: 60,
   note: 80,
   statement: 140,
@@ -33,7 +34,7 @@ export const LIMITS = {
   bigtype: 24,
   title: 80,
   beat: 200,
-  flowSteps: [2, 9],
+  flowSteps: [2, 14],
   hubNodes: [3, 12],
   cards: [2, 12],
   compareSteps: [1, 7],
@@ -41,6 +42,13 @@ export const LIMITS = {
   funnel: [3, 7],
   panels: [1, 3],
   rows: [1, 8],
+  equationTerms: [2, 6],
+  loopNodes: [3, 8],
+  matrixCols: [2, 4],
+  matrixRows: [1, 8],
+  bucketLeaks: [2, 9],
+  listItems: [2, 8],
+  kicker: 24,
 };
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -87,6 +95,9 @@ function steps(raw, [min, max]) {
   return out.length >= min ? out : null;
 }
 
+const OPERATORS = { '×': '×', x: '×', X: '×', '*': '×', '+': '+', '−': '−', '-': '−', '÷': '÷', '/': '÷', '=': '=', '→': '→' };
+const operatorOf = (v) => OPERATORS[typeof v === 'string' ? v.trim() : ''] || '×';
+
 function normalizeSide(raw) {
   if (!isObj(raw)) return null;
   const s = steps(raw.steps ?? raw.items, LIMITS.compareSteps);
@@ -127,7 +138,7 @@ export function normalizeBlock(raw) {
     case 'statement': {
       const t = text(raw.text, LIMITS.statement);
       if (!t) return null;
-      return { type, text: t, emphasis: oneOf(raw.emphasis, ['loud', 'quiet'], 'loud'), tone: tone(raw.tone, 'ink') };
+      return { type, text: t, emphasis: oneOf(raw.emphasis, ['loud', 'quiet', 'inverse'], 'loud'), tone: tone(raw.tone, 'ink') };
     }
     case 'bigtype': {
       const t = text(raw.text, LIMITS.bigtype);
@@ -239,6 +250,66 @@ export function normalizeBlock(raw) {
       if (note) block.note = note;
       return block;
     }
+    case 'equation': {
+      const terms = steps(raw.terms ?? raw.items, LIMITS.equationTerms);
+      if (!terms) return null;
+      const block = {
+        type,
+        terms: terms.map((s) => s.label),
+        operator: operatorOf(raw.operator),
+        tone: tone(raw.tone, 'ink'),
+        resultTone: tone(raw.resultTone, 'money'),
+      };
+      const result = text(raw.result, LIMITS.label);
+      if (result) block.result = result;
+      return block;
+    }
+    case 'loop': {
+      const nodes = steps(raw.nodes ?? raw.items ?? raw.steps, LIMITS.loopNodes);
+      if (!nodes) return null;
+      const block = { type, nodes: nodes.map(({ label }) => ({ label })), tone: tone(raw.tone, 'ink') };
+      const center = text(raw.center, LIMITS.label);
+      if (center) block.center = center;
+      return block;
+    }
+    case 'matrix': {
+      const columns = list(raw.columns).map((c) => labelOf(c, LIMITS.label)).filter(Boolean).slice(0, LIMITS.matrixCols[1]);
+      if (columns.length < LIMITS.matrixCols[0]) return null;
+      const rows = [];
+      for (const row of list(raw.rows)) {
+        const cells = list(isObj(row) ? row.cells : row).map((c) => labelOf(c, LIMITS.label));
+        if (!cells.some(Boolean)) continue;
+        rows.push(columns.map((_, i) => cells[i] || ''));
+        if (rows.length === LIMITS.matrixRows[1]) break;
+      }
+      if (rows.length < LIMITS.matrixRows[0]) return null;
+      const tones = columns.map((_, i) => tone(list(raw.tones)[i], 'ink'));
+      return { type, columns, rows, tones };
+    }
+    case 'bucket': {
+      const leaks = steps(raw.leaks ?? raw.holes ?? raw.items, LIMITS.bucketLeaks);
+      if (!leaks) return null;
+      const block = { type, leaks: leaks.map(({ label }) => ({ label })), tone: tone(raw.tone, 'problem') };
+      const top = text(raw.top, LIMITS.label);
+      const bottom = text(raw.bottom, LIMITS.label);
+      if (top) block.top = top;
+      if (bottom) block.bottom = bottom;
+      return block;
+    }
+    case 'list': {
+      const items = [];
+      for (const item of list(raw.items)) {
+        const label = labelOf(item, LIMITS.label);
+        if (!label) continue;
+        const entry = { label };
+        const detail = isObj(item) ? text(item.detail ?? item.note ?? item.description, 100) : '';
+        if (detail) entry.detail = detail;
+        items.push(entry);
+        if (items.length === LIMITS.listItems[1]) break;
+      }
+      if (items.length < LIMITS.listItems[0]) return null;
+      return { type, items, tone: tone(raw.tone, 'ink') };
+    }
     default:
       return null;
   }
@@ -278,6 +349,7 @@ export function normalizeSection(raw, index) {
     title: text(src.title, LIMITS.label) || `Section ${index + 1}`,
     beat: text(src.beat, LIMITS.beat),
     density: int(src.density, 1, 5, 3),
+    ...(text(src.kicker, LIMITS.kicker) ? { kicker: text(src.kicker, LIMITS.kicker) } : {}),
     blocks: blocks.map((block, i) => ({ ...block, id: `${id}.b${i + 1}` })),
   };
   if (src.degraded === true) section.degraded = true;
@@ -295,7 +367,8 @@ export function degradedSection(index, entry = {}) {
   const blocks = [{ type: 'title', text: title, size: 'l', tone: 'ink', id: `${id}.b1` }];
   const line = text(entry.beat, LIMITS.statement);
   if (line) blocks.push({ type: 'statement', text: line, emphasis: 'quiet', tone: 'ink', id: `${id}.b2` });
-  return { id, title, beat, density: 1, degraded: true, blocks };
+  const kicker = text(entry.kicker, LIMITS.kicker);
+  return { id, title, beat, density: 1, ...(kicker ? { kicker } : {}), degraded: true, blocks };
 }
 
 /** The outline call's answer: the board's title and the sections it will have. */
@@ -306,7 +379,8 @@ export function normalizeOutline(raw) {
     if (!isObj(s)) continue;
     const title = text(s.title, LIMITS.label);
     if (!title) continue;
-    sections.push({ title, beat: text(s.beat, LIMITS.beat), density: int(s.density, 1, 5, 3) });
+    const kicker = text(s.kicker, LIMITS.kicker);
+    sections.push({ title, beat: text(s.beat, LIMITS.beat), density: int(s.density, 1, 5, 3), ...(kicker ? { kicker } : {}) });
     if (sections.length === LIMITS.sections) break;
   }
   if (!sections.length) return null;

@@ -36,7 +36,7 @@ test('density changes whitespace: a sparse section is taller than a dense one wi
 
 test('a section with no blocks still gets its minimum height', () => {
   const scene = layoutBoard({ version: 1, title: 'T', sections: [{ id: 's1', title: 'Empty', density: 3, blocks: [] }] }, stubMeasure);
-  assert.equal(scene.sections[0].height, 1000);
+  assert.equal(scene.sections[0].height, 780);
 });
 
 test('blocks are tagged onto their items', () => {

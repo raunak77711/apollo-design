@@ -3,7 +3,7 @@ import { Sparkles } from 'lucide-react';
 import { Button } from '../../ui/primitives.jsx';
 
 const MIN = 40;
-const MAX = 60000;
+const MAX = 120000;
 
 /**
  * The brief box. Paste the story of the video — chapters, flows, the lines you

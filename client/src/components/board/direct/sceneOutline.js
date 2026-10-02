@@ -6,7 +6,7 @@
  * (the same lesson as sanitizeForPrompt in the server's DeepSeekProvider).
  */
 
-const CAP = { sections: 20, blocks: 12, parts: 30, annotations: 60, label: 40 };
+const CAP = { sections: 40, blocks: 12, parts: 30, annotations: 60, label: 40 };
 
 const clip = (value) => {
   const one = String(value ?? '').replace(/\s+/g, ' ').trim();
