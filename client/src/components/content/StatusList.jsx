@@ -61,11 +61,21 @@ export default function StatusList({ session }) {
         ? 'Runs after transcription'
         : 'Link a board to tally it against the video';
 
+  const a = session.analysis;
+  const analysisDetail =
+    a.status === 'processing'
+      ? `Looking for shorts and retakes... ${Math.round((a.progress || 0) * 100)}%`
+      : a.status === 'complete'
+        ? [`${session.counts.candidates} shorts found`, a.retakes ? `${a.retakes} restarts detected` : null, a.cachedWindows ? 'from saved answers' : null].filter(Boolean).join(' - ')
+        : a.status === 'failed'
+          ? a.error
+          : a.reason || 'Runs after transcription';
+
   return (
     <ul className="divide-y divide-line">
       <Row label="Transcription" status={t.status} detail={transcriptionDetail} />
       <Row label="Board tally" status={tally.status} detail={tallyDetail} />
-      <Row label="Analysis" status={session.analysis.status} detail="Finding shorts and retakes comes in the next step" />
+      <Row label="Analysis" status={a.status} detail={analysisDetail} />
       <li className="flex gap-3 py-2">
         <Dot status={c.candidates ? 'complete' : 'not_started'} />
         <div className="flex flex-1 items-baseline justify-between gap-3">

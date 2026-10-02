@@ -15,6 +15,8 @@ import { getTranscriptionService } from '../services/transcription/transcription
  *   PUT    /sessions/:id/board           { boardId, title, spec }  link a Jam board snapshot
  *   DELETE /sessions/:id/board
  *   POST   /sessions/:id/process         { force? }  transcribe (cached) + tally, in the background
+ *   POST   /sessions/:id/analyze         { force? }  find shorts and retakes (DeepSeek), in the background
+ *   GET    /sessions/:id/analysis        retakes the detector saw, stats, warnings
  *   GET    /sessions/:id/transcript
  *   GET    /sessions/:id/tally
  *
@@ -59,6 +61,11 @@ export function createContentRouter({ service } = {}) {
   router.post('/sessions/:id/process', wrap(async (req, res) => {
     res.status(202).json(await svc().process(req.params.id, { force: req.body?.force === true }));
   }));
+
+  router.post('/sessions/:id/analyze', wrap(async (req, res) => {
+    res.status(202).json(await svc().analyze(req.params.id, { force: req.body?.force === true }));
+  }));
+  router.get('/sessions/:id/analysis', wrap(async (req, res) => res.json(await svc().getAnalysis(req.params.id))));
 
   router.get('/sessions/:id/transcript', wrap(async (req, res) => res.json(await svc().getTranscript(req.params.id))));
   router.get('/sessions/:id/tally', wrap(async (req, res) => res.json(await svc().getTally(req.params.id))));

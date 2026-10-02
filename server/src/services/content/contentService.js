@@ -3,6 +3,9 @@ import path from 'node:path';
 import { normalizeBlock } from '../../design/board/schema.js';
 import { buildBoardIndex } from './boardIndex.js';
 import { TALLY_VERSION, tallyBoard } from './boardTally.js';
+import { AnalysisError, analyzeTranscript } from './analysis/analyze.js';
+import { boardMatchesFor } from './analysis/candidate.js';
+import { PROMPT_VERSION } from './analysis/prompts.js';
 import { extensionOf, storeUpload } from './uploadVideo.js';
 
 /**
@@ -83,10 +86,30 @@ export function sanitizeBoardSnapshot(raw) {
     });
   }
   if (!sections.length) throw new ContentError(400, 'That board has nothing Content Factory can read yet.');
-  return { version: 1, title: String(raw.title || '').slice(0, 80), sections };
+  return { version: 1, title: String(raw.title || '').slice(0, 80), audience: String(raw.audience || '').slice(0, 80), sections };
 }
 
-export function createContentService({ store, transcription, maxUploadBytes = 20 * GB, log = console }) {
+/**
+ * Re-analysis must never undo a person's review. Candidates are matched by id (a hash of the clip's
+ * source times), so a clip found again keeps its status; a reviewed clip that is no longer found is
+ * kept, marked stale, rather than silently disappearing; an unreviewed one that vanished is dropped.
+ */
+export function mergeCandidates(existing = [], fresh = []) {
+  const old = new Map(existing.map((c) => [c.id, c]));
+  const merged = fresh.map((c) => {
+    const prior = old.get(c.id);
+    if (!prior) return c;
+    const { status, reviewedAt, note, edits } = prior;
+    return { ...c, status: status || 'pending', ...(reviewedAt ? { reviewedAt } : {}), ...(note ? { note } : {}), ...(edits ? { edits } : {}) };
+  });
+  const seen = new Set(fresh.map((c) => c.id));
+  for (const c of existing) {
+    if (!seen.has(c.id) && c.status && c.status !== 'pending') merged.push({ ...c, stale: true });
+  }
+  return merged.sort((a, b) => a.sourceStart - b.sourceStart);
+}
+
+export function createContentService({ store, transcription, getProvider = () => null, llmCache = null, maxUploadBytes = 20 * GB, log = console }) {
   const running = new Set();
 
   const sessionVideoPath = (session) => path.join(store.dirFor(session.id), session.source.storedName);
@@ -112,6 +135,75 @@ export function createContentService({ store, transcription, maxUploadBytes = 20
       s.tally = { status: 'complete', computedAt: new Date().toISOString(), ...tally.stats, key };
     });
     return tally;
+  }
+
+  /** Board matches are the tally read through each clip's kept stretches: cheap, so they follow the board with no model call. */
+  async function refreshBoardMatches(id) {
+    const session = await store.get(id);
+    if (!session.candidates?.length) return;
+    const tally = (await store.readJson(id, 'tally.json'))?.tally || null;
+    await store.update(id, (x) => {
+      for (const c of x.candidates) c.boardMatches = boardMatchesFor(tally, c.sourceSegments);
+    });
+  }
+
+  /** Find the shorts. Failures are recorded on the session, never thrown into the page's face. */
+  async function runAnalysis(id, { force }) {
+    const provider = getProvider();
+    const session = await store.get(id);
+    if (!provider?.live) {
+      await store.update(id, (s) => {
+        s.analysis = { status: 'not_started', reason: 'Add a DeepSeek key (DEEPSEEK_API_KEY) to find shorts.' };
+      });
+      return;
+    }
+    const key = { sourceHash: session.source.sha256, promptVersion: PROMPT_VERSION, model: provider.model || 'deepseek' };
+    const same = session.analysis?.key && JSON.stringify(session.analysis.key) === JSON.stringify(key);
+    if (!force && session.analysis?.status === 'complete' && same) return;
+
+    await store.update(id, (s) => {
+      s.analysis = { status: 'processing', progress: 0, startedAt: new Date().toISOString(), key };
+    });
+    try {
+      const transcript = await loadTranscript(session);
+      if (!transcript) throw new AnalysisError('Transcribe the video first.', 409);
+      const snapshot = await store.readJson(id, 'board.json');
+      const tally = (await store.readJson(id, 'tally.json'))?.tally || null;
+      const result = await analyzeTranscript({
+        transcript,
+        boardIndex: snapshot ? buildBoardIndex(snapshot.spec) : null,
+        tally,
+        provider,
+        cache: llmCache,
+        title: session.title,
+        audience: snapshot?.spec?.audience || '',
+        sourceHash: session.source.sha256,
+        onProgress: ({ done, total }) => {
+          store.update(id, (s) => { if (s.analysis.status === 'processing') s.analysis.progress = Math.round((done / total) * 100) / 100; }).catch(() => {});
+        },
+      });
+      await store.writeJson(id, 'analysis.json', { key, retakes: result.retakes, stats: result.stats, warnings: result.warnings });
+      await store.update(id, (s) => {
+        s.candidates = mergeCandidates(s.candidates, result.candidates);
+        s.analysis = {
+          status: 'complete',
+          finishedAt: new Date().toISOString(),
+          key,
+          model: result.model,
+          windows: result.stats.windows,
+          cachedWindows: result.stats.cachedWindows,
+          modelCalls: result.stats.modelCalls,
+          proposed: result.stats.proposed,
+          retakes: result.retakes.length,
+          warnings: result.warnings,
+        };
+      });
+    } catch (err) {
+      log.error?.('[content] analysis failed:', err.message);
+      await store.update(id, (s) => {
+        s.analysis = { status: 'failed', error: err instanceof AnalysisError ? err.message : "Apollo couldn't finish looking for shorts. Try again in a moment.", key };
+      }).catch(() => {});
+    }
   }
 
   async function run(id, { force }) {
@@ -144,6 +236,7 @@ export function createContentService({ store, transcription, maxUploadBytes = 20
         };
       });
       await computeTally(id);
+      await runAnalysis(id, { force: false });
     } catch (err) {
       log.error?.('[content] processing failed:', err.message);
       await store.update(id, (s) => {
@@ -163,7 +256,8 @@ export function createContentService({ store, transcription, maxUploadBytes = 20
     },
 
     async listSessions() {
-      return (await store.list()).map(publicSession);
+      // The list needs counts, not every clip's transcript.
+      return (await store.list()).map((x) => ({ ...publicSession(x), candidates: undefined }));
     },
 
     async getSession(id) {
@@ -227,6 +321,7 @@ export function createContentService({ store, transcription, maxUploadBytes = 20
       });
       if (session.transcription.status === 'complete') {
         await computeTally(id);
+        await refreshBoardMatches(id);
         session = await store.get(id);
       }
       return publicSession(session);
@@ -260,6 +355,25 @@ export function createContentService({ store, transcription, maxUploadBytes = 20
       return publicSession(updated);
     },
 
+    /** (Re)run only the analysis: find shorts in an already-transcribed recording. */
+    async analyze(id, { force = false } = {}) {
+      const session = await store.get(id);
+      if (session.transcription.status !== 'complete') throw new ContentError(409, 'Process the video first: shorts are found in its transcript.');
+      if (running.has(id)) return publicSession(session);
+      if (!getProvider()?.live) throw new ContentError(503, 'Finding shorts needs a DeepSeek key. Add DEEPSEEK_API_KEY and restart Apollo.');
+      running.add(id);
+      await store.update(id, (s) => { s.analysis = { status: 'processing', progress: 0, startedAt: new Date().toISOString() }; });
+      runAnalysis(id, { force }).finally(() => running.delete(id));
+      return publicSession(await store.get(id));
+    },
+
+    async getAnalysis(id) {
+      await store.get(id);
+      const stored = await store.readJson(id, 'analysis.json');
+      if (!stored) throw new ContentError(404, 'This session has not been analysed yet.');
+      return stored;
+    },
+
     async getTranscript(id) {
       const session = await store.get(id);
       const transcript = await loadTranscript(session);
@@ -284,6 +398,9 @@ export function createContentService({ store, transcription, maxUploadBytes = 20
     /** Sessions left "processing" by a restart cannot finish: say so, so the page does not wait forever. */
     async recoverInterrupted() {
       for (const s of await store.list()) {
+        if (s.analysis?.status === 'processing' && !running.has(s.id)) {
+          await store.update(s.id, (x) => { x.analysis = { status: 'failed', error: 'Apollo restarted while looking for shorts. Press Find shorts to continue.' }; });
+        }
         if (s.transcription?.status === 'processing' && !running.has(s.id)) {
           await store.update(s.id, (x) => {
             x.transcription = { status: 'failed', error: 'Apollo restarted while this was processing. Press Process video to continue.' };

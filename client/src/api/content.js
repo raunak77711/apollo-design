@@ -59,6 +59,8 @@ export const contentApi = {
   linkBoard: (id, payload) => request(`/sessions/${id}/board`, { method: 'PUT', body: payload }),
   unlinkBoard: (id) => request(`/sessions/${id}/board`, { method: 'DELETE' }),
   process: (id, force = false) => request(`/sessions/${id}/process`, { method: 'POST', body: { force } }),
+  analyze: (id, force = false) => request(`/sessions/${id}/analyze`, { method: 'POST', body: { force } }),
+  analysis: (id) => request(`/sessions/${id}/analysis`),
   transcript: (id) => request(`/sessions/${id}/transcript`),
   tally: (id) => request(`/sessions/${id}/tally`),
   uploadVideo,

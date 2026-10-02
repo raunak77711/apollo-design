@@ -8,6 +8,7 @@ import { Button, IconButton, Spinner } from '../ui/primitives.jsx';
 import AppHeader from '../components/AppHeader.jsx';
 import BoardLink from '../components/content/BoardLink.jsx';
 import BoardTally from '../components/content/BoardTally.jsx';
+import ShortsPanel from '../components/content/ShortsPanel.jsx';
 import StatusList from '../components/content/StatusList.jsx';
 import TranscriptPanel from '../components/content/TranscriptPanel.jsx';
 import VideoUpload from '../components/content/VideoUpload.jsx';
@@ -155,6 +156,14 @@ function SessionView({ id }) {
     }
   };
 
+  const analyze = async (force) => {
+    try {
+      setSession(await contentApi.analyze(id, force));
+    } catch (e) {
+      toast.error("Couldn't look for shorts", e.message);
+    }
+  };
+
   const saveTitle = async () => {
     const next = title.trim();
     if (!next || next === session.title) { setTitle(session.title); return; }
@@ -234,6 +243,12 @@ function SessionView({ id }) {
           </div>
         </div>
       </div>
+
+      {done && (session.analysis.status !== 'not_started' || session.analysis.reason || session.candidates?.length > 0) && (
+        <div className="mt-12">
+          <ShortsPanel session={session} onSeek={seek} onAnalyze={analyze} />
+        </div>
+      )}
 
       {tally && (
         <div className="mt-12">
