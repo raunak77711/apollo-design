@@ -46,4 +46,23 @@ export const SAMPLES = {
     type: 'list',
     items: [{ label: 'ACQUISITION', detail: 'How do people find us?' }, { label: 'CLARITY', detail: 'Do they immediately understand what we do?' }, { label: 'TRUST', detail: 'Why should they believe us?' }],
   },
+  moment: {
+    type: 'moment', icon: 'user', text: 'SARAH', caption: 'a person with a problem',
+    chips: [{ label: '8:32 PM', icon: 'clock' }, { label: 'AC STOPS WORKING', icon: 'snowflake', tone: 'problem' }],
+  },
+  meter: {
+    type: 'meter', tone: 'problem',
+    items: [{ label: 'FRESH PROBLEM', value: 100, display: '100%', tone: 'money', icon: 'battery-full' }, { label: 'WAIT', value: 80, display: '80%' }, { label: 'CONFUSION', value: 60, display: '60%' }, { label: 'NO RESPONSE', value: 10, display: '10%', icon: 'battery-low' }],
+    total: { label: 'MOTIVATION LEFT', display: '10%' },
+  },
+  eliminate: { type: 'eliminate', options: ['A', 'B', 'C', 'D'], order: [2, 3, 4] },
+  track: {
+    type: 'track', title: 'THE FRICTION TAX', start: { label: 'CUSTOMER', icon: 'user' }, end: { label: 'PURCHASE', icon: 'credit-card' },
+    stops: [{ label: 'SEARCH', icon: 'search' }, { label: 'FORM', icon: 'file-text' }, { label: 'CALL', icon: 'phone' }, { label: 'WAIT', icon: 'hourglass' }, { label: 'QUOTE', icon: 'receipt' }],
+  },
+  zones: {
+    type: 'zones',
+    inside: { heading: 'MOMENTUM WINDOW', items: [{ label: 'PROBLEM IS FRESH', icon: 'flame' }, { label: 'BUYING INTENT IS HIGH', icon: 'target' }] },
+    outside: { heading: 'AFTER IT CLOSES', items: [{ label: 'DISTRACTED', icon: 'eye-off' }, { label: 'SOLVED ELSEWHERE', icon: 'store' }] },
+  },
 };

@@ -1,5 +1,5 @@
 import { CX, MUTED, SAFE_W, font, toneColor } from '../theme.js';
-import { boxItem, textItem } from './common.js';
+import { boxItem, iconItem, textItem } from './common.js';
 
 /**
  * flow · timeline · funnel — things that happen in order.
@@ -10,7 +10,11 @@ import { boxItem, textItem } from './common.js';
  */
 
 const COLUMN_MAX = 7;
-const COLUMN = { hero: { size: 64, gap: 100, note: 26 }, normal: { size: 40, gap: 76, note: 22 }, small: { size: 24, gap: 48, note: 16 } };
+const COLUMN = {
+  hero: { size: 64, gap: 100, note: 26, icon: 84 },
+  normal: { size: 40, gap: 76, note: 22, icon: 56 },
+  small: { size: 24, gap: 48, note: 16, icon: 40 },
+};
 const NODE = { hero: { size: 34, pad: 24 }, normal: { size: 26, pad: 20 }, small: { size: 18, pad: 14 } };
 
 const connector = (id, from, to, color, over = {}) => ({
@@ -27,24 +31,31 @@ function layoutColumn(block, { measure, id }) {
   const items = [];
   const labels = [];
   const lowest = [];
+  const icons = [];
+  // With icons the whole picture (icon + words) is centred, so the words move right by half the icon's width.
+  const anyIcon = block.steps.some((st) => st.icon);
+  const labelCx = CX + (anyIcon ? (cfg.icon + 24) / 2 : 0);
   let y = 0;
 
   order.forEach((si, pos) => {
     const step = block.steps[si];
     const label = textItem({
       id: `${id}.n${si + 1}`, text: step.label, width: SAFE_W, measure, color: toneColor(step.tone || block.tone),
-      font: font({ size: cfg.size, weight: 700, lineHeight: 1.1 }),
+      font: font({ size: cfg.size, weight: 700, lineHeight: 1.1 }), cx: labelCx,
     });
-    label.cy = y + label.h / 2;
-    y += label.h;
+    const rowTop = y;
+    const rowH = Math.max(label.h, step.icon ? cfg.icon : 0); // a row is never shorter than its icon
+    label.cy = y + rowH / 2;
+    y += rowH;
     items.push(label);
     labels[si] = label;
     lowest[si] = label;
+    if (step.icon) icons.push({ step, si, label, rowTop });
 
     if (step.note) {
       const note = textItem({
         id: `${id}.n${si + 1}.note`, text: step.note, width: SAFE_W, measure, color: MUTED,
-        font: font({ family: 'IBM Plex Mono', size: cfg.note, weight: 400, lineHeight: 1.25 }),
+        font: font({ family: 'IBM Plex Mono', size: cfg.note, weight: 400, lineHeight: 1.25 }), cx: labelCx,
       });
       note.follow = label.id;
       note.cy = y + 8 + note.h / 2;
@@ -54,6 +65,19 @@ function layoutColumn(block, { measure, id }) {
     }
     if (pos < n - 1) y += cfg.gap;
   });
+
+  // Each icon hugs the left of its own label; the arrows still run straight down the shared centre line.
+  let width = SAFE_W;
+  if (icons.length) {
+    const size = cfg.icon;
+    for (const { step, si, label } of icons) {
+      items.push(iconItem({
+        id: `${id}.n${si + 1}.icon`, name: step.icon, cx: label.cx - label.tight / 2 - 24 - size / 2, cy: label.cy, size,
+        color: toneColor(step.tone || block.tone), follow: label.id,
+      }));
+    }
+    width = SAFE_W + 2 * (size + 24);
+  }
 
   const down = block.direction !== 'up';
   const connectors = [];
@@ -65,7 +89,7 @@ function layoutColumn(block, { measure, id }) {
       toneColor(block.tone)
     ));
   }
-  return { items: [...connectors, ...items], w: SAFE_W, h: y };
+  return { items: [...connectors, ...items], w: width, h: y };
 }
 
 function layoutRow(block, { measure, id }) {
@@ -85,7 +109,10 @@ function layoutRow(block, { measure, id }) {
     Math.floor((1180 - (cols - 1) * gapX) / cols)
   );
   const labelWidth = nodeW - cfg.pad * 2;
-  const nodeH = Math.max(...block.steps.map((s) => Math.ceil(measure(s.label, labelFont, labelWidth).h))) + cfg.pad * 2 + 8;
+  const hasIcons = block.steps.some((st) => st.icon);
+  const iconSize = scale === 'small' ? 32 : 44;
+  const nodeH = Math.max(...block.steps.map((s) => Math.ceil(measure(s.label, labelFont, labelWidth).h))) + cfg.pad * 2 + 8
+    + (hasIcons ? iconSize + 12 : 0);
   const rows = Math.ceil(n / perRow);
   const up = block.direction === 'up'; // a climb still starts at the bottom when it is folded into rows
   const fullW = cols * nodeW + (cols - 1) * gapX;
@@ -102,10 +129,17 @@ function layoutRow(block, { measure, id }) {
       id: `${id}.n${i + 1}`, cx: CX - fullW / 2 + nodeW / 2 + slot * (nodeW + gapX),
       cy: (up ? rows - 1 - Math.floor(i / perRow) : Math.floor(i / perRow)) * (nodeH + rowGap) + nodeH / 2, w: nodeW, h: nodeH, radius: 18,
       stroke: color, strokeWidth: 3, label: step.label, labelFont, labelColor: color, pad: cfg.pad, labelWidth,
+      // With an icon on the node, the label sits in the lower part of the box.
+      ...(hasIcons ? { labelOffsetY: (iconSize + 12) / 2 } : {}),
     });
   });
+  const badges = hasIcons
+    ? block.steps.flatMap((step, i) => (step.icon
+      ? [iconItem({ id: `${id}.n${i + 1}.icon`, name: step.icon, cx: nodes[i].cx, cy: nodes[i].cy - nodeH / 2 + cfg.pad * 0.6 + iconSize / 2, size: iconSize, color: toneColor(step.tone || block.tone), follow: nodes[i].id })]
+      : []))
+    : [];
   const connectors = nodes.slice(0, -1).map((node, i) => connector(`${id}.c${i + 1}`, node.id, nodes[i + 1].id, toneColor(block.tone)));
-  return { items: [...connectors, ...nodes], w: fullW, h: rows * nodeH + (rows - 1) * rowGap };
+  return { items: [...connectors, ...nodes, ...badges], w: fullW, h: rows * nodeH + (rows - 1) * rowGap };
 }
 
 export function layoutFlow(block, ctx) {
@@ -117,6 +151,7 @@ export function layoutFlow(block, ctx) {
 /* -------------------------------- timeline -------------------------------- */
 
 const DOT = 24;
+const ICON_DOT = 48;
 
 function timelineRight(block, { measure, id }) {
   const n = block.events.length;
@@ -141,10 +176,12 @@ function timelineRight(block, { measure, id }) {
 
   whens.forEach((w) => { w.cy = whenH - w.h / 2; });
   labels.forEach((l) => { l.cy = labelTop + l.h / 2; });
-  const dots = block.events.map((ev, i) => boxItem({
-    id: `${id}.d${i + 1}`, cx: CX - span / 2 + i * spacing, cy: dotY, w: DOT, h: DOT, radius: DOT / 2,
-    fill: toneColor(ev.tone || block.tone), stroke: toneColor(ev.tone || block.tone), strokeWidth: 0,
-  }));
+  const dots = block.events.map((ev, i) => (ev.icon
+    ? iconItem({ id: `${id}.d${i + 1}`, name: ev.icon, cx: CX - span / 2 + i * spacing, cy: dotY, size: ICON_DOT, color: toneColor(ev.tone || block.tone) })
+    : boxItem({
+      id: `${id}.d${i + 1}`, cx: CX - span / 2 + i * spacing, cy: dotY, w: DOT, h: DOT, radius: DOT / 2,
+      fill: toneColor(ev.tone || block.tone), stroke: toneColor(ev.tone || block.tone), strokeWidth: 0,
+    })));
   const connectors = dots.slice(0, -1).map((d, i) => connector(`${id}.c${i + 1}`, d.id, dots[i + 1].id, color, { gap: 6 }));
   const h = labelTop + Math.max(...labels.map((l) => l.h));
   return { items: [...connectors, ...dots, ...whens, ...labels], w: span + colW, h };

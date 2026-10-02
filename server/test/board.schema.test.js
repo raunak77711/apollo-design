@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  BLOCK_TYPES, LIMITS, degradedSection, normalizeBlock, normalizeBoard, normalizeOutline, normalizeSection,
+  BLOCK_TYPES, LIMITS, degradedSection, iconOf, normalizeBlock, normalizeBoard, normalizeOutline, normalizeSection,
 } from '../src/design/board/schema.js';
 import { SAMPLES } from './fixtures/boardSamples.js';
 
@@ -188,4 +188,59 @@ test('statements may be inverse; sections and outlines carry a kicker', () => {
   assert.equal(section.kicker, 'SCENE 3');
   assert.equal(normalizeOutline({ sections: [{ title: 'T', kicker: 'OPEN' }] }).sections[0].kicker, 'OPEN');
   assert.equal(degradedSection(0, { title: 'T', kicker: 'OPEN' }).kicker, 'OPEN');
+});
+
+test('icons are matched case- and alias-tolerantly and unknown ones are dropped', () => {
+  assert.equal(iconOf('Snowflake'), 'snowflake');
+  assert.equal(iconOf('AlertTriangle'), 'triangle-alert');
+  assert.equal(iconOf('home'), 'house');
+  assert.equal(iconOf('definitely-not-an-icon'), '');
+  assert.equal(iconOf(7), '');
+  const b = normalizeBlock({ type: 'flow', steps: [{ label: 'A', icon: 'search' }, { label: 'B', icon: 'nope' }] });
+  assert.equal(b.steps[0].icon, 'search');
+  assert.equal('icon' in b.steps[1], false);
+});
+
+test('moment keeps its hero icon and up to four chips', () => {
+  const b = normalizeBlock(SAMPLES.moment);
+  assert.equal(b.icon, 'user');
+  assert.deepEqual(b.chips.map((c) => c.icon), ['clock', 'snowflake']);
+  assert.equal(b.chips[1].tone, 'problem');
+  assert.equal(normalizeBlock({ type: 'moment', text: '' }), null);
+});
+
+test('meter clamps values, keeps displays and totals', () => {
+  const b = normalizeBlock({ type: 'meter', items: [{ label: 'a', value: '140%' }, { label: 'b', value: -5 }, { label: 'c' }], total: { label: 'T', display: '+60' } });
+  assert.deepEqual(b.items.map((i) => i.value), [100, 0, 50]);
+  assert.deepEqual(b.total, { label: 'T', display: '+60' });
+  assert.equal(normalizeBlock({ type: 'meter', items: [{ label: 'only', value: 1 }] }), null);
+});
+
+test('eliminate validates its order and always leaves a survivor', () => {
+  assert.deepEqual(normalizeBlock({ type: 'eliminate', options: ['A', 'B', 'C', 'D'], order: [2, 9, 2, 3] }).order, [2, 3]);
+  assert.deepEqual(normalizeBlock({ type: 'eliminate', options: ['A', 'B', 'C'], order: [1, 2, 3] }).order, [1, 2]);
+  assert.deepEqual(normalizeBlock({ type: 'eliminate', options: ['A', 'B', 'C'] }).order, [1, 2]);
+  assert.equal(normalizeBlock({ type: 'eliminate', options: ['A', 'B'] }), null);
+});
+
+test('track needs both ends; stops are optional', () => {
+  assert.equal(normalizeBlock({ type: 'track', start: 'A' }), null);
+  const b = normalizeBlock({ type: 'track', start: 'ME', end: 'BUY', title: 'DISTANCE' });
+  assert.deepEqual(b.stops, []);
+  assert.equal(b.title, 'DISTANCE');
+  assert.equal(normalizeBlock(SAMPLES.track).stops.length, 5);
+});
+
+test('zones needs an inside; the outside is optional', () => {
+  assert.equal(normalizeBlock({ type: 'zones', outside: { items: ['x'] } }), null);
+  const b = normalizeBlock(SAMPLES.zones);
+  assert.equal(b.inside.tone, 'money');
+  assert.equal(b.outside.tone, 'problem');
+  assert.equal('outside' in normalizeBlock({ type: 'zones', inside: { items: ['x'] } }), false);
+});
+
+test('a title eyebrow that repeats the section kicker is dropped', () => {
+  const { section } = normalizeSection({ title: 'T', kicker: 'OPEN', blocks: [{ type: 'title', text: 'HELLO', eyebrow: 'Open' }, { type: 'title', text: 'B', eyebrow: 'different' }] }, 0);
+  assert.equal('eyebrow' in section.blocks[0], false);
+  assert.equal(section.blocks[1].eyebrow, 'different');
 });

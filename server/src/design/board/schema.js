@@ -19,7 +19,39 @@ export const BLOCK_TYPES = [
   'title', 'statement', 'bigtype', 'quote', 'flow', 'hub', 'cards',
   'compare', 'panels', 'code', 'timeline', 'funnel', 'browser',
   'equation', 'loop', 'matrix', 'bucket', 'list',
+  'moment', 'meter', 'eliminate', 'track', 'zones',
 ];
+
+/** The icon vocabulary. The model names one; the client owns the drawing. Anything else is dropped. */
+export const ICONS = [
+  'search', 'globe', 'phone', 'phone-off', 'phone-missed', 'mail', 'mail-open', 'inbox', 'send', 'message-square', 'message-circle',
+  'bell', 'megaphone', 'siren', 'video', 'camera', 'image',
+  'clock', 'hourglass', 'timer', 'calendar',
+  'user', 'users', 'handshake', 'heart', 'smile', 'frown', 'thumbs-up', 'thumbs-down',
+  'wrench', 'snowflake', 'flame', 'thermometer', 'zap', 'plug-zap', 'settings', 'key', 'lock', 'house', 'truck', 'store', 'building-2', 'briefcase', 'package',
+  'dollar-sign', 'coins', 'hand-coins', 'piggy-bank', 'credit-card', 'receipt', 'shopping-cart', 'tag', 'percent', 'gift',
+  'star', 'award', 'trophy', 'crown', 'badge-check', 'shield-check', 'check', 'circle-check', 'x', 'circle-x', 'ban', 'skull', 'ghost', 'triangle-alert',
+  'eye', 'eye-off', 'target', 'radar', 'mouse-pointer-click', 'map-pin', 'route', 'flag', 'door-open', 'link', 'unplug', 'cloud-off', 'wifi-off',
+  'trending-up', 'trending-down', 'chart-column', 'gauge', 'scale', 'battery-low', 'battery-medium', 'battery-full', 'filter',
+  'repeat', 'refresh-cw', 'rocket', 'bot', 'database', 'smartphone', 'layout-template', 'file-text', 'clipboard-list', 'book-open',
+  'lightbulb', 'sparkles', 'magnet', 'anchor', 'scissors', 'circle-help', 'graduation-cap',
+];
+
+const ICON_ALIASES = {
+  home: 'house', alert: 'triangle-alert', warning: 'triangle-alert', 'alert-triangle': 'triangle-alert', dollar: 'dollar-sign', money: 'dollar-sign',
+  cart: 'shopping-cart', chart: 'chart-column', 'bar-chart': 'chart-column', battery: 'battery-medium', form: 'file-text', document: 'file-text',
+  person: 'user', people: 'users', cross: 'x', close: 'x', ac: 'snowflake', cold: 'snowflake', time: 'clock', question: 'circle-help',
+  help: 'circle-help', email: 'mail', chat: 'message-square', tools: 'wrench', repair: 'wrench', web: 'globe', website: 'globe', speed: 'zap',
+  lightning: 'zap', trust: 'shield-check', 'thumb-up': 'thumbs-up', 'thumb-down': 'thumbs-down', stop: 'ban', checkmark: 'check',
+};
+
+/** 'Snowflake', 'snow flake', 'snowFlake' → the canonical kebab-case name, or '' when it is not in the vocabulary. */
+export function iconOf(v) {
+  if (typeof v !== 'string') return '';
+  const k = v.trim().replace(/([a-z])([A-Z])/g, '$1-$2').replace(/[\s_]+/g, '-').toLowerCase();
+  const name = ICON_ALIASES[k] || k;
+  return ICONS.includes(name) ? name : '';
+}
 
 /** A section without one of these has nothing to say out loud and is sent back for repair. */
 export const HEADLINE_TYPES = ['title', 'statement', 'bigtype'];
@@ -49,6 +81,11 @@ export const LIMITS = {
   bucketLeaks: [2, 9],
   listItems: [2, 8],
   kicker: 24,
+  meterItems: [2, 8],
+  eliminateOptions: [3, 6],
+  trackStops: [0, 9],
+  zoneItems: [1, 5],
+  momentChips: [0, 4],
 };
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -88,6 +125,8 @@ function steps(raw, [min, max]) {
       const note = text(item.note ?? item.detail ?? item.caption, LIMITS.note);
       if (note) step.note = note;
       if (TONES.includes(item.tone)) step.tone = item.tone;
+      const icon = iconOf(item.icon);
+      if (icon) step.icon = icon;
     }
     out.push(step);
     if (out.length === max) break;
@@ -133,6 +172,8 @@ export function normalizeBlock(raw) {
       const block = { type, text: t, size: oneOf(raw.size, ['xl', 'l', 'm'], 'l'), tone: tone(raw.tone, 'ink') };
       const eyebrow = text(raw.eyebrow, LIMITS.label);
       if (eyebrow) block.eyebrow = eyebrow;
+      const icon = iconOf(raw.icon);
+      if (icon) block.icon = icon;
       return block;
     }
     case 'statement': {
@@ -189,6 +230,8 @@ export function normalizeBlock(raw) {
           const tag = text(item.tag, 24);
           if (tag) card.tag = tag;
           if (TONES.includes(item.tone)) card.tone = item.tone;
+          const icon = iconOf(item.icon);
+          if (icon) card.icon = icon;
         }
         items.push(card);
         if (items.length === LIMITS.cards[1]) break;
@@ -220,6 +263,8 @@ export function normalizeBlock(raw) {
         if (!label) continue;
         const item = { when: isObj(ev) ? text(ev.when ?? ev.time ?? ev.date, 24) : '', label };
         if (isObj(ev) && TONES.includes(ev.tone)) item.tone = ev.tone;
+        const icon = isObj(ev) ? iconOf(ev.icon) : '';
+        if (icon) item.icon = icon;
         events.push(item);
         if (events.length === LIMITS.timeline[1]) break;
       }
@@ -262,12 +307,16 @@ export function normalizeBlock(raw) {
       };
       const result = text(raw.result, LIMITS.label);
       if (result) block.result = result;
+      const icons = terms.map((t) => t.icon || '');
+      if (icons.some(Boolean)) block.icons = icons;
+      const resultIcon = iconOf(raw.resultIcon);
+      if (resultIcon) block.resultIcon = resultIcon;
       return block;
     }
     case 'loop': {
       const nodes = steps(raw.nodes ?? raw.items ?? raw.steps, LIMITS.loopNodes);
       if (!nodes) return null;
-      const block = { type, nodes: nodes.map(({ label }) => ({ label })), tone: tone(raw.tone, 'ink') };
+      const block = { type, nodes: nodes.map(({ label, icon }) => (icon ? { label, icon } : { label })), tone: tone(raw.tone, 'ink') };
       const center = text(raw.center, LIMITS.label);
       if (center) block.center = center;
       return block;
@@ -289,7 +338,7 @@ export function normalizeBlock(raw) {
     case 'bucket': {
       const leaks = steps(raw.leaks ?? raw.holes ?? raw.items, LIMITS.bucketLeaks);
       if (!leaks) return null;
-      const block = { type, leaks: leaks.map(({ label }) => ({ label })), tone: tone(raw.tone, 'problem') };
+      const block = { type, leaks: leaks.map(({ label, icon }) => (icon ? { label, icon } : { label })), tone: tone(raw.tone, 'problem') };
       const top = text(raw.top, LIMITS.label);
       const bottom = text(raw.bottom, LIMITS.label);
       if (top) block.top = top;
@@ -304,11 +353,104 @@ export function normalizeBlock(raw) {
         const entry = { label };
         const detail = isObj(item) ? text(item.detail ?? item.note ?? item.description, 100) : '';
         if (detail) entry.detail = detail;
+        const icon = isObj(item) ? iconOf(item.icon) : '';
+        if (icon) entry.icon = icon;
         items.push(entry);
         if (items.length === LIMITS.listItems[1]) break;
       }
       if (items.length < LIMITS.listItems[0]) return null;
       return { type, items, tone: tone(raw.tone, 'ink') };
+    }
+    case 'moment': {
+      const t = text(raw.text ?? raw.title, LIMITS.title, { multiline: true });
+      if (!t) return null;
+      const block = { type, text: t, tone: tone(raw.tone, 'ink') };
+      const icon = iconOf(raw.icon);
+      if (icon) block.icon = icon;
+      const caption = text(raw.caption, LIMITS.note);
+      if (caption) block.caption = caption;
+      const chips = [];
+      for (const c of list(raw.chips ?? raw.items)) {
+        const label = labelOf(c, LIMITS.label);
+        if (!label) continue;
+        const chip = { label, tone: isObj(c) ? tone(c.tone, 'ink') : 'ink' };
+        const chipIcon = isObj(c) ? iconOf(c.icon) : '';
+        if (chipIcon) chip.icon = chipIcon;
+        chips.push(chip);
+        if (chips.length === LIMITS.momentChips[1]) break;
+      }
+      if (chips.length) block.chips = chips;
+      return block;
+    }
+    case 'meter': {
+      const items = [];
+      for (const it of list(raw.items ?? raw.rows)) {
+        const label = labelOf(it, LIMITS.label);
+        if (!label) continue;
+        const parsed = isObj(it) ? Number.parseFloat(String(it.value ?? it.percent ?? '').replace('%', '')) : NaN;
+        const entry = { label, value: Number.isFinite(parsed) ? Math.min(100, Math.max(0, Math.round(parsed))) : 50 };
+        const display = isObj(it) ? text(it.display ?? it.shown, 16) : '';
+        if (display) entry.display = display;
+        if (isObj(it) && TONES.includes(it.tone)) entry.tone = it.tone;
+        const icon = isObj(it) ? iconOf(it.icon) : '';
+        if (icon) entry.icon = icon;
+        items.push(entry);
+        if (items.length === LIMITS.meterItems[1]) break;
+      }
+      if (items.length < LIMITS.meterItems[0]) return null;
+      const block = { type, items, tone: tone(raw.tone, 'ink') };
+      if (isObj(raw.total)) {
+        const label = text(raw.total.label, LIMITS.label);
+        const display = text(raw.total.display ?? raw.total.value, 16);
+        if (label && display) block.total = { label, display };
+      }
+      return block;
+    }
+    case 'eliminate': {
+      const options = list(raw.options ?? raw.items).map((o) => labelOf(o, 24)).filter(Boolean).slice(0, LIMITS.eliminateOptions[1]);
+      if (options.length < LIMITS.eliminateOptions[0]) return null;
+      const out = [];
+      for (const n of list(raw.order ?? raw.eliminated)) {
+        const i = Math.round(Number(n));
+        if (Number.isInteger(i) && i >= 1 && i <= options.length && !out.includes(i)) out.push(i);
+      }
+      // Always leave a survivor; with no usable order, knock out everything but the last.
+      let order = out.slice(0, options.length - 1);
+      if (!order.length) order = options.slice(0, -1).map((_, i) => i + 1);
+      return { type, options, order, tone: tone(raw.tone, 'problem') };
+    }
+    case 'track': {
+      const end = (v) => (isObj(v) ? { label: text(v.label ?? v.text, LIMITS.label), icon: iconOf(v.icon) } : { label: text(v, LIMITS.label), icon: '' });
+      const start = end(raw.start);
+      const finish = end(raw.end);
+      if (!start.label || !finish.label) return null;
+      const stops = steps(raw.stops ?? raw.items, [0, LIMITS.trackStops[1]]) || [];
+      const block = {
+        type,
+        start: { label: start.label, ...(start.icon ? { icon: start.icon } : {}) },
+        end: { label: finish.label, ...(finish.icon ? { icon: finish.icon } : {}) },
+        stops,
+        tone: tone(raw.tone, 'ink'),
+      };
+      const title = text(raw.title ?? raw.caption, LIMITS.label);
+      if (title) block.title = title;
+      return block;
+    }
+    case 'zones': {
+      const zone = (z, fallbackTone) => {
+        if (!isObj(z)) return null;
+        const zs = steps(z.items ?? z.steps, [1, LIMITS.zoneItems[1]]);
+        if (!zs) return null;
+        return {
+          heading: text(z.heading ?? z.title, LIMITS.label),
+          tone: tone(z.tone, fallbackTone),
+          items: zs.map((it) => (it.icon ? { label: it.label, icon: it.icon } : { label: it.label })),
+        };
+      };
+      const inside = zone(raw.inside, 'money');
+      if (!inside) return null;
+      const outside = zone(raw.outside, 'problem');
+      return outside ? { type, inside, outside } : { type, inside };
     }
     default:
       return null;
@@ -344,13 +486,19 @@ export function normalizeSection(raw, index) {
   });
 
   const id = `s${index + 1}`;
+  const kicker = text(src.kicker, LIMITS.kicker);
   const section = {
     id,
     title: text(src.title, LIMITS.label) || `Section ${index + 1}`,
     beat: text(src.beat, LIMITS.beat),
     density: int(src.density, 1, 5, 3),
-    ...(text(src.kicker, LIMITS.kicker) ? { kicker: text(src.kicker, LIMITS.kicker) } : {}),
-    blocks: blocks.map((block, i) => ({ ...block, id: `${id}.b${i + 1}` })),
+    ...(kicker ? { kicker } : {}),
+    blocks: blocks.map((block, i) => {
+      const out = { ...block, id: `${id}.b${i + 1}` };
+      // The board already prints the marker above the section; a title eyebrow that says the same thing is noise.
+      if (kicker && out.eyebrow && out.eyebrow.toLowerCase() === kicker.toLowerCase()) delete out.eyebrow;
+      return out;
+    }),
   };
   if (src.degraded === true) section.degraded = true;
   if (!section.blocks.some((b) => HEADLINE_TYPES.includes(b.type))) {

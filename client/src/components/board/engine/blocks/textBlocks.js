@@ -1,5 +1,5 @@
 import { CX, HAIRLINE, MUTED, SAFE_W, SOFT, font, toneColor } from '../theme.js';
-import { boxItem, clamp, fitSize, range, stack, textItem } from './common.js';
+import { boxItem, clamp, fitSize, iconItem, range, stack, textItem } from './common.js';
 
 /**
  * title · statement · bigtype · quote · code.
@@ -21,6 +21,11 @@ export function layoutTitle(block, { measure, id }) {
   const size = fitSize(measure, block.text, base, FIT_W, range(target, min, -4), explicitLines);
 
   const items = [];
+  if (block.icon) {
+    const badge = iconItem({ id: `${id}.icon`, name: block.icon, cx: CX, cy: 0, size: block.size === 'm' ? 84 : 120, color: toneColor(block.tone) });
+    badge.cy = badge.h / 2;
+    items.push(badge);
+  }
   if (block.eyebrow) {
     items.push(textItem({
       id: `${id}.eyebrow`, text: block.eyebrow.toUpperCase(), width: SAFE_W, measure, color: MUTED,

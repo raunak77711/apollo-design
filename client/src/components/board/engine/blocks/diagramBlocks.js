@@ -1,5 +1,6 @@
+import { tint } from '../../tools/util.js';
 import { CX, HAIRLINE, MUTED, SAFE_W, SOFT, STRONG_LINE, font, toneColor } from '../theme.js';
-import { boxItem, clamp, textItem } from './common.js';
+import { boxItem, clamp, iconItem, textItem } from './common.js';
 
 /**
  * hub · cards · compare · panels · browser — things that sit side by side.
@@ -76,24 +77,39 @@ export function layoutCards(block, { measure, id }) {
 
   // A card is at least as wide as its longest single word: a Textbox wraps
   // between words, never inside one.
-  const longestWord = Math.max(...block.items.flatMap((it) => it.label.split(/s+/).map((w) => measure(w, labelFont, 10000).w)));
-  const cardW = Math.max(Math.min(260, Math.floor((900 - (cols - 1) * gap) / cols)), Math.ceil(longestWord) + pad * 2);
+  const hasIcons = block.items.some((it) => it.icon);
+  const iconSize = 52;
+  const padL = hasIcons ? pad + iconSize + 16 : pad; // the label starts after the icon disc
+  const longestWord = Math.max(...block.items.flatMap((it) => it.label.split(/\s+/).map((w) => measure(w, labelFont, 10000).w)));
+  const cardW = Math.max(
+    Math.min(hasIcons ? 330 : 260, Math.floor(((hasIcons ? 1120 : 900) - (cols - 1) * gap) / cols)),
+    Math.ceil(longestWord) + padL + pad
+  );
+  const labelW = cardW - padL - pad;
 
   const anyTag = block.items.some((it) => it.tag);
-  const labelH = Math.max(...block.items.map((it) => Math.ceil(measure(it.label, labelFont, cardW - pad * 2).h)));
-  const cardH = Math.max(anyTag ? 128 : 92, labelH + pad * 2 + (anyTag ? 30 : 0));
+  const labelH = Math.max(...block.items.map((it) => Math.ceil(measure(it.label, labelFont, labelW).h)));
+  const cardH = Math.max(anyTag ? 128 : hasIcons ? 104 : 92, labelH + pad * 2 + (anyTag ? 30 : 0), hasIcons ? iconSize + pad * 2 : 0);
   const rows = Math.ceil(count / cols);
 
-  const items = block.items.map((it, i) => {
+  const items = [];
+  block.items.forEach((it, i) => {
     const r = Math.floor(i / cols);
     const k = i % cols;
     const inRow = Math.min(cols, count - r * cols);
     const rowW = inRow * cardW + (inRow - 1) * gap;
-    return boxItem({
-      id: `${id}.n${i + 1}`, cx: CX - rowW / 2 + cardW / 2 + k * (cardW + gap), cy: r * (cardH + gap) + cardH / 2,
-      w: cardW, h: cardH, radius: 16, label: it.label, labelFont, labelColor: '#0a0a0a', labelAlign: 'left', pad,
-      tag: it.tag || '', tagFont, tagColor: toneColor(it.tone || block.tone), tagAlign: 'bottom-left',
+    const cx = CX - rowW / 2 + cardW / 2 + k * (cardW + gap);
+    const cy = r * (cardH + gap) + cardH / 2;
+    const tone = toneColor(it.tone || block.tone);
+    const card = boxItem({
+      id: `${id}.n${i + 1}`, cx, cy, w: cardW, h: cardH, radius: 16, label: it.label, labelFont, labelColor: '#0a0a0a', labelAlign: 'left',
+      pad: padL, labelWidth: labelW, stroke: it.icon ? tint(tone, 0.45) : STRONG_LINE, strokeWidth: it.icon ? 3 : 2,
+      tag: it.tag || '', tagFont, tagColor: tone, tagAlign: 'bottom-left',
     });
+    items.push(card);
+    if (it.icon) {
+      items.push(iconItem({ id: `${id}.n${i + 1}.icon`, name: it.icon, cx: cx - cardW / 2 + pad + iconSize / 2, cy, size: iconSize, color: tone, follow: card.id }));
+    }
   });
   return { items, w: cols * cardW + (cols - 1) * gap, h: rows * cardH + (rows - 1) * gap };
 }
@@ -117,10 +133,18 @@ export function layoutCompare(block, { measure, id }) {
     y += head.h + 44;
     items.push(head);
 
+    const withIcons = side.steps.some((st) => st.icon);
+    const icon = 44;
+    const textW = withIcons ? colW - icon - 18 : colW;
+    const textCx = withIcons ? cx + (icon + 18) / 2 : cx; // text sits right of the icon column
     const steps = side.steps.map((step, i) => {
-      const t = textItem({ id: `${id}.${key}.n${i + 1}`, text: step.label, width: colW, measure, color: toneColor(step.tone || side.tone), font: stepFont, cx });
-      t.cy = y + t.h / 2;
-      y += t.h + (i < side.steps.length - 1 ? 64 : 0);
+      const t = textItem({ id: `${id}.${key}.n${i + 1}`, text: step.label, width: textW, measure, color: toneColor(step.tone || side.tone), font: stepFont, cx: textCx });
+      const rowH = Math.max(t.h, step.icon ? icon : 0);
+      t.cy = y + rowH / 2;
+      if (step.icon) {
+        items.push(iconItem({ id: `${id}.${key}.n${i + 1}.icon`, name: step.icon, cx: cx - colW / 2 + icon / 2, cy: y + rowH / 2, size: icon, color: toneColor(step.tone || side.tone), follow: t.id }));
+      }
+      y += rowH + (i < side.steps.length - 1 ? 64 : 0);
       return t;
     });
     items.push(...steps);

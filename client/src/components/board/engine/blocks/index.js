@@ -1,5 +1,6 @@
 import { layoutBrowser, layoutCards, layoutCompare, layoutHub, layoutPanels } from './diagramBlocks.js';
 import { layoutBucket, layoutEquation, layoutList, layoutLoop, layoutMatrix } from './conceptBlocks.js';
+import { layoutEliminate, layoutMeter, layoutMoment, layoutTrack, layoutZones } from './sceneBlocks.js';
 import { layoutFlow, layoutFunnel, layoutTimeline } from './flowBlocks.js';
 import { layoutBigtype, layoutCode, layoutQuote, layoutStatement, layoutTitle } from './textBlocks.js';
 
@@ -23,4 +24,9 @@ export const LAYOUTS = {
   matrix: layoutMatrix,
   bucket: layoutBucket,
   list: layoutList,
+  moment: layoutMoment,
+  meter: layoutMeter,
+  eliminate: layoutEliminate,
+  track: layoutTrack,
+  zones: layoutZones,
 };

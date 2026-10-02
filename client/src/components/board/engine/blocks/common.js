@@ -1,4 +1,5 @@
 import { CX, STRONG_LINE } from '../theme.js';
+import { tint } from '../../tools/util.js';
 
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -46,4 +47,25 @@ export function fitSize(measure, text, font, width, sizes, maxLines) {
     if (measure(text, { ...font, size }, width).lines <= maxLines) return size;
   }
   return sizes[sizes.length - 1];
+}
+
+/**
+ * A pictogram: a Lucide icon in a soft tinted disc (or bare). The layout only
+ * names the icon; the renderer owns the drawing, and the model can only name
+ * icons from the schema's ICONS list.
+ */
+/** The colour blended into white, opaque: a disc must hide whatever passes behind it (a road, a connector). */
+function softDisc(color, amount = 0.13) {
+  const m = /^#([0-9a-f]{6})$/i.exec(color);
+  if (!m) return color;
+  const n = parseInt(m[1], 16);
+  const mix = (c) => Math.round(255 - (255 - c) * amount);
+  return `#${[(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => mix(c).toString(16).padStart(2, '0')).join('')}`;
+}
+
+export function iconItem({ id, name, cx, cy, size, color, disc = true, follow }) {
+  return {
+    id, kind: 'icon', name, cx, cy, w: size, h: size, color, disc: disc ? softDisc(color) : null,
+    ...(follow ? { follow } : {}),
+  };
 }

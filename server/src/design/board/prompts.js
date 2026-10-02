@@ -11,7 +11,7 @@
  * Twelve section calls therefore pay for the brief once.
  */
 
-import { BLOCK_TYPES, LIMITS, TONES } from './schema.js';
+import { BLOCK_TYPES, ICONS, LIMITS, TONES } from './schema.js';
 
 /** One example per block type. A block type added to the schema must appear here (a test checks). */
 export const BLOCK_SHAPES = {
@@ -19,20 +19,25 @@ export const BLOCK_SHAPES = {
   statement: '{"type":"statement","text":"the claim the video lands on","emphasis":"loud"|"quiet"|"inverse","tone":"problem"}   // "inverse" = a black band: the ONE punchline of a section',
   bigtype: '{"type":"bigtype","text":"8:47 PM","caption":"optional line under it","tone":"ink"}',
   quote: '{"type":"quote","text":"\\"Do you service commercial properties?\\"","attribution":"optional, e.g. 10:30 PM"}',
-  flow: '{"type":"flow","direction":"down"|"up"|"right","scale":"hero"|"normal"|"small","tone":"money","steps":[{"label":"GOOGLE","note":"optional","tone":"optional"}]}   // 2-14 steps',
+  flow: '{"type":"flow","direction":"down"|"up"|"right","scale":"hero"|"normal"|"small","tone":"money","steps":[{"label":"GOOGLE","note":"optional","tone":"optional","icon":"search"}]}   // 2-14 steps; an icon on most steps makes a chain readable at a glance',
   hub: '{"type":"hub","center":"BROWSER","links":"spokes"|"spokes+cross","tone":"tech","nodes":[{"label":"HTML"}]}   // 3-12 nodes',
-  cards: '{"type":"cards","columns":2|3|4,"tone":"problem","items":[{"label":"Phone isn\'t clickable","tag":"LEAK","tone":"problem"}]}   // 2-12 items',
+  cards: '{"type":"cards","columns":2|3|4,"tone":"problem","items":[{"label":"Phone isn\'t clickable","tag":"LEAK","tone":"problem","icon":"phone-off"}]}   // 2-12 items',
   compare: '{"type":"compare","left":{"heading":"GENERIC AI","tone":"tech","steps":[{"label":"QUESTION"}],"footnote":"optional"},"right":{"heading":"BUSINESS AI","tone":"money","steps":[{"label":"QUESTION"}]}}   // 1-7 steps a side',
   panels: '{"type":"panels","panels":[{"heading":"CONTENT","tone":"money","rows":[{"label":"Headline","state":"open"|"locked"}]}]}   // 1-3 panels, 1-8 rows',
   code: '{"type":"code","text":"<a href=\\"tel:+15551234567\\">","caption":"optional"}',
-  timeline: '{"type":"timeline","direction":"right"|"down","tone":"problem","events":[{"when":"8:47 PM","label":"Form submitted"}]}   // 2-8 events',
+  timeline: '{"type":"timeline","direction":"right"|"down","tone":"problem","events":[{"when":"8:47 PM","label":"Form submitted","icon":"file-text"}]}   // 2-8 events',
   funnel: '{"type":"funnel","tone":"money","stages":[{"label":"Searches","value":"1,000"}]}   // 3-7 stages, widest first',
   browser: '{"type":"browser","url":"example.com","title":"optional","note":"optional","placeholder":"screenshot"|"blank"}',
-  equation: '{"type":"equation","terms":["ATTENTION","CONVERSION","VALUE"],"operator":"×"|"+"|"−"|"÷","result":"REVENUE","tone":"ink","resultTone":"money"}   // 2-6 terms, drawn as one line of chips ending in the result',
-  loop: '{"type":"loop","center":"optional label in the middle","tone":"movement","nodes":[{"label":"ATTENTION"}]}   // 3-8 nodes in a CYCLE: the last arrow returns to the first, so never repeat the first node at the end',
+  equation: '{"type":"equation","terms":["ATTENTION","CONVERSION","VALUE"],"operator":"×"|"+"|"−"|"÷","result":"REVENUE","tone":"ink","resultTone":"money","icons":["eye","mouse-pointer-click","gauge"],"resultIcon":"dollar-sign"}   // 2-6 terms (icons optional, one per term), drawn as one line of chips ending in the result',
+  loop: '{"type":"loop","center":"optional label in the middle","tone":"movement","nodes":[{"label":"ATTENTION","icon":"eye"}]}   // 3-8 nodes in a CYCLE: the last arrow returns to the first, so never repeat the first node at the end',
   matrix: '{"type":"matrix","columns":["FEATURE","PROBLEM","VALUE"],"tones":["tech","problem","money"],"rows":[["Booking","Too much back-and-forth","Faster appointments"]]}   // 2-4 columns, 1-8 rows; each row reads left to right with arrows between cells',
-  bucket: '{"type":"bucket","top":"TRAFFIC","bottom":"CUSTOMERS","tone":"problem","leaks":[{"label":"SLOW"}]}   // a bucket with a labelled hole per leak; 2-9 leaks',
-  list: '{"type":"list","tone":"ink","items":[{"label":"ACQUISITION","detail":"How do people find us?"}]}   // 2-8 numbered items, each with an optional one-line detail',
+  bucket: '{"type":"bucket","top":"TRAFFIC","bottom":"CUSTOMERS","tone":"problem","leaks":[{"label":"SLOW","icon":"hourglass"}]}   // a bucket with a labelled hole per leak; 2-9 leaks',
+  list: '{"type":"list","tone":"ink","items":[{"label":"ACQUISITION","detail":"How do people find us?","icon":"search"}]}   // 2-8 items, each with an optional one-line detail; with icons they are drawn as icon badges, without as numbered circles',
+  moment: '{"type":"moment","icon":"user","text":"SARAH","caption":"optional","tone":"ink","chips":[{"label":"8:32 PM","icon":"clock"},{"label":"AC STOPS WORKING","icon":"snowflake","tone":"problem"}]}   // a person or moment introduced: big icon badge, a name, and up to 4 fact chips',
+  meter: '{"type":"meter","tone":"ink","items":[{"label":"FRESH PROBLEM","value":100,"display":"100%","tone":"money","icon":"battery-full"}],"total":{"label":"optional bottom line","display":"+60"}}   // 2-8 labelled bars; value is 0-100 (bar length), display is the text at the end of the bar',
+  eliminate: '{"type":"eliminate","options":["A","B","C","D"],"order":[2,3,4],"tone":"problem"}   // 3-6 options crossed out one at a time; order = 1-based positions in the order they are eliminated; one survivor is always left',
+  track: '{"type":"track","title":"optional label over the whole road","start":{"label":"CUSTOMER","icon":"user"},"end":{"label":"PURCHASE","icon":"credit-card"},"tone":"ink","stops":[{"label":"FORM","icon":"file-text"}]}   // a road from start to end with 0-9 stops (toll booths, obstacles, milestones) along it',
+  zones: '{"type":"zones","inside":{"heading":"MOMENTUM WINDOW","tone":"money","items":[{"label":"PROBLEM IS FRESH","icon":"flame"}]},"outside":{"heading":"AFTER THE WINDOW","tone":"problem","items":[{"label":"DISTRACTED","icon":"eye-off"}]}}   // a framed zone (what is inside) and what lies outside it; 1-5 items each; outside optional',
 };
 
 const VOCABULARY = BLOCK_TYPES.map((type) => BLOCK_SHAPES[type]).join('\n');
@@ -110,9 +115,18 @@ MATCH THE VISUAL TO THE CUE
 - Several numbered headings, each with a sentence beneath → list.
 - A plain list of words with no arrows → cards (tag "LEAK" when the brief calls them problems or holes). Items joined to a hub or "everything connected to X" → hub.
 - "One by one" headings → one statement per heading, loud, ink.
+- A person, customer or moment being introduced (a name, a time, a situation) → moment.
+- Rows drawn with ████░░ bars, percentages, a "battery", a decay table, or a +10/+15 ledger → meter (value = the bar length, display = the text beside it, total = a bottom line).
+- Options "crossed out one at a time", "eliminated", "A X C D" → eliminate.
+- "Draw a road", toll booths, obstacles between a start and an end, a long "distance" between two statements → track (put a phrase like DECISION DISTANCE in its title).
+- "Inside the window" versus "outside the window", a safe zone against what lies beyond it → zones.
 - A day-by-day or time sequence ("Branch: DAY 1 / DAY 3 / DAY 7") → timeline. A narrowing pipeline with counts → funnel. A web page the creator will drop a screenshot into → browser.
 - "Beside CLICK: $5" → put the $5 in that step's note.
 - A spoken customer line in quotes → quote. A snippet of code or a metric list → code (always subordinate).
+
+ICONS
+Most boards are far better with icons: an icon turns a word into a thing the viewer recognises before they read it. Put an "icon" on most steps, cards, list items, nodes, leaks, meter rows and stops, and on a title or moment that introduces a person or place. Choose the most literal icon for the label ("AC STOPS WORKING" → snowflake, "WAIT" → hourglass, "PHONE DOESN'T WORK" → phone-off, "QUOTE" → receipt, "REVIEWS" → star, "PRICE" → dollar-sign). Skip an icon when nothing fits rather than force a wrong one; leave out the field entirely. Never put an icon on a title or a statement; icons belong to the parts of a diagram, and a moment block (not a title) introduces a person.
+Use ONLY these icon names (anything else is dropped): ${ICONS.join(', ')}.
 
 TONE DISCIPLINE
 Tones are colour roles — never write hex codes: ${TONES.join(', ')}. Colour carries meaning; most of a board is ink.

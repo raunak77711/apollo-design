@@ -1,6 +1,6 @@
 import { CX, MUTED, SAFE_W, font, toneColor } from '../theme.js';
 import { tint } from '../../tools/util.js';
-import { boxItem, clamp, textItem } from './common.js';
+import { boxItem, clamp, iconItem, textItem } from './common.js';
 
 /**
  * equation · loop · matrix · bucket · list — the shapes a script reaches for when
@@ -69,13 +69,21 @@ export function layoutEquation(block, { measure, id }) {
   const horizontal = rowW <= 1240;
   const chipH = Math.max(...sized.filter((p) => p.kind !== 'op').map((p) => p.h));
   const items = [];
+  const iconFor = (p) => (p.kind === 'term' ? block.icons?.[p.index - 1] : p.kind === 'result' ? block.resultIcon : '');
+  const withIcons = horizontal && sized.some((p) => iconFor(p));
+  const ICON = 64;
+  const top = withIcons ? ICON + 18 : 0; // icons sit above the chips they belong to
 
   let x = CX - rowW / 2;
   let y = 0;
   sized.forEach((p, i) => {
     const key = `${id}.${p.kind === 'op' ? 'o' : p.kind === 'result' ? 'r' : 't'}${p.index || i + 1}`;
     const cx = horizontal ? x + p.w / 2 : CX;
-    const cy = horizontal ? chipH / 2 : y + p.h / 2;
+    const cy = horizontal ? top + chipH / 2 : y + p.h / 2;
+    if (withIcons && iconFor(p)) {
+      const tone = p.kind === 'result' ? toneColor(block.resultTone) : color;
+      items.push(iconItem({ id: `${key}.icon`, name: iconFor(p), cx, cy: ICON / 2, size: ICON, color: tone }));
+    }
     if (p.kind === 'op') {
       const op = textItem({ id: key, text: p.text, width: p.w, measure, color: MUTED, font: p.font, cx });
       op.cy = cy;
@@ -93,7 +101,7 @@ export function layoutEquation(block, { measure, id }) {
     y += p.h + (p.kind === 'op' ? 6 : 10);
   });
 
-  if (horizontal) return { items, w: Math.max(rowW, 400), h: chipH };
+  if (horizontal) return { items, w: Math.max(rowW, 400), h: top + chipH };
   return { items, w: Math.max(...sized.map((p) => p.w)), h: y };
 }
 
@@ -107,9 +115,10 @@ export function layoutLoop(block, { measure, id }) {
   const rx = Math.round(ry * 1.55);
   const pad = 22;
 
+  const ICON = 44;
   const sizes = block.nodes.map((nd) => {
     const m = measure(nd.label, nodeFont, 220);
-    return { w: clamp(Math.ceil(m.w) + pad * 2, 160, 270), h: Math.ceil(m.h) + 34 };
+    return { w: clamp(Math.ceil(m.w) + pad * 2, 160, 270), h: Math.ceil(m.h) + 34 + (nd.icon ? ICON + 8 : 0) };
   });
   const maxW = Math.max(...sizes.map((s) => s.w));
   const maxH = Math.max(...sizes.map((s) => s.h));
@@ -120,13 +129,16 @@ export function layoutLoop(block, { measure, id }) {
     return boxItem({
       id: `${id}.n${i + 1}`, cx: CX + rx * Math.cos(angle), cy: cy0 + ry * Math.sin(angle), w: sizes[i].w, h: sizes[i].h,
       radius: 18, stroke: color, strokeWidth: 3, label: nd.label, labelFont: nodeFont, labelColor: '#0a0a0a', pad,
-      labelWidth: sizes[i].w - pad * 2,
+      labelWidth: sizes[i].w - pad * 2, ...(nd.icon ? { labelOffsetY: (ICON + 8) / 2 } : {}),
     });
   });
+  const badges = block.nodes.flatMap((nd, i) => (nd.icon
+    ? [iconItem({ id: `${id}.n${i + 1}.icon`, name: nd.icon, cx: nodes[i].cx, cy: nodes[i].cy - sizes[i].h / 2 + 12 + ICON / 2, size: ICON, color, follow: nodes[i].id })]
+    : []));
   // The last arrow closes the cycle back to the first node.
   const arrows = nodes.map((node, i) => connector(`${id}.a${i + 1}`, node.id, nodes[(i + 1) % n].id, color, { width: 4, gap: 12 }));
 
-  const items = [...arrows, ...nodes];
+  const items = [...arrows, ...nodes, ...badges];
   if (block.center) {
     const centerFont = font({ family: 'Space Grotesk', size: 46, weight: 700, lineHeight: 1.1 });
     const c = textItem({ id: `${id}.center`, text: block.center, width: 420, measure, color, font: centerFont });
@@ -224,7 +236,8 @@ export function layoutBucket(block, { measure, id }) {
     const sign = left ? -1 : 1;
     const wallX = CX + sign * half(depth);
     const m = measure(leak.label, chipFont, 240);
-    const chipW = clamp(Math.ceil(m.w) + 44, 150, 290);
+    const iconPad = leak.icon ? 40 : 0;
+    const chipW = clamp(Math.ceil(m.w) + 44 + iconPad, 150, 290);
     const cy = bodyTop + depth;
 
     const hole = boxItem({
@@ -232,12 +245,16 @@ export function layoutBucket(block, { measure, id }) {
     });
     const chip = boxItem({
       id: `${id}.l${i + 1}`, cx: CX + sign * (410 + chipW / 2 - 100), cy, w: chipW, h: 60, radius: 16, stroke: leakColor, strokeWidth: 3,
-      label: leak.label, labelFont: chipFont, labelColor: leakColor, pad: 18, labelWidth: chipW - 36, follow: body.id,
+      label: leak.label, labelFont: chipFont, labelColor: leakColor, pad: 18 + iconPad, labelWidth: chipW - 36 - iconPad, follow: body.id,
+      ...(leak.icon ? { labelAlign: 'left' } : {}),
     });
     const drop = boxItem({
       id: `${id}.d${i + 1}`, cx: wallX + sign * 20, cy: cy + 36, w: 14, h: 18, radius: 7, fill: tint(leakColor, 0.55), stroke: leakColor, strokeWidth: 0, follow: body.id,
     });
     items.push(hole, chip, drop);
+    if (leak.icon) {
+      items.push(iconItem({ id: `${id}.l${i + 1}.icon`, name: leak.icon, cx: chip.cx - chipW / 2 + 18 + 15, cy, size: 30, color: leakColor, disc: false, follow: chip.id }));
+    }
     connectors.push(connector(`${id}.c${i + 1}`, hole.id, chip.id, leakColor, { head: false, width: 3, gap: 4 }));
   });
 
@@ -278,10 +295,12 @@ export function layoutList(block, { measure, id }) {
     const h = Math.max(badge, rowH);
     label.cy = rowTop + (h - rowH) / 2 + label.h / 2;
     if (detail) detail.cy = rowTop + (h - rowH) / 2 + label.h + 6 + detail.h / 2;
-    const num = boxItem({
-      id: `${id}.n${i + 1}`, cx: left + badge / 2, cy: rowTop + h / 2, w: badge, h: badge, radius: badge / 2,
-      fill: color, stroke: color, strokeWidth: 0, label: String(i + 1), labelFont: numFont, labelColor: '#ffffff', pad: 8, labelWidth: badge - 16,
-    });
+    const num = it.icon
+      ? iconItem({ id: `${id}.n${i + 1}`, name: it.icon, cx: left + badge / 2, cy: rowTop + h / 2, size: badge, color })
+      : boxItem({
+        id: `${id}.n${i + 1}`, cx: left + badge / 2, cy: rowTop + h / 2, w: badge, h: badge, radius: badge / 2,
+        fill: color, stroke: color, strokeWidth: 0, label: String(i + 1), labelFont: numFont, labelColor: '#ffffff', pad: 8, labelWidth: badge - 16,
+      });
     items.push(num, label);
     if (detail) items.push(detail);
     y += h + 38;

@@ -4,6 +4,7 @@ import { textboxOptions } from '../engine/measure.js';
 import { toneColor } from '../engine/theme.js';
 import { arrowGeometry } from '../state/annotations.js';
 import { styleToFabric } from '../state/styleMap.js';
+import { buildIconGroup, recolorIcon } from './iconShapes.js';
 import { registerLineArrow } from './LineArrow.js';
 
 /**
@@ -64,7 +65,7 @@ export function createRenderer(fabric, canvas, { objectById = () => null } = {})
         originX: 'center',
         originY: hasTag ? 'top' : 'center',
         left: leftAligned ? -item.w / 2 + item.pad + item.labelWidth / 2 : 0,
-        top: hasTag ? -item.h / 2 + item.pad : 0,
+        top: hasTag ? -item.h / 2 + item.pad : item.labelOffsetY || 0,
         selectable: false,
         evented: false,
       }));
@@ -123,6 +124,15 @@ export function createRenderer(fabric, canvas, { objectById = () => null } = {})
     });
   }
 
+  /** An icon is a Lucide glyph (optionally on a tinted disc), scaled so its outer edge is item.w wide. */
+  function makeIcon(item) {
+    const inner = buildIconGroup(fabric, item.name, item.color, item.disc);
+    inner.scale(item.w / (item.disc ? 46 : 24));
+    return new fabric.Group([inner], {
+      left: item.cx, top: item.cy, originX: 'center', originY: 'center', subTargetCheck: false, data: data(item),
+    });
+  }
+
   function makeRule(item) {
     return new fabric.Line([-item.w / 2, -item.h / 2, item.w / 2, item.h / 2], {
       stroke: item.color, strokeWidth: item.width, strokeDashArray: item.dashed ? [10, 8] : null,
@@ -145,6 +155,7 @@ export function createRenderer(fabric, canvas, { objectById = () => null } = {})
       case 'text': return makeText(item);
       case 'box': return makeBox(item);
       case 'poly': return makePoly(item);
+      case 'icon': return makeIcon(item);
       case 'rule': return makeRule(item);
       default: return null;
     }
@@ -154,7 +165,12 @@ export function createRenderer(fabric, canvas, { objectById = () => null } = {})
 
   function applyStyle(item, obj, style) {
     if (!Object.keys(style).length) return;
-    if (item.kind === 'text') {
+    if (item.kind === 'icon') {
+      const color = style.color || style.stroke;
+      if (color) recolorIcon(obj.getObjects()[0], color);
+      if (typeof style.opacity === 'number') obj.set('opacity', style.opacity);
+      obj.dirty = true;
+    } else if (item.kind === 'text') {
       obj.set(styleToFabric(style, 'text'));
     } else if (item.kind === 'box' || item.kind === 'poly') {
       const parts = obj.getObjects ? obj.getObjects() : [obj];
@@ -169,7 +185,7 @@ export function createRenderer(fabric, canvas, { objectById = () => null } = {})
     }
   }
 
-  const selectableKind = (item) => item.kind === 'text' || item.kind === 'box' || item.kind === 'poly';
+  const selectableKind = (item) => item.kind === 'text' || item.kind === 'box' || item.kind === 'poly' || item.kind === 'icon';
 
   function place(entry, eff) {
     const { item, obj } = entry;
