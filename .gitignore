@@ -10,3 +10,13 @@ npm-debug.log*
 # Local asset/export storage (keep the folder, ignore contents)
 server/storage/projects/*
 !server/storage/projects/.gitkeep
+
+# Content Factory: local Whisper environment, model weights, generated samples and caches
+server/whisper/.venv/
+server/whisper/models/
+server/whisper/samples/
+server/whisper/__pycache__/
+server/storage/transcripts/*
+server/storage/content/*
+!server/storage/transcripts/.gitkeep
+!server/storage/content/.gitkeep

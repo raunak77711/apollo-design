@@ -1,0 +1,8 @@
+# Apollo Content Factory - local transcription environment (see setup.ps1).
+# Pinned to what was verified on Windows 11 + RTX 4060 (CUDA 12 runtime from pip wheels).
+faster-whisper==1.2.1
+ctranslate2==4.8.2
+# faster-whisper 1.2.1 passes av.open(metadata_errors=...), which PyAV 17+ no longer accepts.
+av>=14,<17
+nvidia-cublas-cu12==12.9.2.10
+nvidia-cudnn-cu12==9.27.0.42

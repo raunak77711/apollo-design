@@ -20,6 +20,18 @@ export const config = {
   // Absolute path to the on-disk storage root.
   storageRoot: path.resolve(__dirname, '../../storage'),
 
+  // Content Factory - local transcription. Whisper runs on the host (it needs the GPU);
+  // from Docker the backend reaches it through WHISPER_WORKER_URL. With neither a worker
+  // URL nor a local venv, transcription reports "unavailable" and the rest of Apollo is unaffected.
+  whisper: {
+    workerUrl: process.env.WHISPER_WORKER_URL || '',
+    python: process.env.WHISPER_PYTHON || '',
+    model: process.env.WHISPER_MODEL || 'large-v3-turbo',
+    language: process.env.WHISPER_LANGUAGE || 'en',
+    device: process.env.WHISPER_DEVICE || 'auto',
+  },
+  transcriptsDir: path.resolve(__dirname, '../../storage/transcripts'),
+
   ai: {
     provider: process.env.AI_PROVIDER || 'deepseek',
     deepseek: {

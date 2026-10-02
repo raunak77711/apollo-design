@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "nodemon --legacy-watch src/index.js",
     "start": "node src/index.js",
-    "test": "node --test"
+    "test": "node --test",
+    "transcribe": "node scripts/transcribe.js",
+    "whisper:worker": "node scripts/whisper-worker.js"
   },
   "dependencies": {
     "compression": "^1.7.5",
