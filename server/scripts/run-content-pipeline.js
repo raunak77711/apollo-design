@@ -8,6 +8,7 @@
  * make-test-recording.js) it also checks the cuts against the mistakes that were planted.
  */
 import fs from 'node:fs';
+import { Readable } from 'node:stream';
 import path from 'node:path';
 
 const args = process.argv.slice(2);
@@ -23,8 +24,11 @@ const clock = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStar
 
 const t0 = Date.now();
 const session = await post('/sessions', { title: path.basename(video, path.extname(video)) });
-const bytes = fs.readFileSync(video);
-await fetch(`${API}/sessions/${session.id}/video?name=${encodeURIComponent(path.basename(video))}`, { method: 'PUT', headers: { 'Content-Type': 'application/octet-stream' }, body: bytes }).then(j);
+// Streamed: a phone recording can be several gigabytes, far past what Node will hold in one buffer.
+const size = fs.statSync(video).size;
+const up0 = Date.now();
+await fetch(`${API}/sessions/${session.id}/video?name=${encodeURIComponent(path.basename(video))}`, { method: 'PUT', headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': String(size) }, body: Readable.toWeb(fs.createReadStream(video)), duplex: 'half' }).then(j);
+console.log(`uploaded ${(size / 1024 ** 3).toFixed(2)} GB in ${((Date.now() - up0) / 1000).toFixed(0)}s`);
 if (val('--board')) {
   const spec = JSON.parse(fs.readFileSync(val('--board'), 'utf8'));
   await post(`/sessions/${session.id}/board`, { boardId: 'cli', title: spec.title, spec }, 'PUT');
@@ -37,7 +41,8 @@ for (;;) {
   s = await get(`/sessions/${session.id}`);
   const stage = s.transcription.status !== 'complete' ? `transcription ${s.transcription.status} ${Math.round((s.transcription.progress || 0) * 100)}%` : `analysis ${s.analysis.status} ${Math.round((s.analysis.progress || 0) * 100)}%`;
   process.stdout.write(`\r${((Date.now() - t0) / 1000).toFixed(0)}s  ${stage}          `);
-  if (s.transcription.status === 'failed' || ['complete', 'failed', 'not_started'].includes(s.analysis.status) && s.transcription.status === 'complete') break;
+  const analysisSettled = s.analysis.status === 'failed' || s.analysis.reason || (s.analysis.status === 'complete' && s.candidates.every((c) => c.director));
+  if (s.transcription.status === 'failed' || (s.transcription.status === 'complete' && analysisSettled)) break;
 }
 console.log('');
 if (s.transcription.status === 'failed') { console.error('transcription failed:', s.transcription.error); process.exit(2); }

@@ -8,6 +8,8 @@ import { Button, IconButton, Spinner } from '../ui/primitives.jsx';
 import AppHeader from '../components/AppHeader.jsx';
 import BoardLink from '../components/content/BoardLink.jsx';
 import BoardTally from '../components/content/BoardTally.jsx';
+import EditingSettings from '../components/content/EditingSettings.jsx';
+import ReviewDrawer from '../components/content/ReviewDrawer.jsx';
 import ShortsPanel from '../components/content/ShortsPanel.jsx';
 import StatusList from '../components/content/StatusList.jsx';
 import TranscriptPanel from '../components/content/TranscriptPanel.jsx';
@@ -116,6 +118,8 @@ function SessionView({ id }) {
   const [tally, setTally] = useState(null);
   const [title, setTitle] = useState('');
   const playerRef = useRef(null);
+  const [reviewing, setReviewing] = useState(null);
+  const [aiReady, setAiReady] = useState(true);
 
   // Load once, then poll while the server is working in the background.
   useEffect(() => {
@@ -132,7 +136,7 @@ function SessionView({ id }) {
   }, [id]);
 
   useEffect(() => {
-    contentApi.status().then((s) => setWhisper(s.transcription)).catch(() => setWhisper({ available: false }));
+    contentApi.status().then((s) => { setWhisper(s.transcription); setAiReady(s.aiLive !== false); }).catch(() => setWhisper({ available: false }));
   }, []);
 
   useEffect(() => { if (session) setTitle(session.title); }, [session?.id, session?.title]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -161,6 +165,25 @@ function SessionView({ id }) {
       setSession(await contentApi.analyze(id, force));
     } catch (e) {
       toast.error("Couldn't look for shorts", e.message);
+    }
+  };
+
+  const quick = async (c, status) => {
+    try {
+      await contentApi.review(id, c.id, { status });
+      setSession(await contentApi.get(id));
+    } catch (e) {
+      toast.error("Couldn't update that short", e.message);
+    }
+  };
+
+  const renderApproved = async () => {
+    try {
+      const r = await contentApi.renderApproved(id);
+      setSession(r.session);
+      toast.success?.(`${r.queued} short${r.queued === 1 ? '' : 's'} queued for rendering`);
+    } catch (e) {
+      toast.error("Couldn't start rendering", e.message);
     }
   };
 
@@ -246,8 +269,18 @@ function SessionView({ id }) {
 
       {done && (session.analysis.status !== 'not_started' || session.analysis.reason || session.candidates?.length > 0) && (
         <div className="mt-12">
-          <ShortsPanel session={session} onSeek={seek} onAnalyze={analyze} />
+          <ShortsPanel session={session} onSeek={seek} onAnalyze={analyze} onReview={setReviewing} onQuick={quick} onRenderApproved={renderApproved} />
         </div>
+      )}
+
+      {session.source && (
+        <div className="mt-12">
+          <EditingSettings session={session} onChanged={setSession} aiReady={aiReady} />
+        </div>
+      )}
+
+      {reviewing && session.candidates.find((c) => c.id === reviewing) && (
+        <ReviewDrawer session={session} candidate={session.candidates.find((c) => c.id === reviewing)} onClose={() => setReviewing(null)} onChanged={setSession} />
       )}
 
       {tally && (

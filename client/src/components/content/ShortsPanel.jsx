@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronRight, Play, Scissors } from 'lucide-react';
+import { Check, ChevronRight, Film, Play, Scissors, X } from 'lucide-react';
 import { contentApi } from '../../api/content.js';
 import { cx } from '../../lib/cx.js';
 import { formatTime } from '../../lib/time.js';
@@ -64,7 +64,7 @@ function EditBar({ segments, onSeek }) {
   );
 }
 
-function ShortCard({ c, onSeek }) {
+function ShortCard({ c, onSeek, onReview, onQuick }) {
   const [open, setOpen] = useState(false);
   const cuts = c.discarded || [];
   return (
@@ -126,6 +126,21 @@ function ShortCard({ c, onSeek }) {
         </div>
       )}
 
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+        <Button size="sm" variant="primary" onClick={() => onReview(c.id)}>
+          <Film size={13} /> Review edited short
+        </Button>
+        <Button size="sm" variant={c.status === 'approved' ? 'accent' : 'secondary'} onClick={() => onQuick(c, c.status === 'approved' ? 'pending' : 'approved')}>
+          <Check size={13} /> {c.status === 'approved' ? 'Approved' : 'Approve'}
+        </Button>
+        <Button size="sm" variant={c.status === 'rejected' ? 'danger' : 'ghost'} onClick={() => onQuick(c, c.status === 'rejected' ? 'pending' : 'rejected')}>
+          <X size={13} /> {c.status === 'rejected' ? 'Rejected' : 'Reject'}
+        </Button>
+        {c.render?.status === 'done' && <span className="ml-auto text-xs text-ink-3">Video ready</span>}
+        {(c.render?.status === 'rendering' || c.render?.status === 'queued') && <span className="ml-auto flex items-center gap-1.5 text-xs text-ink-3"><Spinner size={11} /> {Math.round((c.render.progress || 0) * 100)}%</span>}
+        {c.render?.status === 'failed' && <span className="ml-auto text-xs text-danger">Render failed</span>}
+      </div>
+
       <button type="button" onClick={() => setOpen((o) => !o)} className="mt-3 flex items-center gap-1.5 font-mono text-2xs uppercase tracking-[0.16em] text-ink-3 hover:text-ink-2">
         <ChevronRight size={11} className={cx('transition-transform', open && 'rotate-90')} />
         What was said
@@ -185,7 +200,7 @@ function Retakes({ sessionId, onSeek }) {
   );
 }
 
-export default function ShortsPanel({ session, onSeek, onAnalyze }) {
+export default function ShortsPanel({ session, onSeek, onAnalyze, onReview, onQuick, onRenderApproved }) {
   const a = session.analysis;
   const list = [...(session.candidates || [])].sort((x, y) => y.score - x.score || x.sourceStart - y.sourceStart);
   const working = a.status === 'processing';
@@ -195,6 +210,11 @@ export default function ShortsPanel({ session, onSeek, onAnalyze }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-mono text-2xs uppercase tracking-[0.2em] text-ink-3">Shorts</h2>
         <div className="flex items-center gap-3">
+          {session.counts.approved > 0 && (
+            <Button variant="primary" size="sm" onClick={onRenderApproved}>
+              <Film size={13} /> Render {session.counts.approved} approved
+            </Button>
+          )}
           {a.status === 'complete' && (
             <button
               type="button"
@@ -223,7 +243,7 @@ export default function ShortsPanel({ session, onSeek, onAnalyze }) {
       {list.length > 0 && (
         <ul className="mt-4 grid gap-4 lg:grid-cols-2">
           {list.map((c) => (
-            <ShortCard key={c.id} c={c} onSeek={onSeek} />
+            <ShortCard key={c.id} c={c} onSeek={onSeek} onReview={onReview} onQuick={onQuick} />
           ))}
         </ul>
       )}

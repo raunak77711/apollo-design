@@ -35,6 +35,8 @@ export const config = {
   // Content Factory sessions (long-form recordings and what is derived from them).
   content: {
     maxUploadBytes: (Number(process.env.CONTENT_MAX_UPLOAD_GB) || 20) * 1024 ** 3,
+    // The render worker (Remotion + FFmpeg) runs on the host beside the GPU, like the Whisper worker.
+    renderWorkerUrl: process.env.RENDER_WORKER_URL || 'http://127.0.0.1:5012',
   },
 
   ai: {

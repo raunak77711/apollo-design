@@ -13,8 +13,8 @@ Design notes
   * Verbatim, not polished. Whisper loves to tidy "I I I think" into "I think".
     Apollo needs the mess (stutters, false starts, "sorry", "let me say that
     again") because that is how retakes are found, so the prompt below nudges
-    the model to keep disfluencies, and previous-text conditioning is off so a
-    bad take cannot bleed into the next sentence.
+    the model to keep disfluencies. Previous-text conditioning is ON: it is what
+    keeps punctuation going past the first window (see the note at the call).
   * GPU first, CPU if CUDA is not usable. A CUDA failure can surface late (a
     missing cuDNN DLL only shows up at the first decode), so the fallback wraps
     the whole run, not just model loading.
@@ -32,6 +32,8 @@ import subprocess
 import sys
 import tempfile
 import time
+
+import numpy as np
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -48,7 +50,7 @@ DEFAULT_LANGUAGE = os.environ.get("WHISPER_LANGUAGE", "en")
 
 # A few filler words and a restart in the prompt are enough to keep Whisper from
 # cleaning them away.
-VERBATIM_PROMPT = (
+VERBATIM_PROMPT = os.environ.get("WHISPER_PROMPT") if os.environ.get("WHISPER_PROMPT") is not None else (
     "Umm, let me think. Uh, so, you know, it's like... I mean, I-I think, sorry, "
     "let me say that again. Okay."
 )
@@ -148,37 +150,78 @@ def resolve_device(requested: str) -> tuple[str, str]:
 # --------------------------------------------------------------------------- #
 # Transcription
 # --------------------------------------------------------------------------- #
+# Whisper loses its punctuation if it is left to run: once it has produced a stretch of lowercase text with no
+# full stops, it conditions on that and carries on in the same style, and a 37-minute recording came back
+# unpunctuated from minute 10 to minute 30. Sentence boundaries are what clip edges and captions are built on, so
+# the audio is decoded in pieces of about CHUNK_SECONDS, each started fresh from the prompt (which sets the
+# punctuated, verbatim style), and conditioned on its own text only inside the piece. Cuts fall in the quietest
+# moment near each target, so no word is split.
+CHUNK_SECONDS = float(os.environ.get("WHISPER_CHUNK_SECONDS", "180"))
+SAMPLE_RATE = 16000
+
+
+def chunk_boundaries(audio, chunk_seconds: float = CHUNK_SECONDS) -> list[tuple[int, int]]:
+    """[(start_sample, end_sample)] covering the audio, each cut at the quietest 100 ms near a multiple of chunk_seconds."""
+    total = len(audio)
+    target = int(chunk_seconds * SAMPLE_RATE)
+    if total <= target * 1.4:
+        return [(0, total)]
+    frame = SAMPLE_RATE // 10
+    reach = int(20 * SAMPLE_RATE)  # look this far either side of the target for a pause
+    cuts = [0]
+    while total - cuts[-1] > target * 1.4:
+        centre = cuts[-1] + target
+        lo, hi = max(cuts[-1] + target // 2, centre - reach), min(total - frame, centre + reach)
+        usable = (hi - lo) // frame
+        if usable < 2:
+            cuts.append(centre)
+            continue
+        energy = np.sqrt(np.mean(np.square(audio[lo: lo + usable * frame].reshape(usable, frame)), axis=1))
+        cuts.append(lo + int(np.argmin(energy)) * frame + frame // 2)
+    cuts.append(total)
+    return list(zip(cuts[:-1], cuts[1:]))
+
+
 def _run(audio_path: str, model_name: str, device: str, compute_type: str, language: Optional[str],
          on_progress: Optional[ProgressFn]) -> dict:
+    from faster_whisper.audio import decode_audio
+
     model = load_model(model_name, device, compute_type)
-    segments_iter, info = model.transcribe(
-        audio_path,
-        language=language or None,
-        beam_size=5,
-        word_timestamps=True,
-        condition_on_previous_text=False,
-        initial_prompt=VERBATIM_PROMPT,
-        vad_filter=True,
-        vad_parameters={"min_silence_duration_ms": 700, "speech_pad_ms": 300},
-        hallucination_silence_threshold=2.0,
-    )
-    duration = float(info.duration or 0.0)
-    segments = []
-    for seg in segments_iter:  # lazy: this loop is where decoding actually happens
-        words = [
-            {"word": w.word.strip(), "start": round(w.start, 3), "end": round(w.end, 3), "probability": round(w.probability, 3)}
-            for w in (seg.words or [])
-            if w.word.strip()
-        ]
-        text = seg.text.strip()
-        if not text:
-            continue
-        segments.append({"id": len(segments), "start": round(seg.start, 3), "end": round(seg.end, 3), "text": text, "words": words})
-        if on_progress and duration:
-            on_progress(min(1.0, seg.end / duration))
+    audio = decode_audio(audio_path, sampling_rate=SAMPLE_RATE)
+    duration = len(audio) / SAMPLE_RATE
+    segments: list[dict] = []
+    detected, detected_p = language, 1.0
+
+    for start, end in chunk_boundaries(audio):
+        offset = start / SAMPLE_RATE
+        segments_iter, info = model.transcribe(
+            audio[start:end],
+            language=language or None,
+            beam_size=5,
+            word_timestamps=True,
+            condition_on_previous_text=os.environ.get("WHISPER_CONDITION", "1") == "1",
+            initial_prompt=VERBATIM_PROMPT,
+            vad_filter=True,
+            vad_parameters={"min_silence_duration_ms": 700, "speech_pad_ms": 300},
+            hallucination_silence_threshold=2.0,
+        )
+        if not segments:
+            detected, detected_p = info.language, float(info.language_probability or 0.0)
+        for seg in segments_iter:  # lazy: this loop is where decoding actually happens
+            words = [
+                {"word": w.word.strip(), "start": round(w.start + offset, 3), "end": round(w.end + offset, 3), "probability": round(w.probability, 3)}
+                for w in (seg.words or [])
+                if w.word.strip()
+            ]
+            text = seg.text.strip()
+            if not text:
+                continue
+            segments.append({"id": len(segments), "start": round(seg.start + offset, 3), "end": round(seg.end + offset, 3), "text": text, "words": words})
+            if on_progress and duration:
+                on_progress(min(1.0, (seg.end + offset) / duration))
     return {
-        "language": info.language,
-        "languageProbability": round(float(info.language_probability or 0.0), 3),
+        "language": detected,
+        "languageProbability": round(detected_p, 3),
         "duration": round(duration, 3),
         "text": " ".join(s["text"] for s in segments),
         "segments": segments,

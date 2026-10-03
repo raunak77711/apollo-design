@@ -6,6 +6,10 @@ import { TALLY_VERSION, tallyBoard } from './boardTally.js';
 import { AnalysisError, analyzeTranscript } from './analysis/analyze.js';
 import { boardMatchesFor } from './analysis/candidate.js';
 import { PROMPT_VERSION } from './analysis/prompts.js';
+import { createCandidateApi } from './candidates.js';
+import { createMediaApi, newMediaState } from './mediaService.js';
+import { createRenderApi } from './renderService.js';
+import { DEFAULT_SETTINGS, mergeSettings } from './settings.js';
 import { extensionOf, storeUpload } from './uploadVideo.js';
 
 /**
@@ -44,6 +48,8 @@ export function newSessionRecord(title) {
     tally: idle(),
     analysis: idle(),
     candidates: [],
+    settings: structuredClone(DEFAULT_SETTINGS),
+    media: newMediaState(),
   };
 }
 
@@ -58,6 +64,12 @@ export function publicSession(session) {
   return {
     ...session,
     source: session.source ? { ...session.source, url: `/storage/content/sessions/${session.id}/${session.source.storedName}` } : null,
+    settings: mergeSettings(session.settings || {}, {}),
+    media: {
+      ...(session.media || newMediaState()),
+      // Prefer the small H.264 copy for playback: a phone's HEVC original often will not play in a browser.
+      ...(session.media?.proxy?.status === 'complete' ? { playUrl: `/storage/content/sessions/${session.id}/proxy.mp4` } : {}),
+    },
     counts,
   };
 }
@@ -109,8 +121,11 @@ export function mergeCandidates(existing = [], fresh = []) {
   return merged.sort((a, b) => a.sourceStart - b.sourceStart);
 }
 
-export function createContentService({ store, transcription, getProvider = () => null, llmCache = null, maxUploadBytes = 20 * GB, log = console }) {
+export function createContentService({ store, transcription, getProvider = () => null, llmCache = null, media = null, renderClient = null, engineVersion = 'engine-1', maxUploadBytes = 20 * GB, log = console }) {
   const running = new Set();
+  const candidatesApi = createCandidateApi({ store, transcription, getProvider, llmCache, log });
+  const mediaApi = createMediaApi({ store, media, log });
+  const renders = renderClient ? createRenderApi({ store, candidates: candidatesApi, client: renderClient, engineVersion, log }) : null;
 
   const sessionVideoPath = (session) => path.join(store.dirFor(session.id), session.source.storedName);
 
@@ -198,6 +213,8 @@ export function createContentService({ store, transcription, getProvider = () =>
           warnings: result.warnings,
         };
       });
+      // Each new short gets its edit now (the AI director or the rule-based one, per the toggle), so review starts with something to look at.
+      await candidatesApi.directMissing(id).catch((err) => log.error?.('[content] directing failed:', err.message));
     } catch (err) {
       log.error?.('[content] analysis failed:', err.message);
       await store.update(id, (s) => {
@@ -294,8 +311,10 @@ export function createContentService({ store, transcription, getProvider = () =>
           s.tally = idle();
           s.analysis = idle();
           s.candidates = [];
+          s.media = newMediaState();
         }
       });
+      mediaApi.prepareInBackground(id); // head position + browser-playable preview, in the background
       return publicSession(updated);
     },
 
@@ -322,6 +341,7 @@ export function createContentService({ store, transcription, getProvider = () =>
       if (session.transcription.status === 'complete') {
         await computeTally(id);
         await refreshBoardMatches(id);
+        await candidatesApi.revalidateDirectors(id);
         session = await store.get(id);
       }
       return publicSession(session);
@@ -351,6 +371,7 @@ export function createContentService({ store, transcription, getProvider = () =>
         s.transcription = { status: 'processing', progress: 0, startedAt: new Date().toISOString() };
         s.tally = idle();
       });
+      if (session.media?.framing?.status !== 'complete' || session.media?.proxy?.status !== 'complete') mediaApi.prepareInBackground(id);
       run(id, { force });
       return publicSession(updated);
     },
@@ -367,11 +388,85 @@ export function createContentService({ store, transcription, getProvider = () =>
       return publicSession(await store.get(id));
     },
 
+    /** The linked board as a list a person can pick from: every block, with what it says. */
+    async getBoardOutline(id) {
+      await store.get(id);
+      const snapshot = await store.readJson(id, 'board.json');
+      if (!snapshot) throw new ContentError(404, 'No board is linked to this recording.');
+      const index = buildBoardIndex(snapshot.spec);
+      return {
+        title: index.title,
+        sections: index.sections.map((sec) => ({
+          id: sec.id,
+          title: sec.title,
+          kicker: sec.kicker,
+          blocks: sec.blocks.map((b) => ({ id: b.id, type: b.type, label: (b.parts.find((x) => x.role !== 'caption')?.text || b.type).slice(0, 48), parts: b.parts.length })),
+        })),
+      };
+    },
+
     async getAnalysis(id) {
       await store.get(id);
       const stored = await store.readJson(id, 'analysis.json');
       if (!stored) throw new ContentError(404, 'This session has not been analysed yet.');
       return stored;
+    },
+
+    /* ------------------------------- settings & media ------------------------------- */
+
+    async updateSettings(id, patch) {
+      await store.get(id);
+      return publicSession(await store.update(id, (x) => { x.settings = mergeSettings(x.settings || {}, patch || {}); }));
+    },
+
+    /** Find the head and build the preview copy (again, if it failed). */
+    async prepareMedia(id) {
+      const session = await store.get(id);
+      if (!session.source) throw new ContentError(400, 'Upload a video first.');
+      if (mediaApi.isPreparing(id)) return publicSession(session);
+      const status = await mediaApi.status();
+      if (!status.ok) throw new ContentError(503, status.reason || "The worker isn't running.");
+      mediaApi.prepareInBackground(id);
+      await new Promise((r) => setTimeout(r, 50));
+      return publicSession(await store.get(id));
+    },
+
+    /* ------------------------------ reviewing and editing ----------------------------- */
+
+    updateCandidate: candidatesApi.updateCandidate,
+    trimCandidate: candidatesApi.trimCandidate,
+    setDirector: candidatesApi.setDirector,
+    regenerateDirector: candidatesApi.regenerateDirector,
+    directAll: candidatesApi.directAll,
+    exportPackage: candidatesApi.exportPackage,
+    promptText: candidatesApi.promptText,
+    engineProps: candidatesApi.engineProps,
+
+    /* ----------------------------------- rendering ----------------------------------- */
+
+    aiLive: () => Boolean(getProvider()?.live),
+
+    async renderStatus() {
+      return renders ? renders.status() : { ok: false, reason: 'No render worker is configured.' };
+    },
+    async renderCandidate(id, cid) {
+      if (!renders) throw new ContentError(503, 'No render worker is configured.');
+      const status = await renders.status();
+      if (!status.ok) throw new ContentError(503, status.reason);
+      const c = await renders.enqueue(id, cid);
+      if (!c) throw new ContentError(404, 'That short no longer exists.');
+      return publicSession(await store.get(id));
+    },
+    async renderApproved(id) {
+      if (!renders) throw new ContentError(503, 'No render worker is configured.');
+      const status = await renders.status();
+      if (!status.ok) throw new ContentError(503, status.reason);
+      const queued = await renders.enqueueApproved(id);
+      return { queued, session: publicSession(await store.get(id)) };
+    },
+    async cancelRender(id, cid) {
+      if (renders) await renders.cancel(id, cid);
+      return publicSession(await store.get(id));
     },
 
     async getTranscript(id) {
@@ -397,6 +492,8 @@ export function createContentService({ store, transcription, getProvider = () =>
 
     /** Sessions left "processing" by a restart cannot finish: say so, so the page does not wait forever. */
     async recoverInterrupted() {
+      await mediaApi.recoverInterrupted();
+      if (renders) await renders.recoverInterrupted();
       for (const s of await store.list()) {
         if (s.analysis?.status === 'processing' && !running.has(s.id)) {
           await store.update(s.id, (x) => { x.analysis = { status: 'failed', error: 'Apollo restarted while looking for shorts. Press Find shorts to continue.' }; });

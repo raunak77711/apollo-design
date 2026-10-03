@@ -20,3 +20,6 @@ server/storage/transcripts/*
 server/storage/content/*
 !server/storage/transcripts/.gitkeep
 !server/storage/content/.gitkeep
+
+# Render worker dependencies
+render/node_modules/

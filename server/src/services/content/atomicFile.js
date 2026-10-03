@@ -14,13 +14,13 @@ import { randomBytes } from 'node:crypto';
 const TRANSIENT = new Set(['EPERM', 'EBUSY', 'EACCES']);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function retrying(fn, attempts = 12) {
+async function retrying(fn, attempts = 40) {
   for (let i = 0; ; i += 1) {
     try {
       return await fn();
     } catch (err) {
       if (!TRANSIENT.has(err.code) || i >= attempts - 1) throw err;
-      await sleep(10 + i * 15);
+      await sleep(Math.min(250, 10 + i * 20));
     }
   }
 }

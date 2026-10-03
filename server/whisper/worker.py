@@ -7,7 +7,8 @@ model loaded between jobs, and does one transcription at a time (a 4060 is
 faster running jobs back to back than in parallel).
 
     GET  /health                -> { ok, device, model, cuda, ffmpeg, busy, queued }
-    POST /jobs  { "path": ... } -> { id }           (path is relative to the storage root)
+    POST /jobs  { "path": ..., "kind": "transcribe"|"framing"|"proxy", "out": ... }  -> { id }
+                (paths are relative to the storage root; "framing" finds the speaker's head, "proxy" builds the preview copy)
     GET  /jobs/<id>             -> { status: queued|running|done|failed, progress, result?, error? }
 
 Only files under the storage root can be read (no path traversal), and the
@@ -27,6 +28,8 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import framing as F
+import proxy as P
 import transcribe as T
 
 JOBS: dict[str, dict] = {}
@@ -54,7 +57,13 @@ def run_job(job_id: str, storage: Path) -> None:
 
     try:
         src = safe_resolve(storage, job["path"])
-        job["result"] = T.transcribe(src, model=job["model"], device=job["device"], language=job["language"], on_progress=progress)
+        kind = job.get("kind", "transcribe")
+        if kind == "framing":
+            job["result"] = F.detect_framing(src)
+        elif kind == "proxy":
+            job["result"] = P.build_proxy(src, safe_resolve(storage, job["out"]), on_progress=progress)
+        else:
+            job["result"] = T.transcribe(src, model=job["model"], device=job["device"], language=job["language"], on_progress=progress)
         job["status"] = "done"
         job["progress"] = 1.0
     except Exception as err:  # reported to the caller, never raised into the worker loop
@@ -127,7 +136,16 @@ def make_handler(storage: Path, defaults: dict):
             except (KeyError, ValueError):
                 return self._send(400, {"error": "body must be JSON with a 'path'"})
             job_id = uuid.uuid4().hex[:12]
+            kind = req.get("kind", "transcribe")
+            if kind not in ("transcribe", "framing", "proxy"):
+                return self._send(400, {"error": f"unknown job kind: {kind}"})
+            if kind == "proxy":
+                try:
+                    safe_resolve(storage, req["out"])
+                except (KeyError, PermissionError):
+                    return self._send(400, {"error": "a proxy job needs 'out' under the storage root"})
             JOBS[job_id] = {
+                "kind": kind, "out": req.get("out"),
                 "status": "queued", "progress": 0.0, "path": path,
                 "model": req.get("model") or defaults["model"],
                 "device": req.get("device") or defaults["device"],

@@ -358,6 +358,8 @@ async function serviceWith(provider, transcript = prepare().transcript) {
   });
   const { id } = await service.createSession({ title: 'Ep' });
   await service.attachVideo(id, { body: Readable.from([Buffer.from('video')]), fileName: 'ep.mp4' });
+  // These tests are about finding shorts; the AI director has its own tests, so keep it out of the call counts.
+  await service.updateSettings(id, { aiDirector: false });
   return { service, id };
 }
 

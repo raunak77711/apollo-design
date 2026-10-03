@@ -45,6 +45,7 @@ services:
       OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
       # Content Factory: Whisper needs the GPU, so it runs on the host (npm run whisper:worker --prefix server).
       WHISPER_WORKER_URL: ${WHISPER_WORKER_URL:-http://host.docker.internal:5011}
+      RENDER_WORKER_URL: ${RENDER_WORKER_URL:-http://host.docker.internal:5012}
     ports:
       - "5010:5010"
     volumes:

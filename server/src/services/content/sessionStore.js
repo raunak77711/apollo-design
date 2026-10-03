@@ -27,6 +27,10 @@ export class SessionNotFoundError extends Error {
 
 export function createSessionStore(root) {
   const queues = new Map(); // id -> tail of that session's write queue
+  // Write-through cache. The page polls a session every second while background jobs save it; on Windows a
+  // save can fail for a moment if a reader has the file open. This process is the only writer, so reads are
+  // answered from memory and only a save touches the file.
+  const cache = new Map();
 
   const dirFor = (id) => {
     if (!SAFE_ID.test(String(id))) throw new SessionNotFoundError(id);
@@ -35,8 +39,11 @@ export function createSessionStore(root) {
   const fileFor = (id) => path.join(dirFor(id), 'session.json');
 
   async function read(id) {
+    if (cache.has(id)) return structuredClone(cache.get(id));
     try {
-      return JSON.parse(await readFileRetry(fileFor(id)));
+      const session = JSON.parse(await readFileRetry(fileFor(id)));
+      cache.set(id, structuredClone(session));
+      return session;
     } catch (err) {
       if (err.code === 'ENOENT') throw new SessionNotFoundError(id);
       throw err;
@@ -45,6 +52,7 @@ export function createSessionStore(root) {
 
   async function write(session) {
     await writeFileAtomic(fileFor(session.id), JSON.stringify(session, null, 2));
+    cache.set(session.id, structuredClone(session));
   }
 
   return {
@@ -99,6 +107,7 @@ export function createSessionStore(root) {
 
     async remove(id) {
       await read(id);
+      cache.delete(id);
       await fs.rm(dirFor(id), { recursive: true, force: true });
     },
 

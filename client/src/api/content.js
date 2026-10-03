@@ -63,5 +63,23 @@ export const contentApi = {
   analysis: (id) => request(`/sessions/${id}/analysis`),
   transcript: (id) => request(`/sessions/${id}/transcript`),
   tally: (id) => request(`/sessions/${id}/tally`),
+  boardOutline: (id) => request(`/sessions/${id}/board`),
+  settings: (id, patch) => request(`/sessions/${id}/settings`, { method: 'PATCH', body: patch }),
+  prepareMedia: (id) => request(`/sessions/${id}/media`, { method: 'POST' }),
+  review: (id, cid, patch) => request(`/sessions/${id}/candidates/${cid}`, { method: 'PATCH', body: patch }),
+  trim: (id, cid, body) => request(`/sessions/${id}/candidates/${cid}/trim`, { method: 'POST', body }),
+  setDirector: (id, cid, body) => request(`/sessions/${id}/candidates/${cid}/director`, { method: 'PUT', body }),
+  regenerate: (id, cid, ai) => request(`/sessions/${id}/candidates/${cid}/director/regenerate`, { method: 'POST', body: typeof ai === 'boolean' ? { ai } : {} }),
+  regenerateAll: (id, ai) => request(`/sessions/${id}/director`, { method: 'POST', body: typeof ai === 'boolean' ? { ai } : {} }),
+  props: (id, cid) => request(`/sessions/${id}/candidates/${cid}/props`),
+  exportPackage: (id, cid) => request(`/sessions/${id}/candidates/${cid}/package`),
+  promptText: async (id, cid) => {
+    const res = await fetch(`/api/content/sessions/${id}/candidates/${cid}/prompt`);
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not build the prompt');
+    return res.text();
+  },
+  render: (id, cid) => request(`/sessions/${id}/candidates/${cid}/render`, { method: 'POST' }),
+  cancelRender: (id, cid) => request(`/sessions/${id}/candidates/${cid}/render`, { method: 'DELETE' }),
+  renderApproved: (id) => request(`/sessions/${id}/render`, { method: 'POST' }),
   uploadVideo,
 };
