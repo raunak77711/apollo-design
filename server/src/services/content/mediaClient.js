@@ -33,7 +33,7 @@ export function createMediaClient({ url, storageRoot, fetchImpl = fetch, pollMs 
         const { ok, body } = await call('/health');
         return ok ? { ...body, ok: true } : { ok: false, reason: 'The worker returned an error.' };
       } catch (err) {
-        return { ok: false, reason: `The worker isn't running (${err.message}). Start it: npm run whisper:worker --prefix server` };
+        return { ok: false, reason: `The worker isn't running (${err.message}). Double-click start-workers.bat in the Apollo folder (or run: npm run workers --prefix server).` };
       }
     },
 
@@ -48,7 +48,7 @@ export function createMediaClient({ url, storageRoot, fetchImpl = fetch, pollMs 
           body: JSON.stringify({ kind, path: relOf(absPath), ...(absOut ? { out: relOf(absOut) } : {}) }),
         });
       } catch (err) {
-        throw new MediaUnavailableError(`The worker isn't running (${err.message}). Start it: npm run whisper:worker --prefix server`);
+        throw new MediaUnavailableError(`The worker isn't running (${err.message}). Double-click start-workers.bat in the Apollo folder (or run: npm run workers --prefix server).`);
       }
       if (!created.ok) throw new Error(created.body.error || `The worker rejected the ${kind} job (${created.status}).`);
 

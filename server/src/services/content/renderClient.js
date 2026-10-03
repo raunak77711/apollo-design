@@ -24,7 +24,7 @@ export function createRenderClient({ url, fetchImpl = fetch, pollMs = 1000, maxP
         const { ok, body } = await call('/health');
         return ok ? { ...body, ok: true } : { ok: false, reason: 'The render worker returned an error.' };
       } catch (err) {
-        return { ok: false, reason: `The render worker isn't running (${err.message}). Start it: npm run render:worker` };
+        return { ok: false, reason: `The render worker isn't running (${err.message}). Double-click start-workers.bat in the Apollo folder (or run: npm run workers --prefix server).` };
       }
     },
 
@@ -35,7 +35,7 @@ export function createRenderClient({ url, fetchImpl = fetch, pollMs = 1000, maxP
       try {
         created = await call('/renders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(job) });
       } catch (err) {
-        throw new RenderUnavailableError(`The render worker isn't running (${err.message}). Start it: npm run render:worker`);
+        throw new RenderUnavailableError(`The render worker isn't running (${err.message}). Double-click start-workers.bat in the Apollo folder (or run: npm run workers --prefix server).`);
       }
       if (!created.ok) throw new Error(created.body.error || `The render worker rejected the job (${created.status}).`);
 

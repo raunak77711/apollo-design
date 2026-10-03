@@ -91,7 +91,7 @@ export function createWorkerRunner({ url, storageRoot, model, device, language, 
         const { ok, body } = await call('/health');
         return ok ? { ...body, mode: 'worker', url: base } : { ok: false, mode: 'worker', url: base, reason: 'worker returned an error' };
       } catch (err) {
-        return { ok: false, mode: 'worker', url: base, reason: `worker not reachable (${err.message}). Start it: npm run whisper:worker --prefix server` };
+        return { ok: false, mode: 'worker', url: base, reason: `worker not reachable (${err.message}). Double-click start-workers.bat in the Apollo folder (or run: npm run workers --prefix server).` };
       }
     },
 
@@ -108,7 +108,7 @@ export function createWorkerRunner({ url, storageRoot, model, device, language, 
           body: JSON.stringify({ path: rel.split(path.sep).join('/'), model, device, language }),
         });
       } catch (err) {
-        throw new TranscriptionUnavailableError(`Whisper worker not reachable at ${base} (${err.message}). Start it: npm run whisper:worker --prefix server`);
+        throw new TranscriptionUnavailableError(`Whisper worker not reachable at ${base} (${err.message}). Double-click start-workers.bat in the Apollo folder (or run: npm run workers --prefix server).`);
       }
       if (!created.ok) throw new TranscriptionFailedError(created.body.error || `worker rejected the job (${created.status})`);
 

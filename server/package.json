@@ -10,7 +10,8 @@
     "test": "node --test",
     "transcribe": "node scripts/transcribe.js",
     "whisper:worker": "node scripts/whisper-worker.js",
-    "render:worker": "node ../render/worker.mjs"
+    "render:worker": "node ../render/worker.mjs",
+    "workers": "node scripts/workers.js"
   },
   "dependencies": {
     "compression": "^1.7.5",
