@@ -10,6 +10,7 @@ import { imagesRouter } from './routes/images.js';
 import { assetsRouter } from './routes/assets.js';
 import { exportRouter } from './routes/export.js';
 import { createContentRouter } from './routes/content.js';
+import { createDistributionRouter } from './routes/distribution.js';
 import { notFound, errorHandler } from './middleware/error.js';
 import { isMongoConnected } from './config/db.js';
 
@@ -46,6 +47,9 @@ export function createApp() {
   app.use('/api/export', exportRouter);
   // Content Factory: long-form recordings -> transcript -> Jam board tally -> shorts.
   app.use('/api/content', createContentRouter());
+  // Distribution: batches, the deduplicated+classified asset pool, platform accounts,
+  // scheduling/publishing and analytics.
+  app.use('/api/distribution', createDistributionRouter());
 
   app.use(notFound);
   app.use(errorHandler);

@@ -11,3 +11,4 @@ whisper/samples
 whisper/__pycache__
 storage/transcripts
 storage/content
+storage/distribution

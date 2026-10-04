@@ -39,6 +39,22 @@ export const config = {
     renderWorkerUrl: process.env.RENDER_WORKER_URL || 'http://127.0.0.1:5012',
   },
 
+  // Distribution: real publishing to YouTube, a Facebook Page (and, through it, Instagram)
+  // and TikTok, plus the scheduler and analytics ingestion that run while Apollo is online.
+  // Every secret below is OPTIONAL and per-platform: a platform with no client id/secret
+  // configured simply can't be connected yet (see README's Distribution section for the
+  // developer-app setup each one needs — Apollo cannot create these apps for you).
+  distribution: {
+    secretKeyFile: path.resolve(__dirname, '../../storage/distribution/.secret-key'),
+    // Where a rendered short can be fetched from the public internet. Only Instagram's publish
+    // API needs this (it fetches the video by URL); everything else uploads the bytes directly.
+    publicMediaBaseUrl: process.env.PUBLIC_MEDIA_BASE_URL || '',
+    tickIntervalMs: (Number(process.env.DISTRIBUTION_TICK_MINUTES) || 15) * 60_000,
+    youtube: { clientId: process.env.YOUTUBE_CLIENT_ID || '', clientSecret: process.env.YOUTUBE_CLIENT_SECRET || '' },
+    facebook: { clientId: process.env.FACEBOOK_CLIENT_ID || '', clientSecret: process.env.FACEBOOK_CLIENT_SECRET || '' },
+    tiktok: { clientKey: process.env.TIKTOK_CLIENT_KEY || '', clientSecret: process.env.TIKTOK_CLIENT_SECRET || '' },
+  },
+
   ai: {
     provider: process.env.AI_PROVIDER || 'deepseek',
     deepseek: {

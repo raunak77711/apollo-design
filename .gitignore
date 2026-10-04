@@ -23,3 +23,5 @@ server/storage/content/*
 
 # Render worker dependencies
 render/node_modules/
+server/storage/distribution/*
+!server/storage/distribution/.gitkeep
