@@ -19,9 +19,10 @@ export default function AccountsPanel({ status, accounts, onChanged }) {
 
   const connect = (platform) => {
     const redirectUri = `${window.location.origin}${CALLBACK_PATH}`;
-    const state = platform;
+    const nonce = crypto.randomUUID();
     sessionStorage.setItem('apollo:oauth:redirect', redirectUri);
-    distributionApi.authUrl(platform, redirectUri, state).then((url) => { window.location.href = url; }).catch((e) => toast.error("Couldn't start connecting", e.message));
+    sessionStorage.setItem('apollo:oauth:state', JSON.stringify({ nonce, platform }));
+    distributionApi.authUrl(platform, redirectUri, nonce).then((url) => { window.location.href = url; }).catch((e) => toast.error("Couldn't start connecting", e.message));
   };
 
   const linkInstagram = async (facebookAccountId) => {

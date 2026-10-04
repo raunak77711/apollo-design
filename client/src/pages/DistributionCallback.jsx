@@ -11,10 +11,17 @@ export default function DistributionCallback() {
 
   useEffect(() => {
     const code = params.get('code');
-    const platform = params.get('state');
+    const returnedState = params.get('state');
     const redirectUri = sessionStorage.getItem('apollo:oauth:redirect') || `${window.location.origin}/distribution/callback`;
-    if (!code || !platform) {
+    const stored = sessionStorage.getItem('apollo:oauth:state');
+    sessionStorage.removeItem('apollo:oauth:state');
+    const { nonce, platform } = stored ? JSON.parse(stored) : {};
+    if (!code || !returnedState || !nonce || !platform) {
       setError('That link is missing what it needs to connect the account.');
+      return;
+    }
+    if (returnedState !== nonce) {
+      setError('This connection request could not be verified — please try connecting again.');
       return;
     }
     distributionApi
