@@ -47,6 +47,12 @@ export class InstagramProvider extends PlatformProvider {
     });
   }
 
+  // No scopes of its own: it rides on whatever the linked Facebook account already requested
+  // (FacebookProvider's SCOPES includes instagram_basic / instagram_content_publish for exactly this).
+  get scopes() {
+    return [];
+  }
+
   // Instagram publishing authenticates as a Facebook Login for Business connection; this
   // provider is driven by the Facebook account record (see distribution/accounts.js), not its own OAuth round trip.
   authUrl() {

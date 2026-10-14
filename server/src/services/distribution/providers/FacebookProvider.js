@@ -6,18 +6,23 @@ import { PlatformAuthError, PlatformCapabilities, PlatformProvider } from './Pla
  * Also has real native scheduling: a Page video published with `published: false`
  * and a future `scheduled_publish_time` is held and posted by Facebook itself.
  *
+ * One Meta login can administer more than one Page, and `exchangeCode` connects all of
+ * them, each as its own account - never just the first. `InstagramProvider` rides on
+ * whichever one of these the person later links, so this also requests the
+ * `instagram_basic` and `instagram_content_publish` permissions up front; without them
+ * on this same token, linking Instagram later has nothing to work with.
+ *
  * Setup the Page admin must do once, in the Meta Developers console: create an app,
  * add the "Facebook Login for Business" product, register this app's redirect URI,
- * and request the `pages_show_list`, `pages_manage_posts` and `pages_read_engagement`
- * permissions. A Page the connecting account administers can post immediately in
- * development mode; posting to Pages you don't administer, or letting other people
- * connect their own Pages, needs Meta's App Review.
+ * and request the scopes below. A Page the connecting account administers can post
+ * immediately in development mode; posting to Pages you don't administer, or letting
+ * other people connect their own Pages, needs Meta's App Review.
  */
 
 const AUTH_URL = 'https://www.facebook.com/v21.0/dialog/oauth';
 const TOKEN_URL = 'https://graph.facebook.com/v21.0/oauth/access_token';
 const GRAPH = 'https://graph.facebook.com/v21.0';
-const SCOPES = ['pages_show_list', 'pages_manage_posts', 'pages_read_engagement'];
+export const SCOPES = ['pages_show_list', 'pages_manage_posts', 'pages_read_engagement', 'instagram_basic', 'instagram_content_publish'];
 
 export class FacebookProvider extends PlatformProvider {
   static id = 'facebook';
@@ -40,6 +45,10 @@ export class FacebookProvider extends PlatformProvider {
     });
   }
 
+  get scopes() {
+    return SCOPES;
+  }
+
   authUrl({ redirectUri, state }) {
     const q = new URLSearchParams({ client_id: this.clientId, redirect_uri: redirectUri, state, scope: SCOPES.join(',') });
     return `${AUTH_URL}?${q}`;
@@ -53,6 +62,12 @@ export class FacebookProvider extends PlatformProvider {
     return json;
   }
 
+  /**
+   * One login can administer several Pages; every one of them is returned as its own
+   * connectable account (never just the first), since Apollo schedules per-Page, not
+   * per-login. `connectAccount` upserts each entry this resolves to.
+   * @returns {Promise<Array<{accessToken, refreshToken, expiresAt, accountId, accountName, scope}>>}
+   */
   async exchangeCode({ code, redirectUri }) {
     const q = new URLSearchParams({ client_id: this.clientId, client_secret: this.clientSecret, redirect_uri: redirectUri, code });
     const res = await this.fetchImpl(`${TOKEN_URL}?${q}`);
@@ -62,13 +77,12 @@ export class FacebookProvider extends PlatformProvider {
 
     // Pages the user administers, each with its own long-lived Page token - the credential actually used to post.
     const pages = await this.#get('/me/accounts', { fields: 'id,name,access_token' }, userToken);
-    const page = pages.data?.[0];
-    if (!page) throw new PlatformAuthError('No Facebook Page is administered by this account. Create or get admin access to a Page first.', { needsReconnect: false });
+    if (!pages.data?.length) throw new PlatformAuthError('No Facebook Page is administered by this account. Create or get admin access to a Page first.', { needsReconnect: false });
 
-    return {
+    return pages.data.map((page) => ({
       accessToken: page.access_token, refreshToken: null, expiresAt: null, // Page tokens from a long-lived user token do not expire under normal conditions
-      accountId: page.id, accountName: page.name, scope: SCOPES.join(','), raw: { pages: pages.data.map((p) => ({ id: p.id, name: p.name })) },
-    };
+      accountId: page.id, accountName: page.name, scope: SCOPES.join(','),
+    }));
   }
 
   async refresh() {

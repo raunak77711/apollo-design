@@ -95,6 +95,16 @@ export function createCandidateApi({ store, transcription, getProvider = () => n
         }
         if (patch.note !== undefined) c.note = String(patch.note).slice(0, 500);
         if (patch.captions !== undefined) c.edits = { ...(c.edits || {}), captions: patch.captions === false ? false : undefined };
+        if (patch.captionOverrides !== undefined) {
+          const overrides = { ...(c.edits?.captionOverrides || {}) };
+          for (const [key, value] of Object.entries(patch.captionOverrides || {})) {
+            if (!/^\d+$/.test(key)) continue;
+            const text = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+            if (!text) delete overrides[key];
+            else overrides[key] = text.slice(0, 60);
+          }
+          c.edits = { ...(c.edits || {}), captionOverrides: overrides };
+        }
       });
     },
 

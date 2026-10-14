@@ -87,6 +87,32 @@ test('a short with a cut in the middle closes the gap: clip time is continuous',
   assert.deepEqual(keepSegments({ sourceSegments: [{ start: 1, end: 2, action: 'discard' }] }), []);
 });
 
+test('a caption override fixes a word\'s text without moving its timing, keyed by a position that survives a trim', () => {
+  const { transcript, candidate } = setup();
+  const plain = buildClip(candidate, transcript);
+  const target = plain.words[1]; // 'Most owners think' -> override 'owners'
+  assert.equal(target.word, 'owners');
+
+  const corrected = { ...candidate, edits: { captionOverrides: { [target.wordIndex]: 'homeowners' } } };
+  const fixed = buildClip(corrected, transcript);
+  const same = fixed.words[1];
+  assert.equal(same.word, 'homeowners');
+  assert.equal(same.originalWord, 'owners');
+  assert.equal(same.start, target.start); // timing is untouched
+  assert.equal(same.end, target.end);
+
+  // Trimming the start moves which words are kept (and their clip-local `index`), but the
+  // override is keyed by the transcript's own word position, so it still lands on the right word.
+  const trimmed = { ...corrected, sourceSegments: [{ ...corrected.sourceSegments[1], start: corrected.sourceSegments[1].start + 0.1 }] };
+  const afterTrim = buildClip(trimmed, transcript);
+  assert.equal(afterTrim.words.find((w) => w.wordIndex === target.wordIndex).word, 'homeowners');
+
+  // An empty string clears the override back to the original word.
+  const cleared = buildClip({ ...candidate, edits: { captionOverrides: { [target.wordIndex]: '' } } }, transcript);
+  assert.equal(cleared.words[1].word, 'owners');
+  assert.equal(cleared.words[1].originalWord, undefined);
+});
+
 /* ---------------------------------- grounding ---------------------------------- */
 
 test('phrases are found by their real words, stems and all, nearest to the hint', () => {

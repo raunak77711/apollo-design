@@ -45,6 +45,10 @@ export class YouTubeProvider extends PlatformProvider {
     });
   }
 
+  get scopes() {
+    return SCOPES;
+  }
+
   authUrl({ redirectUri, state }) {
     const q = new URLSearchParams({
       client_id: this.clientId, redirect_uri: redirectUri, response_type: 'code', access_type: 'offline', prompt: 'consent',

@@ -69,8 +69,10 @@ export class PlatformProvider {
   }
 
   /**
-   * The redirect's `code` -> a connected account.
-   * @returns {Promise<{ accessToken, refreshToken, expiresAt, accountId, accountName, scope }>}
+   * The redirect's `code` -> one connected account, or several when a single login can
+   * administer more than one postable account (Facebook: every Page it administers).
+   * @returns {Promise<{ accessToken, refreshToken, expiresAt, accountId, accountName, scope }
+   *   | Array<{ accessToken, refreshToken, expiresAt, accountId, accountName, scope }>>}
    */
   async exchangeCode(/* { code, redirectUri } */) {
     throw new Error('exchangeCode() not implemented');

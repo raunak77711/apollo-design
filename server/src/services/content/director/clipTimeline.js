@@ -38,16 +38,31 @@ export function clipToSource(segments, t) {
   return last ? last.end : 0;
 }
 
+/**
+ * `candidate.edits.captionOverrides` corrects a misheard word's text without touching its timing:
+ * `{ [transcriptWordIndex]: correctedText }`, keyed by the word's stable position in the session's
+ * whole transcript (from `flattenWords`) rather than its position in this clip, so the correction
+ * survives a trim even though which words are kept - and therefore their clip-local positions - can change.
+ */
 export function buildClip(candidate, transcript) {
   const segments = keepSegments(candidate);
   const duration = segments.length ? segments[segments.length - 1].clipEnd : 0;
+  const overrides = candidate.edits?.captionOverrides || {};
   const words = [];
   for (const w of flattenWords(transcript)) {
     const seg = segments.find((s) => w.start >= s.start - EPS && w.end <= s.end + EPS);
     if (!seg) continue;
     const start = round(seg.clipStart + Math.max(0, w.start - seg.start));
     const end = round(Math.min(seg.clipEnd, seg.clipStart + (w.end - seg.start)));
-    words.push({ word: w.word, start, end: Math.max(end, start), index: words.length });
+    const override = overrides[w.index];
+    words.push({
+      word: override || w.word,
+      wordIndex: w.index,
+      ...(override ? { originalWord: w.word } : {}),
+      start,
+      end: Math.max(end, start),
+      index: words.length,
+    });
   }
   return { segments, duration: round(duration), words, text: words.map((w) => w.word).join(' ') };
 }

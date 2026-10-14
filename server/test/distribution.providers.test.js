@@ -77,9 +77,12 @@ test('Facebook: connecting resolves the Page token (not the user token), and sch
     { match: (u) => u.includes('/me/accounts'), respond: () => ({ body: { data: [{ id: 'page1', name: 'My Page', access_token: 'page-token' }] } }) },
   ]);
   const fb = new FacebookProvider({ clientId: 'id', clientSecret: 'secret', fetchImpl });
-  const account = await fb.exchangeCode({ code: 'c', redirectUri: 'https://app/cb' });
+  const accounts = await fb.exchangeCode({ code: 'c', redirectUri: 'https://app/cb' });
+  assert.equal(accounts.length, 1);
+  const account = accounts[0];
   assert.equal(account.accountId, 'page1');
   assert.equal(account.accessToken, 'page-token'); // the Page token, never the short-lived user token
+  assert.ok(account.scope.includes('instagram_content_publish')); // so a later Instagram link has the permission it needs
 
   const future = new Date(Date.now() + 3600_000).toISOString();
   const upload = fakeFetch([{ match: (u) => u.includes('graph-video.facebook.com'), respond: () => ({ body: { id: 'post1' } }) }]);
@@ -90,6 +93,21 @@ test('Facebook: connecting resolves the Page token (not the user token), and sch
   assert.ok(form instanceof FormData);
   assert.equal(form.get('published'), 'false');
   assert.ok(form.get('scheduled_publish_time'));
+});
+
+test('Facebook: administering several Pages connects every one of them, not just the first', async () => {
+  const fetchImpl = fakeFetch([
+    { match: (u) => u.includes('/oauth/access_token'), respond: () => ({ body: { access_token: 'user-token' } }) },
+    { match: (u) => u.includes('/me/accounts'), respond: () => ({ body: { data: [
+      { id: 'page1', name: 'Main Page', access_token: 'token1' },
+      { id: 'page2', name: 'Side Project Page', access_token: 'token2' },
+    ] } }) },
+  ]);
+  const fb = new FacebookProvider({ clientId: 'id', clientSecret: 'secret', fetchImpl });
+  const accounts = await fb.exchangeCode({ code: 'c', redirectUri: 'https://app/cb' });
+  assert.equal(accounts.length, 2);
+  assert.deepEqual(accounts.map((a) => a.accountId), ['page1', 'page2']);
+  assert.deepEqual(accounts.map((a) => a.accessToken), ['token1', 'token2']);
 });
 
 test('Facebook: no administered Page is a clear, non-retriable error naming the real problem', async () => {

@@ -27,6 +27,8 @@ from typing import Optional
 
 import numpy as np
 
+os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")  # silence a benign "new graph engine" target warning from cv2.dnn
+
 HERE = Path(__file__).resolve().parent
 MODEL_PATH = HERE / "models" / "face_detection_yunet_2023mar.onnx"
 MODEL_URL = "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"

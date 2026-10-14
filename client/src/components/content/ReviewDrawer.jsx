@@ -5,6 +5,7 @@ import { cx } from '../../lib/cx.js';
 import { formatBytes, formatTime } from '../../lib/time.js';
 import { useToast } from '../../lib/toast.jsx';
 import { Button, Spinner } from '../../ui/primitives.jsx';
+import CaptionEditor from './CaptionEditor.jsx';
 import ShortPreview from './ShortPreview.jsx';
 
 /**
@@ -76,6 +77,7 @@ export default function ReviewDrawer({ session, candidate, onClose, onChanged })
     return act('events', async () => { await contentApi.setDirector(id, c.id, { events, source: 'manual' }); return contentApi.get(id); });
   };
   const toggleCaptions = () => act('captions', () => contentApi.review(id, c.id, { captions: c.edits?.captions === false ? true : false }));
+  const fixCaption = (wordIndex, text) => act('caption', () => contentApi.review(id, c.id, { captionOverrides: { [wordIndex]: text } }));
   const startRender = () => act('render', () => contentApi.render(id, c.id));
   const copyPrompt = async () => {
     try {
@@ -184,6 +186,16 @@ export default function ReviewDrawer({ session, candidate, onClose, onChanged })
                   <Button size="sm" variant="primary" className="mt-2" onClick={applyPasted} disabled={!paste.trim() || !!busy}>Use this edit</Button>
                 </div>
               )}
+            </section>
+
+            <section>
+              <h3 className="font-mono text-2xs uppercase tracking-[0.2em] text-ink-3">Captions</h3>
+              <p className="mt-1.5 text-xs text-ink-3">Click a word Whisper got wrong and retype it. Timing stays exactly where it was; the fix applies to this short only.</p>
+              {props ? (
+                <div className="mt-2">
+                  <CaptionEditor words={props.words} onCommit={fixCaption} disabled={!!busy} />
+                </div>
+              ) : <div className="mt-2"><Spinner size={13} /></div>}
             </section>
 
             <section>

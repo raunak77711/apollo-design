@@ -31,7 +31,10 @@ export function getDistributionService() {
     const scheduler = createScheduler({ publications, accounts, assets, providers, analytics, storageRoot: config.storageRoot });
     const research = new DeepSeekResearchProvider({ getProvider: getAIProvider });
 
-    shared = createDistributionService({ batches, assets, publications, accounts, analytics, providers, scheduler, contentAssets, research });
+    shared = createDistributionService({
+      batches, assets, publications, accounts, analytics, providers, scheduler, contentAssets, research,
+      storageRoot: config.storageRoot, maxUploadBytes: config.content.maxUploadBytes,
+    });
   }
   return shared;
 }

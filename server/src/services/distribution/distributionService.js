@@ -1,3 +1,5 @@
+import path from 'node:path';
+import { extensionOf, storeUpload } from '../content/uploadVideo.js';
 import { PLATFORM_IDS } from './providers/PlatformProvider.js';
 
 /**
@@ -16,7 +18,8 @@ export class DistributionError extends Error {
 }
 
 export function createDistributionService({
-  batches, assets, publications, accounts, analytics, providers, scheduler, contentAssets, research, log = console,
+  batches, assets, publications, accounts, analytics, providers, scheduler, contentAssets, research,
+  storageRoot, maxUploadBytes = 5 * 1024 ** 3, log = console,
 }) {
   function publicAccount(a) {
     return { id: a.id, platform: a.platform, accountId: a.accountId, accountName: a.accountName, connectedAt: a.connectedAt, extra: a.extra };
@@ -67,12 +70,41 @@ export function createDistributionService({
       });
     },
 
+    /**
+     * A video pushed straight into Distribution, bypassing Content Factory and batches entirely:
+     * no transcript, no Director Track, no auto-captions, published exactly as uploaded. Useful for
+     * something that doesn't need the review/dedup pipeline - just get it out to the connected accounts.
+     */
+    async uploadAsset({ title, description, body, fileName }) {
+      const fallback = path.basename(String(fileName || ''), path.extname(String(fileName || ''))).replace(/[_-]+/g, ' ').trim();
+      const name = String(title || '').trim().slice(0, 120) || fallback || 'Untitled upload';
+      const ext = extensionOf(fileName);
+      const asset = await assets.create({ title: name, description: description ? String(description).slice(0, 2000) : '', batchId: null, kind: 'manual', status: 'processing' });
+      try {
+        const stored = await storeUpload(body, { dir: assets.dirFor(asset.id), ext, maxBytes: maxUploadBytes });
+        const renderFile = path.relative(storageRoot, path.join(assets.dirFor(asset.id), stored.storedName)).split(path.sep).join('/');
+        return assets.update(asset.id, (a) => { a.status = 'ready'; a.renderFile = renderFile; a.bytes = stored.bytes; });
+      } catch (err) {
+        await assets.remove(asset.id).catch(() => {});
+        throw err;
+      }
+    },
+    /** Quick uploads live outside any batch; this is how the UI lists them. */
+    async listUnassignedAssets() {
+      return (await assets.list()).filter((a) => !a.batchId);
+    },
+    async deleteAsset(id) {
+      const asset = await assets.get(id);
+      if (asset.batchId) throw new DistributionError(409, 'This asset belongs to a batch; archive it from the batch view instead.');
+      return assets.remove(id);
+    },
+
     /* -------------------------------- accounts -------------------------------- */
 
     platformStatus() {
       return PLATFORM_IDS.map((id) => {
         const provider = providers.get(id);
-        return { platform: id, configured: providers.isConfigured(id), capabilities: provider.capabilities };
+        return { platform: id, configured: providers.isConfigured(id), capabilities: provider.capabilities, scopes: provider.scopes || [] };
       });
     },
     async listAccounts() {
@@ -83,11 +115,13 @@ export function createDistributionService({
       if (platform === 'instagram') throw new DistributionError(400, 'Connect Facebook first, then link its Instagram account.');
       return providers.get(platform).authUrl({ redirectUri, state });
     },
+    /** A login can resolve to more than one connectable account (every Facebook Page it administers); each is upserted. */
     async connectAccount(platform, { code, redirectUri }) {
       const provider = providers.get(platform);
       const result = await provider.exchangeCode({ code, redirectUri });
-      const saved = await accounts.upsert({ platform, ...result, extra: result.raw || {} });
-      return publicAccount(saved);
+      const results = Array.isArray(result) ? result : [result];
+      const saved = await Promise.all(results.map((r) => accounts.upsert({ platform, ...r, extra: r.raw || {} })));
+      return saved.map(publicAccount);
     },
     /** Instagram has no OAuth of its own: it rides on a connected Facebook Page's token. */
     async linkInstagram(facebookAccountId) {

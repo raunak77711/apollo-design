@@ -25,3 +25,6 @@ server/storage/content/*
 render/node_modules/
 server/storage/distribution/*
 !server/storage/distribution/.gitkeep
+
+# Local large media / video working folder (GB-sized MP4s, separate nested repo)
+video/

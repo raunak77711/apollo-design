@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calendar as CalendarIcon, Copy } from 'lucide-react';
+import { Calendar as CalendarIcon, Copy, Trash2 } from 'lucide-react';
 import { distributionApi } from '../../api/distribution.js';
 import { cx } from '../../lib/cx.js';
 import { useToast } from '../../lib/toast.jsx';
@@ -12,8 +12,12 @@ function Badge({ className, children }) {
   return <span className={cx('rounded px-1.5 py-0.5 font-mono text-2xs', className)}>{children}</span>;
 }
 
-/** One asset in the pool: its classification, whether it's a duplicate of a stronger one, and a place to schedule it. */
-export default function AssetCard({ asset, accounts, onScheduled }) {
+/**
+ * One asset in the pool: its classification (when it has any — a quick upload skips Content
+ * Factory entirely, so it has no score, hook or classification), whether it's a duplicate of a
+ * stronger one, and a place to schedule it. `onDelete`, if given, is for a quick upload only.
+ */
+export default function AssetCard({ asset, accounts, onScheduled, onDelete }) {
   const toast = useToast();
   const [schedulingFor, setSchedulingFor] = useState(''); // account id currently showing its datetime picker
   const [when, setWhen] = useState('');
@@ -38,15 +42,25 @@ export default function AssetCard({ asset, accounts, onScheduled }) {
     <li className={cx('rounded-xl border bg-surface p-3.5', asset.duplicateOf && 'opacity-60')}>
       <div className="flex items-start justify-between gap-2">
         <p className="min-w-0 truncate text-[14px] text-ink">{asset.title}</p>
-        <span className="shrink-0 rounded bg-ink px-1.5 py-0.5 font-mono text-2xs text-void">{asset.score}</span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {asset.score != null && <span className="rounded bg-ink px-1.5 py-0.5 font-mono text-2xs text-void">{asset.score}</span>}
+          {onDelete && (
+            <button type="button" onClick={() => onDelete(asset)} aria-label="Remove this upload" className="text-ink-3 hover:text-danger">
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
       </div>
-      <p className="mt-1 line-clamp-2 text-xs text-ink-3">{asset.hook}</p>
+      {asset.hook && <p className="mt-1 line-clamp-2 text-xs text-ink-3">{asset.hook}</p>}
+      {asset.description && !asset.hook && <p className="mt-1 line-clamp-2 text-xs text-ink-3">{asset.description}</p>}
 
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        <Badge className={STAGE_COLOR[asset.classification?.funnelStage] || 'bg-raised text-ink-3'}>{(asset.classification?.funnelStage || '?').toUpperCase()}</Badge>
-        <Badge className="bg-raised text-ink-2">{asset.classification?.hookType?.replace(/-/g, ' ')}</Badge>
-        <Badge className="bg-raised text-ink-2">{asset.classification?.archetype?.replace(/-/g, ' ')}</Badge>
-      </div>
+      {asset.classification && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <Badge className={STAGE_COLOR[asset.classification.funnelStage] || 'bg-raised text-ink-3'}>{(asset.classification.funnelStage || '?').toUpperCase()}</Badge>
+          <Badge className="bg-raised text-ink-2">{asset.classification.hookType?.replace(/-/g, ' ')}</Badge>
+          <Badge className="bg-raised text-ink-2">{asset.classification.archetype?.replace(/-/g, ' ')}</Badge>
+        </div>
+      )}
 
       {asset.duplicateOf && (
         <p className="mt-2 flex items-center gap-1.5 text-2xs text-ink-3">

@@ -50,6 +50,10 @@ export class TikTokProvider extends PlatformProvider {
     });
   }
 
+  get scopes() {
+    return SCOPES;
+  }
+
   authUrl({ redirectUri, state }) {
     const q = new URLSearchParams({ client_key: this.clientKey, redirect_uri: redirectUri, response_type: 'code', scope: SCOPES.join(','), state });
     return `${AUTH_URL}?${q}`;

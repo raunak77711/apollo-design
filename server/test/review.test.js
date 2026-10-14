@@ -224,6 +224,31 @@ test('a short can be renamed, noted, and have its captions switched off', async 
   await assert.rejects(() => t.service.updateCandidate(t.id, t.cid, { title: '   ' }), (e) => e.status === 400);
 });
 
+test('a misheard caption word can be corrected and reverted, without touching other candidates or the timing', async () => {
+  const t = await setup();
+  const before = await t.service.engineProps(t.id, t.cid);
+  const target = before.words[1];
+
+  await t.service.updateCandidate(t.id, t.cid, { captionOverrides: { [target.wordIndex]: '  HVAC  owners  ' } });
+  const corrected = await t.service.engineProps(t.id, t.cid);
+  const same = corrected.words[1];
+  assert.equal(same.word, 'HVAC owners');
+  assert.equal(same.originalWord, target.word);
+  assert.equal(same.start, target.start);
+  assert.equal(same.end, target.end);
+
+  // Clearing it (empty string) reverts to exactly what Whisper produced.
+  await t.service.updateCandidate(t.id, t.cid, { captionOverrides: { [target.wordIndex]: '' } });
+  const reverted = await t.service.engineProps(t.id, t.cid);
+  assert.equal(reverted.words[1].word, target.word);
+  assert.equal(reverted.words[1].originalWord, undefined);
+
+  // A non-numeric key (not a real word position) is ignored rather than silently stored.
+  await t.service.updateCandidate(t.id, t.cid, { captionOverrides: { 'not-a-word-index': 'nope' } });
+  const session = await t.service.getSession(t.id);
+  assert.deepEqual(session.candidates[0].edits?.captionOverrides || {}, {});
+});
+
 test('trimming moves an edge to real word boundaries, shifts the edit with it, and keeps what is still valid', async () => {
   const t = await setup({ provider: stubProvider({ director: () => ({ events: [{ type: 'emphasis', text: 'leak', strength: 3 }, { type: 'number', value: '$10,000' }] }) }) });
   const before = t.session.candidates[0];

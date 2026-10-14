@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import express from 'express';
 import { errorHandler } from '../src/middleware/error.js';
 import { createDistributionRouter } from '../src/routes/distribution.js';
@@ -62,6 +63,7 @@ async function setup({ sessions, providerOverrides = {} } = {}) {
   const service = createDistributionService({
     batches, assets, publications, accounts, analytics, providers, scheduler, contentAssets,
     research: { draftBrief: async () => ({ title: 't', outline: ['a', 'b', 'c'], verified: false }) },
+    storageRoot: path.join(dir, 'storage'), maxUploadBytes: 10 * 1024 * 1024,
   });
   return { dir, batches, assets, publications, accounts, service };
 }
@@ -153,6 +155,44 @@ test('schedulePublication: a future time WITH native scheduling uploads now and 
   const account = await accounts.upsert({ platform: 'youtube', accountId: 'a1', accountName: 'Acct', accessToken: 't', refreshToken: 'r', expiresAt: new Date(Date.now() + 3600_000).toISOString() });
   const pub = await service.schedulePublication({ assetId: asset.id, accountId: account.id, platform: 'youtube', scheduledFor: new Date(Date.now() + 3600_000).toISOString() });
   assert.equal(pub.status, 'native_scheduled');
+});
+
+/* --------------------------------- quick upload --------------------------------- */
+
+test('uploadAsset stores the file outside any batch and it is schedulable like any other asset', async () => {
+  const { service, accounts } = await setup();
+  const asset = await service.uploadAsset({ title: 'A quick one', description: 'posted as-is', body: Readable.from([Buffer.from('raw bytes')]), fileName: 'clip.mp4' });
+  assert.equal(asset.title, 'A quick one');
+  assert.equal(asset.status, 'ready');
+  assert.equal(asset.batchId, null);
+  assert.ok(asset.renderFile.endsWith('.mp4'));
+
+  const unassigned = await service.listUnassignedAssets();
+  assert.deepEqual(unassigned.map((a) => a.id), [asset.id]);
+
+  const account = await accounts.upsert({ platform: 'tiktok', accountId: 'a1', accountName: 'Acct', accessToken: 't', refreshToken: 'r', expiresAt: new Date(Date.now() + 3600_000).toISOString() });
+  const pub = await service.schedulePublication({ assetId: asset.id, accountId: account.id, platform: 'tiktok' });
+  assert.equal(pub.status, 'published');
+});
+
+test('uploadAsset falls back to the file name when no title is given, and rejects an unsupported file type', async () => {
+  const { service } = await setup();
+  const asset = await service.uploadAsset({ body: Readable.from([Buffer.from('x')]), fileName: 'my_cool_clip.mov' });
+  assert.equal(asset.title, 'my cool clip');
+  await assert.rejects(() => service.uploadAsset({ title: 't', body: Readable.from([Buffer.from('x')]), fileName: 'notes.txt' }), (e) => e.status === 400);
+});
+
+test('deleteAsset removes a quick upload but refuses one that belongs to a batch', async () => {
+  const sessions = { s1: { candidates: [candidate('c1', { title: 'A', hook: 'h' })] } };
+  const { service, batches } = await setup({ sessions });
+  const batch = await batches.create({ title: 'R', sessionIds: ['s1'] });
+  await service.syncBatch(batch.id);
+  const [batchAsset] = await service.listAssets(batch.id);
+  await assert.rejects(() => service.deleteAsset(batchAsset.id), (e) => e instanceof DistributionError && e.status === 409);
+
+  const quick = await service.uploadAsset({ title: 'Q', body: Readable.from([Buffer.from('x')]), fileName: 'q.mp4' });
+  await service.deleteAsset(quick.id);
+  assert.deepEqual(await service.listUnassignedAssets(), []);
 });
 
 test('cancel and retry only act on publications in a state where that makes sense', async () => {

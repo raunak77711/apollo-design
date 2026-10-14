@@ -10,6 +10,7 @@ import AccountsPanel from '../components/distribution/AccountsPanel.jsx';
 import AssetCard from '../components/distribution/AssetCard.jsx';
 import Calendar from '../components/distribution/Calendar.jsx';
 import LearningReport from '../components/distribution/LearningReport.jsx';
+import QuickUpload from '../components/distribution/QuickUpload.jsx';
 
 /** Distribution: batches of recordings, the deduplicated asset pool, connected platform accounts, the calendar and performance. */
 export default function DistributionPage() {
@@ -32,9 +33,15 @@ function BatchList() {
   const [picking, setPicking] = useState(false);
   const [title, setTitle] = useState('');
   const [chosen, setChosen] = useState(new Set());
+  const [status, setStatus] = useState([]);
+  const [accounts, setAccounts] = useState([]);
 
   const refresh = useCallback(() => distributionApi.listBatches().then(setBatches).catch(() => setBatches([])), []);
-  useEffect(() => { refresh(); contentApi.list().then(setSessions).catch(() => {}); }, [refresh]);
+  const loadAccounts = useCallback(() => {
+    distributionApi.status().then((r) => setStatus(r.platforms)).catch(() => {});
+    distributionApi.listAccounts().then(setAccounts).catch(() => {});
+  }, []);
+  useEffect(() => { refresh(); loadAccounts(); contentApi.list().then(setSessions).catch(() => {}); }, [refresh, loadAccounts]);
 
   const create = async () => {
     if (!chosen.size) return;
@@ -53,6 +60,15 @@ function BatchList() {
         Group a round of recordings into a batch: deduplicate the shorts across all of them, classify what each one is, and schedule and publish the keepers.
       </p>
 
+      <div className="mt-8">
+        <AccountsPanel status={status} accounts={accounts} onChanged={loadAccounts} />
+      </div>
+
+      <div className="mt-10">
+        <QuickUpload accounts={accounts} />
+      </div>
+
+      <h2 className="mt-10 font-mono text-2xs uppercase tracking-[0.2em] text-ink-3">Batches</h2>
       {!picking ? (
         <Button variant="primary" size="lg" className="mt-6" onClick={() => setPicking(true)}>
           <Plus size={15} /> New batch
@@ -103,7 +119,6 @@ function BatchView({ id }) {
   const toast = useToast();
   const [batch, setBatch] = useState(null);
   const [assets, setAssets] = useState(null);
-  const [status, setStatus] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [syncing, setSyncing] = useState(false);
 
@@ -112,11 +127,7 @@ function BatchView({ id }) {
     setBatch(b);
     setAssets(a);
   }, [id]);
-  const loadAccounts = useCallback(() => {
-    distributionApi.status().then((r) => setStatus(r.platforms));
-    distributionApi.listAccounts().then(setAccounts);
-  }, []);
-  useEffect(() => { load().catch(() => {}); loadAccounts(); }, [load, loadAccounts]);
+  useEffect(() => { load().catch(() => {}); distributionApi.listAccounts().then(setAccounts).catch(() => {}); }, [load]);
 
   const sync = async () => {
     setSyncing(true);
@@ -151,12 +162,8 @@ function BatchView({ id }) {
       </div>
 
       <div className="mt-10">
-        <AccountsPanel status={status} accounts={accounts} onChanged={loadAccounts} />
-      </div>
-
-      <div className="mt-10">
         <h2 className="font-mono text-2xs uppercase tracking-[0.2em] text-ink-3">Shorts ({assets.length})</h2>
-        {assets.length === 0 && <p className="mt-3 text-sm text-ink-3">Approve and render shorts in Content Factory, then sync this batch.</p>}
+        {assets.length === 0 && <p className="mt-3 text-sm text-ink-3">Approve and render shorts in Content Factory, then sync this batch. No connected accounts yet? Connect them from the main Distribution page.</p>}
         <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {assets.map((a) => (
             <AssetCard key={a.id} asset={a} accounts={accounts} onScheduled={load} />

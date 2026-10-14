@@ -12,7 +12,10 @@ import { getDistributionService } from '../services/distribution/index.js';
  *   POST   /batches/:id/sessions            { sessionId }           DELETE /batches/:id/sessions/:sessionId
  *   POST   /batches/:id/sync                promote newly approved+rendered shorts, re-run cross-video dedup
  *   GET    /batches/:id/assets?all=1        the unique (or, with ?all=1, every) asset in the batch
+ *   PUT    /uploads?name=x.mp4&title=&description=   a video pushed straight in, bypassing Content Factory/batches
+ *   GET    /assets                          every asset not attached to a batch (quick uploads)
  *   GET    /assets/:id                      PATCH /assets/:id { title, description, tags, classification, status }
+ *   DELETE /assets/:id                      only an asset with no batch (a quick upload)
  *   GET    /accounts                        connected platform accounts (never returns a token)
  *   GET    /accounts/:platform/auth-url     ?redirectUri=  -> { url }
  *   POST   /accounts/:platform/connect      { code, redirectUri }
@@ -46,8 +49,15 @@ export function createDistributionRouter({ service } = {}) {
   router.get('/batches/:id/assets', wrap(async (req, res) => res.json({ assets: await svc().listAssets(req.params.id, { includeDuplicates: req.query.all === '1' }) })));
   router.get('/batches/:id/learning', wrap(async (req, res) => res.json(await svc().learningReport(req.params.id))));
 
+  router.put('/uploads', wrap(async (req, res) => {
+    // The body is the file itself, not JSON: nothing may read it before the service streams it to disk.
+    res.status(201).json(await svc().uploadAsset({ title: req.query.title, description: req.query.description, body: req, fileName: req.query.name }));
+  }));
+
+  router.get('/assets', wrap(async (req, res) => res.json({ assets: await svc().listUnassignedAssets() })));
   router.get('/assets/:id', wrap(async (req, res) => res.json(await svc().getAsset(req.params.id))));
   router.patch('/assets/:id', wrap(async (req, res) => res.json(await svc().updateAsset(req.params.id, req.body || {}))));
+  router.delete('/assets/:id', wrap(async (req, res) => { await svc().deleteAsset(req.params.id); res.status(204).end(); }));
 
   router.get('/accounts', wrap(async (req, res) => res.json({ accounts: await svc().listAccounts() })));
   router.get('/accounts/:platform/auth-url', wrap(async (req, res) => res.json({ url: svc().authUrl(req.params.platform, { redirectUri: req.query.redirectUri, state: req.query.state || '' }) })));

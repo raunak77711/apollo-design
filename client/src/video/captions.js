@@ -22,7 +22,8 @@ export function groupCaptions(words, { maxWords = 4, maxSeconds = CAPTIONS.maxSe
 
   for (let i = 0; i < words.length; i += 1) {
     const w = words[i];
-    current.push({ text: w.word, start: w.start, end: w.end, index: w.index ?? i });
+    // Carries wordIndex/originalWord through (unused by playback, read by the caption editor) alongside the fields playback needs.
+    current.push({ ...w, text: w.word, start: w.start, end: w.end, index: w.index ?? i });
     const next = words[i + 1];
     if (!next) break;
     const gap = next.start - w.end;

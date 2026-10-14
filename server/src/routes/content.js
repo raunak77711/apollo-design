@@ -19,7 +19,7 @@ import { getTranscriptionService } from '../services/transcription/transcription
  *   GET    /sessions/:id/analysis        retakes the detector saw, stats, warnings
  *   PATCH  /sessions/:id/settings        { aiDirector, framing, platform, captions, background }
  *   POST   /sessions/:id/media           find the speaker's head + build the preview copy (host worker)
- *   PATCH  /sessions/:id/candidates/:cid { status, title, note }   review: approve / reject / rename
+ *   PATCH  /sessions/:id/candidates/:cid { status, title, note, captions, captionOverrides }   review: approve / reject / rename / caption fixes
  *   POST   .../candidates/:cid/trim      { start, end }  move the edges, snapped to words
  *   PUT    .../candidates/:cid/director  { events, source }  replace the edit (validated + grounded)
  *   POST   .../candidates/:cid/director/regenerate { ai? }   direct again (AI or rule-based)
