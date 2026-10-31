@@ -23,8 +23,11 @@ server/storage/content/*
 
 # Render worker dependencies
 render/node_modules/
+render/artifacts/
+server/storage/combinator/
+server/storage/motion-check-*/
 server/storage/distribution/*
 !server/storage/distribution/.gitkeep
 
 # Local large media / video working folder (GB-sized MP4s, separate nested repo)
-video/
+/video/

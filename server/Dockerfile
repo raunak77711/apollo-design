@@ -10,7 +10,7 @@ WORKDIR /app
 # Georgia/Arial are system fonts with no free redistributable equivalent and
 # fall back to Sharp/librsvg's default serif/sans-serif at export time.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends curl fontconfig ca-certificates \
+  && apt-get install -y --no-install-recommends curl fontconfig ca-certificates ffmpeg \
   && mkdir -p /usr/share/fonts/truetype/apollo \
   && for FAM in \
        "Inter:wght@400;500;600;700;800;900" \

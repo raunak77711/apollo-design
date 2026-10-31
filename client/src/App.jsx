@@ -16,6 +16,7 @@ const EditorPage = lazy(() => import('./pages/EditorPage.jsx'));
 const Boards = lazy(() => import('./pages/BoardsPage.jsx'));
 const BoardPage = lazy(() => import('./pages/BoardPage.jsx'));
 const Content = lazy(() => import('./pages/ContentPage.jsx'));
+const Combinator = lazy(() => import('./pages/CombinatorPage.jsx'));
 const Distribution = lazy(() => import('./pages/DistributionPage.jsx'));
 const DistributionCallback = lazy(() => import('./pages/DistributionCallback.jsx'));
 
@@ -35,6 +36,8 @@ export default function App() {
               <Route path="/board" element={<Boards />} />
               <Route path="/board/:id" element={<BoardPage />} />
               <Route path="/content" element={<Content />} />
+              <Route path="/content-machine" element={<Combinator />} />
+              <Route path="/combinator" element={<Navigate to="/content-machine" replace />} />
               <Route path="/content/:id" element={<Content />} />
               <Route path="/distribution/callback" element={<DistributionCallback />} />
               <Route path="/distribution" element={<Distribution />} />

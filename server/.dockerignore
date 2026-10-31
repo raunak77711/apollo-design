@@ -12,3 +12,5 @@ whisper/__pycache__
 storage/transcripts
 storage/content
 storage/distribution
+storage/combinator
+storage/motion-check-*

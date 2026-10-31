@@ -163,34 +163,40 @@ async function runJob(job) {
   job.cancel = () => { job.cancelled = true; cancel.cancel(); job.child?.kill(); };
 
   try {
+    const contentMachine = job.request.kind === 'content-machine';
     progress('cutting the clip', 0.02);
-    const keeps = props.segments.map((s) => ({ start: s.start, end: s.end }));
-    await cutClip({ source, segments: keeps, dest: clip, signal: { get aborted() { return job.cancelled; } }, onChild: (c) => { job.child = c; } });
+    if (!contentMachine) {
+      const keeps = props.segments.map((s) => ({ start: s.start, end: s.end }));
+      await cutClip({ source, segments: keeps, dest: clip, signal: { get aborted() { return job.cancelled; } }, onChild: (c) => { job.child = c; } });
+    }
     const duration = props.duration;
     progress('bundling the engine', 0.1);
     const url = await serveUrl((p) => progress('bundling the engine', 0.1 + p * 0.08));
 
     // The clip is already cut: play it straight through. Framing lookups still use the original source times.
-    const inputProps = {
+    const mediaSrc = `http://127.0.0.1:${MEDIA_PORT}/media/${path.relative(STORAGE, contentMachine ? source : clip).split(path.sep).join('/')}`;
+    const inputProps = contentMachine ? { ...props, videoSrc: mediaSrc } : {
       ...props,
       videoSrc: '',
       playback: { videoSrc: `http://127.0.0.1:${MEDIA_PORT}/media/${path.relative(STORAGE, clip).split(path.sep).join('/')}`, segments: [{ start: 0, end: duration, clipStart: 0, clipEnd: duration }] },
     };
-    const composition = await selectComposition({ serveUrl: url, id: 'Short', inputProps });
+    const composition = await selectComposition({ serveUrl: url, id: contentMachine ? 'ContentMachineClip' : 'Short', inputProps });
     progress('rendering', 0.2);
     const part = `${out}.part.mp4`;
     await renderMedia({
-      composition, serveUrl: url, inputProps, codec: 'h264', outputLocation: part, crf: 18, pixelFormat: 'yuv420p', audioCodec: 'aac', audioBitrate: '192k',
-      x264Preset: 'medium', imageFormat: 'png', colorSpace: 'bt709', enforceAudioTrack: true, cancelSignal: cancel.cancelSignal, concurrency: Math.max(2, Math.floor((await import('node:os')).cpus().length / 2)),
+      composition, serveUrl: url, inputProps, codec: 'h264', outputLocation: part, crf: 18, pixelFormat: 'yuv420p', audioCodec: 'aac', audioBitrate: '192k', sampleRate: 48000,
+      x264Preset: contentMachine ? 'veryfast' : 'medium', imageFormat: contentMachine ? 'jpeg' : 'png', colorSpace: 'bt709', enforceAudioTrack: true, cancelSignal: cancel.cancelSignal, concurrency: contentMachine ? 2 : Math.max(2, Math.floor((await import('node:os')).cpus().length / 2)),
       onProgress: ({ progress: p }) => progress('rendering', 0.2 + p * 0.75),
     });
 
     progress('finishing', 0.96);
     // Index to the front, so a platform can start playing the file before it has all arrived.
-    await ff(['-y', '-i', part, '-c', 'copy', '-movflags', '+faststart', out]);
+    await ff(['-y', '-i', part, ...(contentMachine ? ['-c:v', 'copy', '-video_track_timescale', '15360', '-c:a', 'aac', '-ar', '48000', '-ac', '2'] : ['-c', 'copy']), '-movflags', '+faststart', out]);
     await fs.rm(part, { force: true });
-    const { groupCaptions, toSrt } = await import(engineFile('captions.js'));
-    await fs.writeFile(out.replace(/\.mp4$/, '.srt'), toSrt(groupCaptions(props.words, { maxWords: props.settings.captions.maxWords })), 'utf8');
+    if (!contentMachine) {
+      const { groupCaptions, toSrt } = await import(engineFile('captions.js'));
+      await fs.writeFile(out.replace(/\.mp4$/, '.srt'), toSrt(groupCaptions(props.words, { maxWords: props.settings.captions.maxWords })), 'utf8');
+    }
 
     const stat = await fs.stat(out);
     job.result = { bytes: stat.size, seconds: Math.round(duration * 10) / 10, renderSeconds: Math.round((Date.now() - t0) / 100) / 10, engineVersion: await engineVersion() };
@@ -238,7 +244,7 @@ const readBody = (req) => new Promise((resolve, reject) => {
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://x');
-    if (req.method === 'GET' && url.pathname === '/health') return send(res, 200, { ok: true, engineVersion: await engineVersion(), ffmpeg: Boolean(FFMPEG), busy, queued: QUEUE.length });
+    if (req.method === 'GET' && url.pathname === '/health') return send(res, 200, { ok: true, engineVersion: await engineVersion(), contentMachineMotion: 'content-machine-motion-v2', ffmpeg: Boolean(FFMPEG), busy, queued: QUEUE.length });
     if (req.method === 'POST' && url.pathname === '/renders') {
       const body = await readBody(req);
       if (!body.id || !body.sourceRel || !body.outRel || !body.props) return send(res, 400, { error: 'a render needs id, sourceRel, outRel and props' });

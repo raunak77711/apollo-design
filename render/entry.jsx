@@ -1,6 +1,7 @@
 import React from 'react';
 import { Composition, registerRoot } from 'remotion';
 import { Short, shortMetadata } from '../client/src/video/Short.jsx';
+import { ContentMachineClip, contentMachineMetadata } from '../client/src/video/ContentMachineClip.jsx';
 
 /**
  * The Remotion entry point: one composition, "Short". The same component the live preview in the browser
@@ -23,7 +24,8 @@ const defaultProps = {
 };
 
 const Root = () => (
-  <Composition id="Short" component={Short} width={1080} height={1920} fps={30} durationInFrames={30} defaultProps={defaultProps} calculateMetadata={shortMetadata} />
+  <><Composition id="Short" component={Short} width={1080} height={1920} fps={30} durationInFrames={30} defaultProps={defaultProps} calculateMetadata={shortMetadata} />
+  <Composition id="ContentMachineClip" component={ContentMachineClip} width={1080} height={1920} fps={30} durationInFrames={30} defaultProps={{ videoSrc: '', events: [], width: 1080, height: 1920, duration: 1 }} calculateMetadata={contentMachineMetadata} /></>
 );
 
 registerRoot(Root);

@@ -56,7 +56,7 @@ export function createRenderClient({ url, fetchImpl = fetch, pollMs = 1000, maxP
         }
         if (!polled.ok) throw new Error(polled.body.error || 'The render worker lost the job.');
         const r = polled.body;
-        onProgress?.({ progress: r.progress ?? 0, stage: r.stage });
+        await onProgress?.({ progress: r.progress ?? 0, stage: r.stage });
         if (r.status === 'done') return r.result;
         if (r.status === 'failed') throw new Error(r.error || 'The render failed.');
       }
