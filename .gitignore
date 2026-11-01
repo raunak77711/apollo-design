@@ -10,3 +10,7 @@ npm-debug.log*
 # Local asset/export storage (keep the folder, ignore contents)
 server/storage/projects/*
 !server/storage/projects/.gitkeep
+
+# Video and media artifacts
+render/artifacts/
+server/storage/combinator/
