@@ -14,8 +14,25 @@ server/storage/projects/*
 # Video and media artifacts
 render/artifacts/
 server/storage/combinator/
-server/storage/content/
-server/storage/distribution/
-server/storage/transcripts/
-server/whisper/
-video/
+server/storage/content/*
+!server/storage/content/.gitkeep
+server/storage/transcripts/*
+!server/storage/transcripts/.gitkeep
+server/storage/distribution/*
+!server/storage/distribution/.gitkeep
+server/storage/motion-check-*/
+
+# Content Factory: local Whisper environment, model weights, generated samples and caches
+server/whisper/.venv/
+server/whisper/models/
+server/whisper/samples/
+server/whisper/__pycache__/
+
+# Render worker dependencies
+render/node_modules/
+
+# Local large media / video working folder (GB-sized MP4s, separate nested repo)
+/video/
+
+# Generated whisper sample frames
+server/storage/whisper/samples/

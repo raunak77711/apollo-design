@@ -1,4 +1,4 @@
-import { AIProvider } from './AIProvider.js';
+import { AIProvider, NotConfiguredError } from './AIProvider.js';
 import { detectIndustry } from '../../design/industries.js';
 import { findStyle, layoutsForAspect, pickStyleFor, STYLES } from '../../design/artDirection.js';
 import { seededRandom } from '../../design/layout.js';
@@ -12,6 +12,10 @@ import { seededRandom } from '../../design/layout.js';
  * gets real layouts, real palettes and real photography, not a placeholder.
  */
 export class MockProvider extends AIProvider {
+  async completeJSON() {
+    throw new NotConfiguredError();
+  }
+
   /** The creative-director pass, without a model. */
   async planDesign({ message = '', canvas, variation }) {
     const industry = detectIndustry(message);

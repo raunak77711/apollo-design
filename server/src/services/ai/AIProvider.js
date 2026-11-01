@@ -45,4 +45,20 @@ export class AIProvider {
   async converse(/* { system, messages, onToken, signal } */) {
     throw new Error('converse() not implemented');
   }
+
+  async completeJSON(/* { system, user, temperature, maxTokens, signal, timeoutMs } */) {
+    throw new Error('completeJSON() not implemented');
+  }
+
+  get live() {
+    return false;
+  }
+}
+
+export class NotConfiguredError extends Error {
+  constructor(message = 'No AI model is configured.') {
+    super(message);
+    this.name = 'NotConfiguredError';
+    this.status = 503;
+  }
 }

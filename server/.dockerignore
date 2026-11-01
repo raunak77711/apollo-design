@@ -3,3 +3,14 @@ npm-debug.log
 .env
 storage/projects/*
 !storage/projects/.gitkeep
+
+# Content Factory: host-side Whisper worker assets never belong in the backend image.
+whisper/.venv
+whisper/models
+whisper/samples
+whisper/__pycache__
+storage/transcripts
+storage/content
+storage/distribution
+storage/combinator
+storage/motion-check-*

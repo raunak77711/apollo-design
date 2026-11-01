@@ -1,0 +1,14 @@
+{
+  "name": "apollo-render",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Content Factory render worker: Remotion + FFmpeg, runs on the host",
+  "dependencies": {
+    "@remotion/bundler": "4.0.532",
+    "@remotion/renderer": "4.0.532",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.532"
+  }
+}

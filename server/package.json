@@ -6,9 +6,15 @@
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon --legacy-watch src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "test": "node --test",
+    "transcribe": "node scripts/transcribe.js",
+    "whisper:worker": "node scripts/whisper-worker.js",
+    "render:worker": "node ../render/worker.mjs",
+    "workers": "node scripts/workers.js"
   },
   "dependencies": {
+    "archiver": "^8.0.0",
     "compression": "^1.7.5",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

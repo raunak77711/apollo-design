@@ -20,6 +20,41 @@ export const config = {
   // Absolute path to the on-disk storage root.
   storageRoot: path.resolve(__dirname, '../../storage'),
 
+  // Content Factory - local transcription. Whisper runs on the host (it needs the GPU);
+  // from Docker the backend reaches it through WHISPER_WORKER_URL. With neither a worker
+  // URL nor a local venv, transcription reports "unavailable" and the rest of Apollo is unaffected.
+  whisper: {
+    workerUrl: process.env.WHISPER_WORKER_URL || '',
+    python: process.env.WHISPER_PYTHON || '',
+    model: process.env.WHISPER_MODEL || 'large-v3-turbo',
+    language: process.env.WHISPER_LANGUAGE || 'en',
+    device: process.env.WHISPER_DEVICE || 'auto',
+  },
+  transcriptsDir: path.resolve(__dirname, '../../storage/transcripts'),
+
+  // Content Factory sessions (long-form recordings and what is derived from them).
+  content: {
+    maxUploadBytes: (Number(process.env.CONTENT_MAX_UPLOAD_GB) || 20) * 1024 ** 3,
+    // The render worker (Remotion + FFmpeg) runs on the host beside the GPU, like the Whisper worker.
+    renderWorkerUrl: process.env.RENDER_WORKER_URL || 'http://127.0.0.1:5012',
+  },
+
+  // Distribution: real publishing to YouTube, a Facebook Page (and, through it, Instagram)
+  // and TikTok, plus the scheduler and analytics ingestion that run while Apollo is online.
+  // Every secret below is OPTIONAL and per-platform: a platform with no client id/secret
+  // configured simply can't be connected yet (see README's Distribution section for the
+  // developer-app setup each one needs — Apollo cannot create these apps for you).
+  distribution: {
+    secretKeyFile: path.resolve(__dirname, '../../storage/distribution/.secret-key'),
+    // Where a rendered short can be fetched from the public internet. Only Instagram's publish
+    // API needs this (it fetches the video by URL); everything else uploads the bytes directly.
+    publicMediaBaseUrl: process.env.PUBLIC_MEDIA_BASE_URL || '',
+    tickIntervalMs: (Number(process.env.DISTRIBUTION_TICK_MINUTES) || 15) * 60_000,
+    youtube: { clientId: process.env.YOUTUBE_CLIENT_ID || '', clientSecret: process.env.YOUTUBE_CLIENT_SECRET || '' },
+    facebook: { clientId: process.env.FACEBOOK_CLIENT_ID || '', clientSecret: process.env.FACEBOOK_CLIENT_SECRET || '' },
+    tiktok: { clientKey: process.env.TIKTOK_CLIENT_KEY || '', clientSecret: process.env.TIKTOK_CLIENT_SECRET || '' },
+  },
+
   ai: {
     provider: process.env.AI_PROVIDER || 'deepseek',
     deepseek: {
