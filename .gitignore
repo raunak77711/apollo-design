@@ -14,3 +14,8 @@ server/storage/projects/*
 # Video and media artifacts
 render/artifacts/
 server/storage/combinator/
+server/storage/content/
+server/storage/distribution/
+server/storage/transcripts/
+server/whisper/
+video/
